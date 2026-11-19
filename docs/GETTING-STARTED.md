@@ -59,6 +59,8 @@ py -3 -m venv .venv
 | Взгляд, одежда и возраст по внешности | MediaPipe и OpenVINO с соответствующими моделями. |
 | Qwen3-TTS и Chatterbox на Apple Silicon, исследовательские F5 и Coqui | `mlx-audio` или отдельные окружения F5 и Coqui. Условия использования весов зависят от модели. |
 
+Из корня исходников можно запустить `python -m voice_studio.synthesis.setup_commercial_voices` в окружении MLX или `python -m voice_studio.synthesis.setup_dub_background` в окружении с зависимостями HDemucs. Эти команды загружают веса для соответствующей функции.
+
 Перед запуском офлайн подготовь выбранные движки и веса. [Сведения об источниках и лицензиях](../THIRD-PARTY.md)
 
 ## Если функция недоступна

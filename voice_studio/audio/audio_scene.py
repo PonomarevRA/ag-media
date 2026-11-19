@@ -18,7 +18,7 @@ from voice_studio.audio.speech_intonation import measure_intonation
 from voice_studio.core.storage_cache import use_cache
 from voice_studio.audio.zipformer_audio import BASIS as ZIPFORMER_BASIS, classify_zipformer
 
-from voice_paths import PROJECT_ROOT as ROOT, RUNTIME_DIR, ensure_temporary_root
+from voice_paths import RUNTIME_DIR, ensure_temporary_root
 
 LABELS = {
     "music": ("Музыка", "Music"),
@@ -69,7 +69,7 @@ def sound_binary():
     swift = shutil.which("swiftc") if sys.platform == "darwin" else None
     if not swift:
         return None
-    source = ROOT / "audio_scene.swift"
+    source = Path(__file__).with_name("native") / "audio_scene.swift"
     ensure_temporary_root()
     cache = RUNTIME_DIR / "audio-scene"
     cache.mkdir(mode=0o700, parents=True, exist_ok=True)

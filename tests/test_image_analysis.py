@@ -55,7 +55,7 @@ class ImageAnalysisTests(TestCase):
             self.assertEqual(result["source"], {"sha256": sha256(b"fixture-image").hexdigest(), "bytes": 13})
             self.assertNotIn("path", result["source"])
             args = worker.call_args.args
-            self.assertEqual(args[0], "video_scene.py")
+            self.assertEqual(args[0], "voice_studio.vision.video_scene")
             self.assertEqual(args[1][:2], ["--screenshot", source])
             settings = json.loads(args[1][2])
             self.assertTrue(settings["include_objects"])

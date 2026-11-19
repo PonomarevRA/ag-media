@@ -4,8 +4,6 @@ from voice_studio.mod_runtime import model_resource, worker_environment
 
 from voice_studio.mod_runtime import model_provider
 
-from voice_paths import PROJECT_ROOT
-
 import importlib.util
 import json
 from pathlib import Path
@@ -14,6 +12,7 @@ import sys
 
 from voice_paths import model_path
 from voice_studio.core.media_resources import stage_threads
+from voice_studio.core.worker_process import worker_command
 
 MODEL_PATH = model_path("diarization", "segmentation.onnx").parent
 
@@ -33,8 +32,8 @@ def detect_turns(wav, speaker_count, *, merge_similar=False):
         raise ValueError("Локальная модель разделения говорящих недоступна.")
     try:
         output = subprocess.check_output(
-            [sys.executable, str(PROJECT_ROOT / "speaker_diarization.py"), str(wav), str(speaker_count or -1),
-             "0.72" if merge_similar else "0.50"],
+            worker_command(sys.executable, "voice_studio.speech.speaker_diarization", wav, speaker_count or -1,
+                           "0.72" if merge_similar else "0.50"),
             env=worker_environment(), stderr=subprocess.DEVNULL, timeout=180,
         )
         return json.loads(output)

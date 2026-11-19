@@ -4,26 +4,9 @@
     "files": [
       "ag_media_studio.py",
       "ag_media_studio_mcp.py",
-      "clothing_sample_worker.py",
-      "commercial_voice_worker.py",
-      "dub_background_worker.py",
-      "light_asd_worker.py",
-      "live_face_worker.py",
-      "model_worker.py",
-      "mrx_audio_worker.py",
-      "person_layer_worker.py",
       "server.py",
-      "setup_commercial_voices.py",
-      "setup_dub_background.py",
-      "speaker_diarization.py",
-      "speaker_metric.py",
-      "speaker_photos.py",
-      "speaker_review.py",
-      "speech_metrics.py",
-      "video_scene.py",
       "voice_mcp.py",
       "voice_paths.py",
-      "zipformer_audio.py",
       ".gitignore",
       ".gitattributes",
       "LICENSE",
@@ -36,12 +19,11 @@
       "pyproject.toml",
       "project.json",
       "run.sh",
-      "audio_scene.swift",
-      "scene_ocr.swift",
       {
         "source": "packaging/public-README.md",
         "target": "README.md"
       },
+      "docs/ARCHITECTURE.md",
       "docs/NATIVE-DISTRIBUTION.md",
       "docs/GETTING-STARTED.md",
       "docs/AGENT-SETUP.md",
@@ -69,7 +51,8 @@
         "path": "voice_studio",
         "extensions": [
           ".py",
-          ".json"
+          ".json",
+          ".swift"
         ]
       },
       {

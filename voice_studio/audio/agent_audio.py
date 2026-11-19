@@ -13,10 +13,11 @@ import wave
 
 from voice_studio.audio.audio_processing import denoise_wave
 from voice_studio.synthesis.dub_background import PYTHON, RATE
-from voice_studio.synthesis.engines import ROOT, ffmpeg
+from voice_studio.synthesis.engines import ffmpeg
 from voice_paths import model_path, publish_directory, temporary_directory
 from voice_studio.graph.media_graph_ingest import probe_source
 from voice_studio.core.media_resources import batch_media_job, stage_threads
+from voice_studio.core.worker_process import worker_command
 from voice_studio.speech.media_transcript import FORMATS, MAX_MEDIA_SECONDS, audio_offset, transcribe_wav
 
 Language = Literal["auto", "ru", "en"]
@@ -65,9 +66,9 @@ def run_separator(source, destination, duration_ms):
         raise ValueError("Установи MRX через scripts/install-mrx-audio.py в каталоге Voice Studio.")
     threads = stage_threads(4)
     try:
-        subprocess.run([str(PYTHON), str(ROOT / "mrx_audio_worker.py"), str(source), str(INSTALL),
-                        str(destination), str(threads)],
-                       capture_output=True, check=True, timeout=max(90, duration_ms / 400))
+        command = worker_command(PYTHON, "voice_studio.workers.mrx_audio_worker",
+                                 source, INSTALL, destination, threads)
+        subprocess.run(command, capture_output=True, check=True, timeout=max(90, duration_ms / 400))
     except (OSError, subprocess.SubprocessError) as error:
         logging.getLogger(__name__).warning("MRX failed: %s", str(getattr(error, "stderr", None) or error)[-1200:])
         raise ValueError("MRX не смог разделить выбранный фрагмент.") from error

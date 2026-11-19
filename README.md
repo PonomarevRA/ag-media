@@ -39,8 +39,8 @@ Keep user media, model weights and generated state outside the source repository
 `VOICE_MODELS_DIR`, `VOICE_DEPENDENCIES_DIR` and `VOICE_TEMP_DIR`. Do not commit
 local environment files, recordings, transcripts, credentials or model weights.
 
-The [local documentation](docs/wiki/Home.md) describes the interface, models,
-storage and development. Run focused tests for the capability being changed.
+The [architecture guide](docs/ARCHITECTURE.md) covers package boundaries and launchers.
+The [local documentation](docs/wiki/Home.md) covers the interface, models and storage. Run focused tests for the capability being changed.
 For the source exporter safety contracts:
 
 ```sh

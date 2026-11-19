@@ -9,7 +9,8 @@ import subprocess
 import sys
 
 from voice_paths import model_path
-from voice_studio.synthesis.engines import ROOT, bounded_timeout, python_for, research_enabled
+from voice_studio.core.worker_process import worker_command
+from voice_studio.synthesis.engines import bounded_timeout, python_for, research_enabled
 from voice_studio.speech.recognition import transcribe
 
 
@@ -72,10 +73,10 @@ def speaker_cosine(original, candidate, *, deadline=None):
     if not scorer_ready():
         raise ValueError("Локальный энкодер голоса недоступен.")
     if research_enabled():
-        command = [str(python_for("coqui")), str(ROOT / "speaker_metric.py"),
-                   str(model_path("xtts", "model.pth"))]
+        command = worker_command(python_for("coqui"), "voice_studio.synthesis.speaker_metric",
+                                 model_path("xtts", "model.pth"))
     else:
-        command = [sys.executable, str(ROOT / "speech_metrics.py"), str(ERES2NET)]
+        command = worker_command(sys.executable, "voice_studio.synthesis.speech_metrics", ERES2NET)
     try:
         output = subprocess.check_output(
             [*command, str(original), str(candidate)],

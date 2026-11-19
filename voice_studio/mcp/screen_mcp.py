@@ -90,7 +90,7 @@ def analyze_image_bytes(data, mode, box, session_dir):
         options = {"mode": mode, "region": box, "session_dir": str(session_dir) if session_dir else None,
                    "work_dir": directory}
         try:
-            return run_worker("video_scene.py", ["--screenshot", copy, json.dumps(options)], [VISION], timeout=110)
+            return run_worker("voice_studio.vision.video_scene", ["--screenshot", copy, json.dumps(options)], [VISION], timeout=110)
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             raise ValueError("Локальное распознавание скриншота не завершилось.") from exc
 
@@ -184,7 +184,7 @@ def analyze_scroll_screenshots(file_paths, region=None, timestamps_ms=None, sess
             request = root / "scroll.json"
             request.write_text(json.dumps({"captures": staged, "region": box, "contentOnly": region is not None}),
                                encoding="utf-8")
-            result = run_worker("video_scene.py", ["--scroll-screenshots", request], [VISION], timeout=110)
+            result = run_worker("voice_studio.vision.video_scene", ["--scroll-screenshots", request], [VISION], timeout=110)
             result["schemaVersion"] = "voice-studio-screen-scroll/1"
             result["capturedAtMs"] = times
             if known is not None and result["status"] == "draft":

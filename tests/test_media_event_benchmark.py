@@ -114,6 +114,8 @@ class EventBenchmarkTests(TestCase):
     def test_native_identity_proof_preserves_unknown_graph_facts(self):
         """The bounded UUID proof must reject any additional graph fact drift."""
         path = PATH.parents[1] / 'data/exports/event-bus-20261118/qa/check_native_identity.py'
+        if not path.is_file():
+            self.skipTest('Requires retained native event-bus QA artifacts')
         spec = importlib.util.spec_from_file_location('native_identity_proof', path)
         proof = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(proof)

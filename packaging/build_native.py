@@ -23,16 +23,16 @@ def run(arguments):
 def copy_sources(source, destination):
     """Copy the finite application source/assets, excluding every data, engine and model directory."""
     destination.mkdir(parents=True)
-    for item in source.glob("*.py"):
-        shutil.copy2(item, destination / item.name)
+    for name in ("ag_media_studio.py", "ag_media_studio_mcp.py", "server.py", "voice_mcp.py", "voice_paths.py"):
+        shutil.copy2(source / name, destination / name)
     for directory in ("voice_studio", "web", "docs/wiki"):
         root = source / directory
         for item in root.rglob("*"):
-            if item.is_file() and not item.is_symlink() and "__pycache__" not in item.parts and item.suffix in {".py", ".json", ".js", ".css", ".html", ".svg", ".md", ".png", ".ico"}:
+            if item.is_file() and not item.is_symlink() and "__pycache__" not in item.parts and item.suffix in {".py", ".json", ".js", ".css", ".html", ".svg", ".md", ".png", ".ico", ".swift"}:
                 target = destination / item.relative_to(source)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, target)
-    for name in ("project.json", "scene_ocr.swift", "audio_scene.swift", "THIRD-PARTY.md", "THIRD_PARTY_NOTICES.md", "LICENSE"):
+    for name in ("project.json", "THIRD-PARTY.md", "THIRD_PARTY_NOTICES.md", "LICENSE"):
         if (source / name).is_file():
             shutil.copy2(source / name, destination / name)
 

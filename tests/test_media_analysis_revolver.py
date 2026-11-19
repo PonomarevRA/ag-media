@@ -131,15 +131,19 @@ class AnalysisRevolverTests(TestCase):
         """A stage cannot reuse a checkpoint from an older version of a packaged worker."""
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            for helper in ("scene_ocr.swift", "audio_scene.swift"):
-                (root / helper).touch()
+            helper = root / "voice_studio/audio/native/audio_scene.swift"
+            helper.parent.mkdir(parents=True)
+            helper.write_text("// Original helper")
             worker = root / "voice_studio/vision/tracking.py"
             worker.parent.mkdir(parents=True)
             worker.write_text("LIMIT = 1\n")
             with patch("voice_studio.graph.media_analysis_revolver.ROOT", root):
                 first = analysis_fingerprint("same-source", {})
                 worker.write_text("LIMIT = 2\n")
-                self.assertNotEqual(first, analysis_fingerprint("same-source", {}))
+                updated_worker = analysis_fingerprint("same-source", {})
+                self.assertNotEqual(first, updated_worker)
+                helper.write_text("// Updated helper")
+                self.assertNotEqual(updated_worker, analysis_fingerprint("same-source", {}))
 
     def test_fingerprint_changes_with_face_clothing_and_audio_modes(self):
         """Each stage mode must invalidate previous results when the source stays the same."""

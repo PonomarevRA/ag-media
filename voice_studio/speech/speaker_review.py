@@ -4,8 +4,6 @@ from voice_studio.mod_runtime import current_snapshot, model_resource, worker_en
 
 from voice_studio.mod_runtime import model_provider
 
-from voice_paths import PROJECT_ROOT
-
 from array import array
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -16,6 +14,7 @@ import subprocess
 import sys
 import wave
 
+from voice_studio.core.worker_process import worker_command
 from voice_studio.vision.face_reid import cosine, unit_vector
 from voice_studio.vision.face_speakers import active_face
 from voice_studio.speech.short_reply_review import find_replies, review_short_replies
@@ -64,7 +63,8 @@ def extract_embeddings(wav, spans):
                     'configuration': current_snapshot().fingerprint(['speech.embedding', 'speech.embedding-resource'])}
         timeout = float(os.environ.get('VOICE_SPEAKER_EMBEDDING_TIMEOUT_SECONDS', '35'))
         return get_worker().extract(wav, spans, weights, identity, timeout=timeout)
-    proc = subprocess.run([sys.executable, str(PROJECT_ROOT / "speaker_review.py"), str(wav)], input=json.dumps(spans),
+    command = worker_command(sys.executable, "voice_studio.speech.speaker_review", wav)
+    proc = subprocess.run(command, input=json.dumps(spans),
                           env=worker_environment(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=35, check=True)
     return {int(number): vectors for number, vectors in json.loads(proc.stdout).items()}
 

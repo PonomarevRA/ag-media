@@ -44,10 +44,8 @@ def analysis_fingerprint(source_digest, settings, *, environment_names=None):
     if environment_names is not None:
         environment = {name: os.environ.get(name) for name in environment_names}
     digest = sha256(json.dumps([source_digest, settings, sys.version, environment], sort_keys=True).encode())
-    sources = [
-        *ROOT.glob("*.py"), *(ROOT / "voice_studio").rglob("*.py"),
-        ROOT / "scene_ocr.swift", ROOT / "audio_scene.swift",
-    ]
+    package = ROOT / "voice_studio"
+    sources = [*ROOT.glob("*.py"), *package.rglob("*.py"), *package.rglob("*.swift")]
     for path in sorted(sources):
         digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(path.read_bytes())

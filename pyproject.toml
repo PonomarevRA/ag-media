@@ -16,5 +16,8 @@ py-modules = ["voice_paths"]
 [tool.setuptools.packages.find]
 include = ["voice_studio*"]
 
+[tool.setuptools.package-data]
+voice_studio = ["audio/native/*.swift", "vision/native/*.swift"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements-core.txt"]}

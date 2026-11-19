@@ -42,12 +42,20 @@
       "sha256": "2bffc072a312bbe6a3ac3eb4abb48d1ca5778256ee23e2cd71c667fba860394a"
     },
     {
+      "path": "voice_studio/app/http_transport.py",
+      "group": "app",
+      "summary": "HTTP transport for the studio's loopback server.",
+      "summaryRu": "HTTP transport for the studio's loopback server.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b239ae53debc2456b06495c17ed0a3c62b571304165bb66f02a823d87e411259"
+    },
+    {
       "path": "voice_studio/app/image_analysis.py",
       "group": "app",
       "summary": "Adapt a bounded browser image upload to the same local vision worker used by screenshot MCP.",
       "summaryRu": "Adapt a bounded browser image upload to the same local vision worker used by screenshot MCP.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "e5d4000edccea554dfde807f729245d542b05a346d0c2479e7744adcabc0298d"
+      "sha256": "e8f18ef5f85674d0120cddaaafdf036f124f53a584dbc2dce11a68f070ce738e"
     },
     {
       "path": "voice_studio/app/live_capture.py",
@@ -55,7 +63,7 @@
       "summary": "Bounded local analysis for explicitly selected browser tab fragments.",
       "summaryRu": "Bounded local analysis for explicitly selected browser tab fragments.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "e1170e835cc3377772211273d22b094415e0ba96259b39f278c30df6f81f80ee"
+      "sha256": "4a972cd9ef9ee30430b58577d0f2365b8ef0881404bf4b0845de82a655e09e23"
     },
     {
       "path": "voice_studio/app/media_pipeline.py",
@@ -79,7 +87,7 @@
       "summary": "Serve the single-user ag-media-studio on loopback.",
       "summaryRu": "Serve the single-user ag-media-studio on loopback.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "ae44d00a7900683920078d8e35f6929e5d82a8f6e10f638d5dae79066b8714cd"
+      "sha256": "3158c5b97d6771ad7b83d23ad3953cef81a705052cd98d32722a9957b5d00b1e"
     },
     {
       "path": "voice_studio/app/static_assets.py",
@@ -143,7 +151,7 @@
       "summary": "Export aligned dialogue, music and effects for local MCP clients.",
       "summaryRu": "Export aligned dialogue, music and effects for local MCP clients.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "879d5c5efc212efdd74ba6de9439ade3caa2239ec582a212707f94758b62ec69"
+      "sha256": "30126a4f455936032a76559c70a73345d9d4344902d7c1992f29b935532837bb"
     },
     {
       "path": "voice_studio/audio/audio_processing.py",
@@ -159,7 +167,7 @@
       "summary": "Classify independent music and sound cues on prepared audio and attach pitch evidence.",
       "summaryRu": "Classify independent music and sound cues on prepared audio and attach pitch evidence.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "9ac178053e666cff57bb4f67db9c380310bfab289d13570c19e116f39eca2d44"
+      "sha256": "8707b6f2f8c9c4baf9d0513408724d05ae1b9827ea386d0c3b8583e2c0d343f7"
     },
     {
       "path": "voice_studio/audio/dialogue_pauses.py",
@@ -207,7 +215,7 @@
       "summary": "Run the local Sherpa-ONNX audio tagger on overlapping PCM windows.",
       "summaryRu": "Run the local Sherpa-ONNX audio tagger on overlapping PCM windows.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "fa05721e3fc667d8d03cad953734e8b3516c3fa5013fed3e9563c61e6d3d0211"
+      "sha256": "10384a9c38755ba226f2493693a30c044893a0c2f91cfdfa6a6530b9ac3cd8bf"
     },
     {
       "path": "voice_studio/builtin_mods/catalog.py",
@@ -290,6 +298,14 @@
       "sha256": "b44bdeafac9b716e9cf7af7957183f3a815f1b3e20aeaac5c7dd4767f451285f"
     },
     {
+      "path": "voice_studio/core/worker_process.py",
+      "group": "core",
+      "summary": "Build child commands for modules owned by the installed Studio package.",
+      "summaryRu": "Build child commands for modules owned by the installed Studio package.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ed0eae31548baecefc3b469c211b7cf5a1845642b6c8927932a65b13fdb70875"
+    },
+    {
       "path": "voice_studio/core/workspace_lock.py",
       "group": "core",
       "summary": "Cross-platform, process-lifetime ownership for one writable Studio workspace.",
@@ -311,7 +327,7 @@
       "summary": "Persist successful media-analysis stages so a local graph build can resume.",
       "summaryRu": "Persist successful media-analysis stages so a local graph build can resume.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "3a7ac8762f201ce652b022891f74a6964d667b374e7528d64fd20c8f66a3f2c8"
+      "sha256": "121c489fa8efa738be6e59c6702925e3eff2fea6b4e649c53dd3a160e9faf802"
     },
     {
       "path": "voice_studio/graph/media_graph_events.py",
@@ -551,7 +567,7 @@
       "summary": "Expose local screenshot OCR and geometry as an editable first-pass description.",
       "summaryRu": "Expose local screenshot OCR and geometry as an editable first-pass description.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "322caa0a104a63e4f5961f9cbc5b41108af795824b5af09bf90d34aa6846aea9"
+      "sha256": "905ac1ed45910ada186f031fc4902258e0c3db892cd70e0725eb5ef896d0c671"
     },
     {
       "path": "voice_studio/mcp/ui_bridge_mcp.py",
@@ -831,7 +847,7 @@
       "summary": "Own one lazy native speaker process, bounded serial admission and its deadline.",
       "summaryRu": "Own one lazy native speaker process, bounded serial admission and its deadline.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "72ac83157e07a63d6dcc0a8c026553d7c0c525b695c662c6c88802b1e944dfd8"
+      "sha256": "7b438e804b56f34a0beba2a918e5fd97c55ad61b10352750a4adc4390e21fae8"
     },
     {
       "path": "voice_studio/speech/embedding_worker_server.py",
@@ -895,7 +911,7 @@
       "summary": "Run local speaker segmentation and label timed Whisper words.",
       "summaryRu": "Run local speaker segmentation and label timed Whisper words.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "d017a43a4aa8b36e44685fe90fc8c4f9547419e31f228cb5186b9b4f81e04052"
+      "sha256": "75fbc49b40e35c6c60fb7db5c110885d71519c8ffb01ad85dd9286e38f79cd7c"
     },
     {
       "path": "voice_studio/speech/speaker_identity.py",
@@ -935,7 +951,7 @@
       "summary": "Review provisional Sherpa clusters against local voice and active-face references.",
       "summaryRu": "Review provisional Sherpa clusters against local voice and active-face references.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "020913cd05604a3e5a9b6f78a5a1228c7e140f99b10ae8b6784e6bc74179b1a4"
+      "sha256": "dfc7eda081a3666970c180a7e212bebc58baa865fccfae2082a3b19e4903e9fc"
     },
     {
       "path": "voice_studio/speech/speech_overlap.py",
@@ -1007,7 +1023,7 @@
       "summary": "Pinned local MLX checkpoints for reference-based voice synthesis.",
       "summaryRu": "Pinned local MLX checkpoints for reference-based voice synthesis.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "0e98cecee6b04c831360aed1321cb1c5bcd7f8c3d01e82eb3689508ee3aeb642"
+      "sha256": "4e56d19455165e3cf4435ed9704f1ff2d81e3fa0be896829da9e7fb3e50b1e26"
     },
     {
       "path": "voice_studio/synthesis/corpus.py",
@@ -1023,7 +1039,7 @@
       "summary": "Separate a continuous source bed and mix it with an aligned dub.",
       "summaryRu": "Separate a continuous source bed and mix it with an aligned dub.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "7b8e0e20f328dbd2a0a9dc8e5750855d4b3aa3c655b3514e64d59da645859c24"
+      "sha256": "1031373b21715ecec6d7c396d26065a06603295736075e45dc58377971de129c"
     },
     {
       "path": "voice_studio/synthesis/dub_timing.py",
@@ -1047,7 +1063,7 @@
       "summary": "Local engine adapters and audio preparation for Voice Studio.",
       "summaryRu": "Local engine adapters and audio preparation for Voice Studio.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "44d1eabe6fa37eced8069bebb7ca84ea1b38c5c42f77240c41ba107ec81bf08d"
+      "sha256": "6550f2325093ce90bcf10ca5bbbb99a306287180a845e9e808e9dcef29a189af"
     },
     {
       "path": "voice_studio/synthesis/fragment_similarity.py",
@@ -1103,7 +1119,7 @@
       "summary": "Measure words and speaker similarity independently for a local WAV pair.",
       "summaryRu": "Measure words and speaker similarity independently for a local WAV pair.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "5d191c1726cb7c89789e3c16048099779263d102c41a15c6961997612879e0b6"
+      "sha256": "8308bdf926e77d8196ca1ace7fdb2858aedaacb10a8c5e375dc5cbc9c28142bb"
     },
     {
       "path": "voice_studio/synthesis/video_dub.py",
@@ -1127,7 +1143,7 @@
       "summary": "Reuse the local Light-ASD model across bounded, synchronous requests.",
       "summaryRu": "Reuse the local Light-ASD model across bounded, synchronous requests.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "028ce44c6576e45da1f8d04ee4fa93d74c67bafacffe30e19df63233a46098d8"
+      "sha256": "c35e6aff05caf01e481c0283808dc20685c811274f81233451fd37d720b8317b"
     },
     {
       "path": "voice_studio/vision/adaptive_faces.py",
@@ -1159,7 +1175,7 @@
       "summary": "Sample a small set of outfit references between the face and audio stages.",
       "summaryRu": "Sample a small set of outfit references between the face and audio stages.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "b2cfcf2756230d599c619010221c59d2e3f353529de561e47fc2ef2478e1d59d"
+      "sha256": "03f22739371340ed5afc069ba4e07f9589345204af0185b7a67899bd090b81f2"
     },
     {
       "path": "voice_studio/vision/face_appearance.py",
@@ -1271,7 +1287,7 @@
       "summary": "Select and execute bounded body, gaze or clothing-mask tasks.",
       "summaryRu": "Select and execute bounded body, gaze or clothing-mask tasks.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "241224d1577f9146f1327385cb995f59c24aec60245c49d6321a1694d0afc31d"
+      "sha256": "9094aa9d181750e2f4ccfd23537b7f5eaa2312b0f1f4151e3930116117bea148"
     },
     {
       "path": "voice_studio/vision/person_motion.py",
@@ -1295,7 +1311,7 @@
       "summary": "Run local bilingual OCR and project sector coordinates back onto the video.",
       "summaryRu": "Run local bilingual OCR and project sector coordinates back onto the video.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "96745c056d18ebf5852eb97b9b37753c195f0521f48c20d2c94d77486a6f961c"
+      "sha256": "bfc285e4e7eb5ce67f2bb3fca8858ddaf0e4e186b38d1c25b7cf8a50c19faef0"
     },
     {
       "path": "voice_studio/vision/scene_sampling.py",
@@ -1431,7 +1447,7 @@
       "summary": "Collect visual proposals without rewriting the audio transcript or speaker labels.",
       "summaryRu": "Collect visual proposals without rewriting the audio transcript or speaker labels.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "84ffa4f93e4c84f8cdf07f4e8d1ba25e48dd232b7eb8f2aaec737424c0663396"
+      "sha256": "6b1d0c37a558414aed1e5204f12e1a689c3586fceeb1a491b85101b90287d70d"
     },
     {
       "path": "voice_studio/vision/video_scene.py",
@@ -1439,7 +1455,7 @@
       "summary": "Plan local scene OCR and object recognition without re-running face detection.",
       "summaryRu": "Plan local scene OCR and object recognition without re-running face detection.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "95f94a58c2a4ac31818065ced5fa6d19d0b2beee0f312db5b657eb09f23f5c7f"
+      "sha256": "de1af2fc3fcf9cd1e1791f737da23bbb90329cd2148c086249edb3cfbe6642a7"
     },
     {
       "path": "voice_studio/vision/visual_attributes.py",

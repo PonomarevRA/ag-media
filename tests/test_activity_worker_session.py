@@ -50,7 +50,7 @@ class ActivityWorkerSessionTests(TestCase):
         """Connect a fake owned child while bypassing unrelated mod configuration."""
         with patch(TARGET + '.worker_environment', side_effect=lambda value: value), \
                 patch(TARGET + '.subprocess.Popen', return_value=child):
-            with ActivityWorkerSession('python', 'worker.py', []) as worker:
+            with ActivityWorkerSession(['python', 'worker.py'], []) as worker:
                 return worker.request(['--window', '0'], timeout)
 
     def test_write_timeout_retires_child_and_joins_io(self):
@@ -104,7 +104,7 @@ class ActivityWorkerSessionTests(TestCase):
         invalid, valid = FakeChild(b'{}\n'), FakeChild()
         with patch(TARGET + '.worker_environment', side_effect=lambda value: value), \
                 patch(TARGET + '.subprocess.Popen', side_effect=[invalid, valid]) as spawn:
-            with ActivityWorkerSession('python', 'worker.py', []) as worker:
+            with ActivityWorkerSession(['python', 'worker.py'], []) as worker:
                 with self.assertRaises(ValueError):
                     worker.request([], 1)
                 self.assertTrue(invalid.killed)
@@ -116,7 +116,7 @@ class ActivityWorkerSessionTests(TestCase):
         child = FakeChild(b'{"result": {"window": 1}}\n{"result": {"window": 2}}\n')
         with patch(TARGET + '.worker_environment', side_effect=lambda value: value), \
                 patch(TARGET + '.subprocess.Popen', return_value=child) as spawn:
-            with ActivityWorkerSession('python', 'worker.py', []) as worker:
+            with ActivityWorkerSession(['python', 'worker.py'], []) as worker:
                 self.assertEqual(worker.request([], 1), {'window': 1})
                 self.assertEqual(worker.request([], 1), {'window': 2})
                 self.assertEqual(spawn.call_count, 1)
@@ -125,7 +125,7 @@ class ActivityWorkerSessionTests(TestCase):
     def test_invalid_limits_are_rejected_before_spawn(self):
         """Invalid deadlines and oversized requests never allocate a native child."""
         with patch(TARGET + '.subprocess.Popen') as spawn:
-            with ActivityWorkerSession('python', 'worker.py', []) as worker:
+            with ActivityWorkerSession(['python', 'worker.py'], []) as worker:
                 for timeout in (0, -1, float('nan'), float('inf')):
                     with self.subTest(timeout=timeout), self.assertRaises(ValueError):
                         worker.request([], timeout)

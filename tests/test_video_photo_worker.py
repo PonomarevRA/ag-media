@@ -27,6 +27,6 @@ class VideoPhotoWorkerTests(TestCase):
         with patch('voice_studio.vision.video_revolver.score_visible_faces', side_effect=ValueError), \
              patch('voice_studio.vision.video_revolver.run_worker', return_value={}) as worker:
             collect_evidence("video", "audio", phrases, 0, "mov", report, lambda event: None)
-        self.assertEqual(worker.call_args.args[0], "speaker_photos.py")
+        self.assertEqual(worker.call_args.args[0], "voice_studio.speech.speaker_photos")
         self.assertEqual(worker.call_args.args[1][0], "video")
         self.assertEqual(report["stages"], {"light-asd": "failed", "yunet": "ok", "facial-expressions": "unavailable"})

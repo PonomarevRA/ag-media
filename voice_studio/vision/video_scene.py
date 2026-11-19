@@ -60,7 +60,7 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 request["scrollInputs"] = inputs
                 request["scrollClock"] = scroll_clock(frames, cuts)
             (root / "samples.json").write_text(json.dumps(request), encoding="utf-8")
-            result = run_worker("video_scene.py", [root], [VISION], timeout=max(420, len(plan)))
+            result = run_worker("voice_studio.vision.video_scene", [root], [VISION], timeout=max(420, len(plan)))
             for index, page in enumerate(result.get("interfaceScrolls", [])):
                 filename = page.pop("_mosaicFile", None)
                 if publish_mosaic and isinstance(filename, str) and re.fullmatch(r"screen-scroll-[0-9]+\.png", filename):

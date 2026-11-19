@@ -16,7 +16,8 @@ from threading import Lock, Timer
 from time import monotonic, perf_counter
 import wave
 
-from voice_studio.synthesis.engines import ROOT, bounded_timeout, ffmpeg
+from voice_studio.core.worker_process import worker_command
+from voice_studio.synthesis.engines import bounded_timeout, ffmpeg
 from voice_studio.speech.media_transcript import segments_from_whisper
 from voice_studio.speech.recognition import MODEL, recognize_file
 from voice_paths import model_path
@@ -74,7 +75,7 @@ class FaceProcess:
         if self.process is None or self.process.poll() is not None:
             self.close()
             self.process = subprocess.Popen(
-                [str(PYTHON), "-u", str(ROOT / "live_face_worker.py")],
+                worker_command(PYTHON, "voice_studio.workers.live_face_worker", unbuffered=True),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 env=worker_environment({**os.environ, "PYTHONPATH": str(VISION)}), text=True,
             )

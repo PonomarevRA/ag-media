@@ -17,6 +17,7 @@
 | `voice_studio/app/desktop_runtime.py` | Owned loopback service for the native desktop hosts; never attaches to another instance. |
 | `voice_studio/app/desktop_updates.py` | Read stable native release metadata on demand and report matching packages. |
 | `voice_studio/app/dialogue_audit_service.py` | Validate and serialize source-bound dialogue audits for UI and local agents. |
+| `voice_studio/app/http_transport.py` | HTTP transport for the studio's loopback server. |
 | `voice_studio/app/image_analysis.py` | Adapt a bounded browser image upload to the same local vision worker used by screenshot MCP. |
 | `voice_studio/app/live_capture.py` | Bounded local analysis for explicitly selected browser tab fragments. |
 | `voice_studio/app/media_pipeline.py` | Reuse the graph's bounded source pipeline for long uploads instead of truncating audio. |
@@ -44,6 +45,7 @@
 | `voice_studio/core/storage_cache.py` | Coordinate regenerable storage with its readers across Studio and MCP processes. |
 | `voice_studio/core/tool_names.py` | The finite page-operation allowlist; no legacy aliases or runtime imports. |
 | `voice_studio/core/voice_registry_lock.py` | Serialize writers to one source's private voice registry without locking UI parsing. |
+| `voice_studio/core/worker_process.py` | Build child commands for modules owned by the installed Studio package. |
 | `voice_studio/core/workspace_lock.py` | Cross-platform, process-lifetime ownership for one writable Studio workspace. |
 
 ## Речь и спикеры

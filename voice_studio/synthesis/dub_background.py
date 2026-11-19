@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 
+from voice_studio.core.worker_process import worker_command
 from voice_studio.synthesis.engines import ROOT, ffmpeg
 from voice_studio.speech.media_transcript import FORMATS, audio_offset
 
@@ -36,7 +37,7 @@ def prepare_background(source, duration_ms, folder):
             "-ac", "2", "-af", f"{timing},{timeline_end(duration_ms)}", "-c:a", "pcm_f32le", str(original)])
     timeout = max(90, min(1200, 60 + duration_ms // 1000))
     try:
-        subprocess.run([str(PYTHON), str(ROOT / "dub_background_worker.py"), str(original), str(MODEL), str(output)],
+        subprocess.run(worker_command(PYTHON, "voice_studio.workers.dub_background_worker", original, MODEL, output),
                        check=True, capture_output=True, timeout=timeout,
                        env={**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
     except (OSError, subprocess.SubprocessError) as error:

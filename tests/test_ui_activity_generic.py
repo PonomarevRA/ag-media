@@ -2,8 +2,12 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from importlib.util import find_spec
 import unittest
 from unittest.mock import patch
+
+if find_spec("cv2") is None or find_spec("numpy") is None:
+    raise unittest.SkipTest("Requires the optional vision environment")
 
 import cv2
 import numpy as np

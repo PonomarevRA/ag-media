@@ -12,7 +12,7 @@ import sys
 from threading import BoundedSemaphore, Lock, Thread, Timer
 from time import monotonic
 
-from voice_paths import PROJECT_ROOT
+from voice_studio.core.worker_process import worker_command
 from voice_studio.speech.embedding_protocol import (
     MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, MAX_STDERR_BYTES, validate_spans, validate_vectors,
 )
@@ -72,7 +72,9 @@ class EmbeddingWorker:
         """Create lazy ownership; queue_limit bounds waiting callers, excluding the active call."""
         if not math.isfinite(idle_seconds) or idle_seconds <= 0 or type(queue_limit) is not int or queue_limit < 0:
             raise ValueError('Invalid embedding worker limits')
-        self.command = command or [sys.executable, str(PROJECT_ROOT / 'speaker_review.py'), '--embedding-worker']
+        self.command = command or worker_command(
+            sys.executable, "voice_studio.speech.speaker_review", "--embedding-worker"
+        )
         self.idle_seconds = idle_seconds
         self._admission = BoundedSemaphore(queue_limit + 1)
         self._serial = Lock()

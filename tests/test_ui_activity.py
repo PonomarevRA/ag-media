@@ -1,5 +1,9 @@
 """Call UI evidence must remain distinct from a claimed voice identity."""
+from importlib.util import find_spec
 import unittest
+if find_spec("cv2") is None or find_spec("numpy") is None:
+    raise unittest.SkipTest("Requires the optional vision environment")
+
 import cv2
 import numpy as np
 from voice_studio.vision.ui_activity import UIActivity, outline_candidates

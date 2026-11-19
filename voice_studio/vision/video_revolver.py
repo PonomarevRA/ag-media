@@ -11,6 +11,7 @@ from math import isfinite
 import subprocess
 from threading import BoundedSemaphore
 
+from voice_studio.core.worker_process import worker_command
 from voice_studio.vision.activity_worker_session import ActivityWorkerSession
 from voice_studio.vision.facial_expressions import finalize_expressions
 from voice_studio.vision.video_activity_chunks import STEP, ActivityTimeline, activity_windows
@@ -95,7 +96,7 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
                 result["phrases"] = photos or {}
                 progress["reused"] = True
             else:
-                result["phrases"] = run_worker("speaker_photos.py", [source, MODEL, formats, json.dumps(sampled)],
+                result["phrases"] = run_worker("voice_studio.speech.speaker_photos", [source, MODEL, formats, json.dumps(sampled)],
                                                [VISION], timeout=100)
             result["stages"]["yunet"] = "ok"
         except (OSError, ValueError, subprocess.SubprocessError):
@@ -190,11 +191,11 @@ def probe_video(source, formats, *, timing=False):
         return (None, None) if timing else None
 
 
-def run_worker(script, arguments, imports, timeout):
+def run_worker(module, arguments, imports, timeout):
     """Keep native dependencies in their own interpreter and parse a single JSON response."""
     environment = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, imports))}
     raw = subprocess.check_output(
-        [str(PYTHON), str(ROOT / script), *map(str, arguments)],
+        worker_command(PYTHON, module, *arguments),
         env=worker_environment(environment), stderr=subprocess.DEVNULL, timeout=timeout,
     )
     return json.loads(raw)
@@ -267,7 +268,8 @@ def score_visible_faces(source, wav, audio_start_ms, phrases, formats, *, photo_
     photos = None
     published = False
     imports = [VISION, ASD / "python", ASD / "upstream"]
-    with ActivityWorkerSession(PYTHON, ROOT / "light_asd_worker.py", imports) as worker:
+    command = worker_command(PYTHON, "voice_studio.workers.light_asd_worker")
+    with ActivityWorkerSession(command, imports) as worker:
         for index, (start, end, scan_start, scan_end) in enumerate(plan, 1):
             spans, cue_starts = window_cues(phrases, start, end, scan_start)
             try:

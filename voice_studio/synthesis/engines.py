@@ -12,6 +12,7 @@ import wave
 
 import msgpack
 
+from voice_studio.core.worker_process import worker_command
 from voice_studio.synthesis import commercial_voice
 
 from voice_paths import MODELS_DIR as MODEL_DIR, PROJECT_ROOT as ROOT, RUNTIME_DIR, ensure_temporary_root, model_path
@@ -191,7 +192,7 @@ def generate(model, job, demo):
     env.setdefault("HF_HOME", str(RUNTIME_DIR / "huggingface"))
     env.setdefault("OMP_NUM_THREADS", "4")
     process = subprocess.run(
-        [str(python_for(model)), str(ROOT / "model_worker.py")],
+        worker_command(python_for(model), "voice_studio.workers.model_worker"),
         input=json.dumps(job), text=True, timeout=bounded_timeout(deadline, 900), stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE, env=env,
     )

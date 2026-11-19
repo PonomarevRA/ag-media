@@ -11,7 +11,7 @@ from time import monotonic, sleep
 from unittest import TestCase
 from unittest.mock import patch
 
-from voice_paths import PROJECT_ROOT
+from voice_studio.core.worker_process import worker_command
 from voice_studio.speech.embedding_protocol import MAX_REQUEST_BYTES, MAX_STDERR_BYTES, file_signature
 from voice_studio.speech.embedding_worker import EmbeddingWorker, EmbeddingWorkerError
 from voice_studio.speech.embedding_worker_server import NativeEmbeddingSession
@@ -281,19 +281,27 @@ server.serve()
             self.assertIsNone(session.extractor)
 
     def test_child_server_exits_on_eof_invalid_json_and_parent_loss(self):
-        command = [sys.executable, str(PROJECT_ROOT / 'speaker_review.py'), '--embedding-worker']
-        for wire in (b'', b'{invalid}\n', b'x' * (MAX_REQUEST_BYTES + 1)):
-            process = subprocess.run(command, input=wire, capture_output=True, timeout=3)
-            self.assertEqual(process.returncode, 0, process.stderr)
-            if wire:
-                self.assertIn('error', json.loads(process.stdout))
-        environment = dict(os.environ, VOICE_EMBEDDING_PARENT_PID='-1')
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
-        try:
-            self.assertEqual(process.wait(timeout=3), 0)
-        finally:
-            process.kill() if process.poll() is None else None
-            process.communicate(timeout=2)
+        command = worker_command(sys.executable, 'voice_studio.speech.speaker_review', '--embedding-worker')
+        with TemporaryDirectory() as cwd:
+            # Native app launches need the packaged worker from an arbitrary directory.
+            fake_package = Path(cwd) / "voice_studio"
+            fake_package.mkdir()
+            (fake_package / "__init__.py").write_text("raise RuntimeError('wrong worker package')\n")
+            environment = dict(os.environ, PYTHONPATH=cwd)
+            for wire in (b'', b'{invalid}\n', b'x' * (MAX_REQUEST_BYTES + 1)):
+                process = subprocess.run(command, cwd=cwd, env=environment, input=wire, capture_output=True, timeout=3)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                if wire:
+                    self.assertIn('error', json.loads(process.stdout))
+            environment['VOICE_EMBEDDING_PARENT_PID'] = '-1'
+            process = subprocess.Popen(command, cwd=cwd, env=environment,
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                self.assertEqual(process.wait(timeout=3), 0)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.communicate(timeout=2)
 
     def test_resident_resolves_resource_in_parent_without_mutating_snapshot(self):
         from voice_studio.speech import speaker_review

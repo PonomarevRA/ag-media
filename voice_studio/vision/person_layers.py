@@ -13,6 +13,7 @@ import subprocess
 from threading import BoundedSemaphore
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from voice_studio.core.worker_process import worker_command
 from voice_studio.synthesis.engines import ROOT, ffmpeg
 from voice_studio.vision.video_revolver import PYTHON, VISION
 
@@ -71,7 +72,7 @@ def dispatch_layers(work, frames, timeline, plan, target=None):
     environment = {**os.environ, "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"}
     if interpreter == PYTHON:
         environment["PYTHONPATH"] = str(VISION)
-    result = subprocess.run([str(interpreter), str(ROOT / "person_layer_worker.py"), str(arguments)],
+    result = subprocess.run(worker_command(interpreter, "voice_studio.workers.person_layer_worker", arguments),
                             env=worker_environment(environment), capture_output=True, text=True, timeout=75, check=True)
     return json.loads(result.stdout)
 

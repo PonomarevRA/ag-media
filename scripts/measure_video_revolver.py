@@ -4,17 +4,23 @@ import argparse
 from hashlib import file_digest, sha256
 import json
 import os
+import signal
 from pathlib import Path
 import resource
 import sqlite3
 from statistics import median
 import subprocess
 import sys
-from tempfile import TemporaryDirectory, TemporaryFile
-from time import monotonic, sleep
+from tempfile import TemporaryDirectory
+from time import monotonic
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from voice_studio.vision.activity_worker_session import ActivityWorkerSession
+
+BUILTIN_WORKER = ROOT / "voice_studio/workers/light_asd_worker.py"
 
 
 def millis(seconds):
@@ -27,43 +33,47 @@ def max_rss_mib(usage):
     return round(usage.ru_maxrss / (2**20 if sys.platform == "darwin" else 2**10), 1)
 
 
-def wait_measured(child, timeout):
-    """Collect kernel usage for the worker PID without measuring other workloads."""
-    deadline = monotonic() + timeout
-    while True:
-        pid, status, usage = os.wait4(child.pid, os.WNOHANG)
-        if pid:
-            child.returncode = os.waitstatus_to_exitcode(status)
-            return usage
-        if monotonic() >= deadline:
-            child.kill()
-            child.wait()
-            raise subprocess.TimeoutExpired(child.args, timeout)
-        sleep(.01)
+class MeasuredActivitySession(ActivityWorkerSession):
+    """Measure the exact warm worker process and its completed window requests."""
 
+    def __init__(self, command, imports):
+        """Initialize per-run counters for this worker and any restarted child."""
+        super().__init__(command, imports)
+        self.wall = self.cpu = self.peak_rss = 0
+        self.stages = {}
 
-def run_visual(worker, parameters, imports, timeout, measurements, interpreter):
-    """Execute the selected worker with the production environment and read its report."""
-    libraries = os.pathsep.join(map(str, [ROOT, *imports]))
-    environment = {**os.environ, "PYTHONPATH": libraries}
-    with TemporaryFile() as output, TemporaryFile() as errors:
+    def request(self, arguments, timeout):
+        """Attribute window work, including startup and IPC, to the activity worker."""
         start = monotonic()
-        child = subprocess.Popen(
-            [str(interpreter), str(worker), *map(str, parameters)], cwd=ROOT,
-            env=environment, stdout=output, stderr=errors,
-        )
-        usage = wait_measured(child, timeout)
-        wall = monotonic() - start
-        if child.returncode:
-            errors.seek(0)
-            raise RuntimeError(errors.read().decode(errors="replace")[-1500:])
-        output.seek(0)
-        report = json.load(output)
-    measurements.update(
-        wallMs=millis(wall), cpuMs=millis(usage.ru_utime + usage.ru_stime),
-        peakRssMiB=max_rss_mib(usage), stages=report.get("seconds", {}),
-    )
-    return report
+        try:
+            report = super().request(arguments, timeout)
+        finally:
+            self.wall += monotonic() - start
+        for stage, seconds in report.get("seconds", {}).items():
+            self.stages[stage] = self.stages.get(stage, 0) + seconds
+        return report
+
+    def close_child(self):
+        """Collect usage when retiring the owned process, then close its pipes."""
+        try:
+            child = self.process
+            if child is not None and child.returncode is None:
+                # Popen.kill first polls and could reap an exited PID before wait4.
+                try:
+                    os.kill(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                _, status, usage = os.wait4(child.pid, 0)
+                child.returncode = os.waitstatus_to_exitcode(status)
+                self.cpu += usage.ru_utime + usage.ru_stime
+                self.peak_rss = max(self.peak_rss, max_rss_mib(usage))
+        finally:
+            super().close_child()
+
+    def measurements(self):
+        """Report worker-only resources separately from the full video job."""
+        return {"wallMs": millis(self.wall), "cpuMs": millis(self.cpu),
+                "peakRssMiB": self.peak_rss, "stages": self.stages}
 
 
 def read_context(db_path, digest, language, report):
@@ -109,34 +119,38 @@ def measure_once(args):
     from voice_studio.vision import video_revolver
     from voice_studio.speech.media_transcript import transcribe_media
 
-    original = video_revolver.run_worker
-    visual = {}
+    session = None
     timings = {}
 
-    def intercept(script, parameters, imports, timeout):
-        if script == "light_asd_worker.py":
-            return run_visual(args.worker, parameters, imports, timeout, visual, video_revolver.PYTHON)
-        return original(script, parameters, imports, timeout)
+    def make_session(command, imports):
+        """Keep production transport and switch only the variant entrypoint."""
+        nonlocal session
+        if args.worker.resolve() != BUILTIN_WORKER:
+            command = [command[0], str(args.worker)]
+            imports = [ROOT, *imports]
+        session = MeasuredActivitySession(command, imports)
+        return session
 
     def emit(event):
         if "elapsedMs" in event:
             timings[event["stage"]] = event["elapsedMs"]
 
-    video_revolver.run_worker = intercept
     with args.source.open("rb") as source:
         digest = file_digest(source, "sha256").hexdigest()
     start = monotonic()
-    with TemporaryDirectory(prefix="voice-perf-run-") as work:
-        report = transcribe_media(Path(work), args.language, args.source, speakers=True, quality=True,
-                                  visual=True, scene=args.scene, emit=emit)
-        if args.context_db:
-            read_context(args.context_db, digest, args.language, report)
+    with patch.object(video_revolver, "ActivityWorkerSession", make_session):
+        with TemporaryDirectory(prefix="voice-perf-run-") as work:
+            report = transcribe_media(Path(work), args.language, args.source, speakers=True, quality=True,
+                                      visual=True, scene=args.scene, emit=emit)
+            if args.context_db:
+                read_context(args.context_db, digest, args.language, report)
 
     duration = monotonic() - start
     self_usage = resource.getrusage(resource.RUSAGE_SELF)
     child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
-    if report.get("videoEvidence", {}).get("stages", {}).get("light-asd") != "ok":
+    if session is None or report.get("videoEvidence", {}).get("stages", {}).get("light-asd") != "ok":
         raise RuntimeError("Light-ASD did not run successfully")
+    visual = session.measurements()
     return {
         "sourceSha256": digest,
         "durationMs": report["durationMs"],
@@ -181,7 +195,7 @@ def main():
     parser.add_argument("--context-db", type=Path)
     parser.add_argument("--scene", action="store_true")
     parser.add_argument("--samples", type=int, default=3)
-    parser.add_argument("--variant", action="append", metavar="NAME=PATH")
+    parser.add_argument("--variant", action="append", metavar="NAME=PATH", help="use a worker supporting --window-server")
     parser.add_argument("--worker", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -190,7 +204,7 @@ def main():
         return
     if not 1 <= args.samples <= 10:
         parser.error("--samples must be between 1 and 10")
-    variants = dict(item.split("=", 1) for item in args.variant or [f"current={ROOT / 'light_asd_worker.py'}"])
+    variants = dict(item.split("=", 1) for item in args.variant or [f"current={BUILTIN_WORKER}"])
     command = [sys.executable, str(Path(__file__).resolve()), str(args.source.resolve()), "--language", args.language]
     if args.context_db:
         command += ["--context-db", str(args.context_db.resolve())]

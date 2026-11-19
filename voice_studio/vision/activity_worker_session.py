@@ -16,9 +16,9 @@ MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 class ActivityWorkerSession:
     """Restart the child after a protocol error or timeout without losing completed windows."""
 
-    def __init__(self, python, script, imports):
+    def __init__(self, command, imports):
         """Own one lazy child and one IO thread for sequential window requests."""
-        self.command = [str(python), str(script), "--window-server"]
+        self.command = [*command, "--window-server"]
         self.env = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, imports))}
         self.process = None
         self.reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="light-asd-window")

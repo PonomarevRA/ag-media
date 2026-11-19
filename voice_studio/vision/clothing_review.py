@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 from time import perf_counter
 
+from voice_studio.core.worker_process import worker_command
 from voice_studio.vision.clothing_match import borderline_pairs, choose_sample_tracks, corroborate
 from voice_studio.vision.face_appearance import describe_appearance
 
@@ -82,7 +83,7 @@ def collect_samples(source, tracks, selected, width, height, appearance_faces=()
         }}), encoding="utf-8")
         env = {**os.environ, "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
                "PYTHONPATH": str(APPEARANCE_RUNTIME)}
-        response = subprocess.check_output([str(MP_PYTHON), str(ROOT / "clothing_sample_worker.py"), str(request)],
+        response = subprocess.check_output(worker_command(MP_PYTHON, "voice_studio.workers.clothing_sample_worker", request),
                                            env=worker_environment(env), stderr=subprocess.DEVNULL, timeout=22)
         return json.loads(response)
 

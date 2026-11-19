@@ -7,6 +7,8 @@ import os
 import subprocess
 
 from voice_paths import PROJECT_ROOT as ROOT, model_path
+from voice_studio.core.worker_process import worker_command
+
 PYTHON = ROOT / ".engines" / "mlx-tts" / "bin" / "python"
 MODELS = {"qwen": "Qwen3-TTS 0.6B", "chatterbox": "Chatterbox Multilingual V3"}
 REVISIONS = {
@@ -53,7 +55,7 @@ def generate(model, job_json, timeout):
     env = dict(os.environ, HF_HOME=hub, HF_HUB_CACHE=hub,
                HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
     process = subprocess.run(
-        [str(PYTHON), str(ROOT / "commercial_voice_worker.py"), model],
+        worker_command(PYTHON, "voice_studio.workers.commercial_voice_worker", model),
         input=job_json, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=worker_environment(env), timeout=timeout,
     )
     if process.returncode:

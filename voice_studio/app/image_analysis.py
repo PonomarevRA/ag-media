@@ -39,7 +39,7 @@ def analyze_image(path, options, *, emit=ignore_progress):
         with stage(emit, "image_vision"), temporary_directory() as directory:
             settings = {**options, "work_dir": str(directory)}
             try:
-                result = run_worker("video_scene.py", ["--screenshot", source, json.dumps(settings)], [VISION], timeout=110)
+                result = run_worker("voice_studio.vision.video_scene", ["--screenshot", source, json.dumps(settings)], [VISION], timeout=110)
             except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 raise ValueError("Не удалось завершить анализ картинки. Попробуй быстрый режим или повтори запрос.") from exc
         if not options["include_objects"]:

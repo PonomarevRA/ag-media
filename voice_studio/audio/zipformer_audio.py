@@ -2,8 +2,6 @@
 
 from voice_studio.mod_runtime import model_provider
 
-from voice_paths import PROJECT_ROOT
-
 from array import array
 from importlib.util import find_spec
 import json
@@ -13,6 +11,7 @@ import sys
 import wave
 
 from voice_paths import model_path
+from voice_studio.core.worker_process import worker_command
 
 MODEL_DIR = model_path("audio-tagging", "zipformer-small-int8", "model.int8.onnx").parent
 MODEL = MODEL_DIR / "model.int8.onnx"
@@ -39,7 +38,7 @@ def classify_zipformer(wav, duration_ms):
         return [], "unavailable"
     try:
         raw = subprocess.check_output(
-            [sys.executable, str(PROJECT_ROOT / "zipformer_audio.py"), str(wav)],
+            worker_command(sys.executable, "voice_studio.audio.zipformer_audio", wav),
             timeout=max(15, duration_ms / 1000), stderr=subprocess.DEVNULL,
         )
         return json.loads(raw), "done"

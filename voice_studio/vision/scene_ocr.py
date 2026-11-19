@@ -19,7 +19,7 @@ from voice_studio.core.media_resources import stage_threads
 from voice_studio.vision.scene_objects import iou
 from voice_studio.core.storage_cache import use_cache
 
-from voice_paths import PROJECT_ROOT as ROOT, RUNTIME_DIR, ensure_temporary_root, model_path
+from voice_paths import RUNTIME_DIR, ensure_temporary_root, model_path
 
 TESSDATA = model_path("vision", "tessdata", "rus.traineddata").parent
 FULL = (0, 0, 1, 1)
@@ -83,7 +83,7 @@ def vision_binary(*, compile_missing=True):
     swift = shutil.which("swiftc")
     if not swift:
         return None
-    source = ROOT / "scene_ocr.swift"
+    source = Path(__file__).with_name("native") / "scene_ocr.swift"
     ensure_temporary_root()
     cache = RUNTIME_DIR / "scene-ocr"
     cache.mkdir(mode=0o700, parents=True, exist_ok=True)
