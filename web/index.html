@@ -820,6 +820,12 @@
         <p class="muted" data-ag-width="content" data-ag-width-min-em="7">Встроенные и пользовательские обработчики. Выбор моделей и параметры фиксируются при запуске анализа; текущая обработка продолжится с прежними настройками.</p>
         <p class="muted">Моды запускаются по потребности выбранных этапов. «Включён» разрешает использование; статус ресурсов показывается в карточке.</p>
         <p id="mods-status" role="status" aria-live="polite"></p>
+        <section class="studio-model-install" aria-labelledby="model-install-title" data-ag-width="fill">
+          <h3 id="model-install-title">Установка моделей</h3>
+          <p class="muted">Выберите нужную функцию. Студия скачает модели в локальное хранилище.</p>
+          <p id="model-install-status" role="status"></p>
+          <ul id="model-install-list" role="list" class="studio-model-install-list" data-ag-width="fill"></ul>
+        </section>
         <details class="studio-mod-provider-disclosure" data-ag-width="fill">
           <summary>Выбор обработчиков</summary>
           <div id="mods-providers" class="studio-mod-providers" data-ag-form-row="auto" data-ag-width="fill"></div>

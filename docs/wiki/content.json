@@ -1586,6 +1586,10 @@
       "en": "Schema-driven model settings fields and typed value validation.",
       "ru": "Поля настроек модели по схеме и проверка типов значений."
     },
+    "studio-model-install.js": {
+      "en": "Capability-based model installation and progress in Settings.",
+      "ru": "Установка моделей по функциям и вывод прогресса в настройках."
+    },
     "studio-mods.js": {
       "en": "Model-provider list, settings, availability and management.",
       "ru": "Список провайдеров, параметры, доступность и управление."

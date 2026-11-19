@@ -1,11 +1,11 @@
 """Run body detection, head and gaze estimation, and clothing masks on decoded crops."""
 
+from voice_studio.core.process_usage import process_usage
 from voice_studio.mod_runtime import model_resource, is_replacement
 
 from contextlib import ExitStack
 import json
 from pathlib import Path
-import resource
 import sys
 from time import perf_counter
 
@@ -280,11 +280,11 @@ def main(path):
     with ExitStack() as stack:
         models = open_models(stack, request["plan"], request["models"])
         result = analyze(path.parent, request, *models)
-    usage = resource.getrusage(resource.RUSAGE_SELF)
+    cpu_ms, peak_mib = process_usage()
     result.update(plan=request["plan"], workerMs=round((perf_counter() - started) * 1000),
                   gazeUnavailable=request["plan"]["gaze"] and models[2] is None,
-                  workerCpuMs=round(1000 * (usage.ru_utime + usage.ru_stime)),
-                  workerPeakMiB=round(usage.ru_maxrss / (1024 ** 2 if sys.platform == "darwin" else 1024), 1))
+                  workerCpuMs=cpu_ms,
+                  workerPeakMiB=peak_mib)
     print(json.dumps(result, allow_nan=False))
 
 

@@ -1,6 +1,7 @@
 """Install exact checkpoint revisions after creating the MLX audio environment."""
 
 from os.path import relpath
+import sys
 
 from huggingface_hub import snapshot_download
 
@@ -10,9 +11,10 @@ from voice_paths import MODELS_DIR
 MODEL_ROOT = MODELS_DIR / "commercial"
 
 
-def install():
+def install(models=None):
     """Stage only inference assets and prepare the dependency's offline cache."""
-    for name, (repo, revision) in REVISIONS.items():
+    for name in REVISIONS if models is None else models:
+        repo, revision = REVISIONS[name]
         folder = MODEL_ROOT / name
         snapshot_download(repo_id=repo, revision=revision, local_dir=folder,
                           allow_patterns=["*.json", "*.safetensors", "*.txt", "README.md", "LICENSE*"])
@@ -33,4 +35,10 @@ def install():
 
 
 if __name__ == "__main__":
-    install()
+    if len(sys.argv) > 1:
+        name = sys.argv[1]
+        if name not in {"qwen", "chatterbox"} or len(sys.argv) != 2:
+            raise SystemExit("Choose qwen or chatterbox")
+        install(("chatterbox", "s3tokenizer") if name == "chatterbox" else (name,))
+    else:
+        install()

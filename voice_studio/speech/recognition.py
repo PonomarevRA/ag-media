@@ -22,9 +22,15 @@ LOCK = Lock()
 TRANSLATION_BATCH_SIZE = 16
 
 
+def current_cli():
+    """Find a CLI added after the Studio started, preserving the original selection."""
+    return CLI if CLI.is_file() else whisper_cli()
+
+
 def ready(model=MODEL):
     """Report whether the local executable and model are present."""
-    return CLI.is_file() and os.access(CLI, os.X_OK) and model.is_file()
+    cli = current_cli()
+    return cli.is_file() and os.access(cli, os.X_OK) and model.is_file()
 
 
 def transcribe(root, language, audio, *, deadline=None):
@@ -129,7 +135,7 @@ def run_whisper(jobs, language, options, model, threads, timeout, wait, *, on_wi
     if not LOCK.acquire(timeout=wait):
         raise ValueError("Whisper уже обрабатывает запись. Попробуй ещё раз.")
     try:
-        command = [str(CLI), "-m", str(model), "-l", language, "-oj", *options, "-ng", "-t", str(threads)]
+        command = [str(current_cli()), "-m", str(model), "-l", language, "-oj", *options, "-ng", "-t", str(threads)]
         for wav, output in jobs:
             command.extend(["-f", str(wav), "-of", str(output)])
         if on_window is not None:

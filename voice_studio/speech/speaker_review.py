@@ -15,6 +15,7 @@ import sys
 import wave
 
 from voice_studio.core.worker_process import worker_command
+from voice_studio.core.optional_runtime import runtime_environment
 from voice_studio.vision.face_reid import cosine, unit_vector
 from voice_studio.vision.face_speakers import active_face
 from voice_studio.speech.short_reply_review import find_replies, review_short_replies
@@ -65,7 +66,7 @@ def extract_embeddings(wav, spans):
         return get_worker().extract(wav, spans, weights, identity, timeout=timeout)
     command = worker_command(sys.executable, "voice_studio.speech.speaker_review", wav)
     proc = subprocess.run(command, input=json.dumps(spans),
-                          env=worker_environment(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=35, check=True)
+                          env=runtime_environment("sherpa", worker_environment()), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=35, check=True)
     return {int(number): vectors for number, vectors in json.loads(proc.stdout).items()}
 
 

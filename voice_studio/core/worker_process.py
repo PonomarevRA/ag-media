@@ -4,6 +4,7 @@ from voice_paths import PROJECT_ROOT
 
 
 _BOOTSTRAP = """
+import os
 import runpy
 import sys
 
@@ -13,6 +14,9 @@ if sys.path and sys.path[0] == "":
     sys.path[0] = source
 else:
     sys.path.insert(0, source)
+runtime = os.environ.get("VOICE_WORKER_RUNTIME")
+if runtime:
+    sys.path.insert(1, runtime)
 runpy.run_module(module, run_name="__main__", alter_sys=True)
 """
 

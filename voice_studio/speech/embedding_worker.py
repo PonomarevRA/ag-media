@@ -13,6 +13,7 @@ from threading import BoundedSemaphore, Lock, Thread, Timer
 from time import monotonic
 
 from voice_studio.core.worker_process import worker_command
+from voice_studio.core.optional_runtime import runtime_environment
 from voice_studio.speech.embedding_protocol import (
     MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, MAX_STDERR_BYTES, validate_spans, validate_vectors,
 )
@@ -91,7 +92,7 @@ class EmbeddingWorker:
 
     def _start_locked(self):
         """Spawn a clean native-only child; every model choice arrives in its request."""
-        environment = dict(os.environ)
+        environment = runtime_environment("sherpa")
         environment.pop('VOICE_MOD_SNAPSHOT', None)
         environment['VOICE_EMBEDDING_PARENT_PID'] = str(os.getpid())
         # Buffered reads avoid a syscall per byte when a full reference batch emits JSON.

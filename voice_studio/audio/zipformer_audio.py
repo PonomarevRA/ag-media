@@ -3,7 +3,6 @@
 from voice_studio.mod_runtime import model_provider
 
 from array import array
-from importlib.util import find_spec
 import json
 from pathlib import Path
 import subprocess
@@ -12,6 +11,7 @@ import wave
 
 from voice_paths import model_path
 from voice_studio.core.worker_process import worker_command
+from voice_studio.core.optional_runtime import runtime_environment, sherpa_ready
 
 MODEL_DIR = model_path("audio-tagging", "zipformer-small-int8", "model.int8.onnx").parent
 MODEL = MODEL_DIR / "model.int8.onnx"
@@ -34,12 +34,12 @@ def classify_zipformer(wav, duration_ms):
     """Isolate the native tagger so a runtime error cannot stop transcription."""
     if duration_ms < WINDOW_MS:
         return [], "too-short"
-    if not MODEL.is_file() or not LABELS.is_file() or find_spec("sherpa_onnx") is None:
+    if not MODEL.is_file() or not LABELS.is_file() or not sherpa_ready():
         return [], "unavailable"
     try:
         raw = subprocess.check_output(
             worker_command(sys.executable, "voice_studio.audio.zipformer_audio", wav),
-            timeout=max(15, duration_ms / 1000), stderr=subprocess.DEVNULL,
+            timeout=max(15, duration_ms / 1000), env=runtime_environment("sherpa"), stderr=subprocess.DEVNULL,
         )
         return json.loads(raw), "done"
     except (OSError, ValueError, subprocess.SubprocessError):

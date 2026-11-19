@@ -148,6 +148,13 @@ class ModRegistry:
             row = {key: deepcopy(value) for key, value in record.items() if key != "package"}
             row.update(id=mod_id, manifest=deepcopy(package.manifest), origin=package.origin,
                        fingerprint=package.fingerprint)
+            if package.origin == "builtin":
+                availability = row["manifest"].get("availability", {})
+                files = availability.get("files", [])
+                if files:
+                    ready = all(Path(path).is_file() for path in files)
+                    availability.update(ready=ready, reason="Local artifact/platform present; runtime not probed" if ready
+                                        else "Artifact unavailable or service unprobed")
             rows.append(row)
         return {"apiVersion": 1, "mods": rows + errors, "selections": deepcopy(state["selections"]),
                 "revision": state["revision"], "directory": str(self.directory), "notice": NOTICE,

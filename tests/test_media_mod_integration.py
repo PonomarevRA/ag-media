@@ -286,7 +286,7 @@ class MediaModIntegrationTests(TestCase):
         request = json.loads(process.call_args.kwargs['input'])
         self.assertEqual(request['vocoder'], str(resources['synthesis.vocoder-resource'].parent))
         (absent / 'segmentation.onnx').write_bytes(b'segmentation')
-        with patch.object(speaker_diarization, 'MODEL_PATH', absent), patch.object(speaker_diarization.importlib.util, 'find_spec', return_value=object()):
+        with patch.object(speaker_diarization, 'MODEL_PATH', absent), patch.object(speaker_diarization, 'sherpa_ready', return_value=True):
             self.assertTrue(speaker_diarization.ready())
             self.assertEqual(voice_profiles.local_encoder_id(), 'sherpa-3d-speaker:' + sha256(resources['speech.embedding-resource'].read_bytes()).hexdigest())
         runtime_file = self.root / 'python'

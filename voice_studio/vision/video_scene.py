@@ -1,12 +1,12 @@
 """Plan local scene OCR and object recognition without re-running face detection."""
 
+from voice_studio.core.process_usage import process_usage
 from voice_studio.mod_runtime import model_provider, is_replacement
 
 from bisect import bisect_left
 import json
 from pathlib import Path
 import re
-import resource
 import subprocess
 import sys
 from time import perf_counter
@@ -409,7 +409,7 @@ def analyze_frames(folder):
         screen_statuses.get(f"{prefix}tesseract", screen_statuses.get(f"{prefix}apple-vision", "ok")) == "ok"
         for prefix in ("", "controls-", "scroll-")
     )
-    usage = resource.getrusage(resource.RUSAGE_SELF)
+    cpu_ms, peak_mib = process_usage()
     return {"status": "ok", "stages": {**stages, **ocr_stages}, "sampling": request["sampling"],
             **({"objectTiledShots": sorted(tiled_shots)} if request["objectSampling"] == "shot-tiles" else {}),
             **({"smallObjectPass": small_report} if small_report is not None else {}),
@@ -424,8 +424,8 @@ def analyze_frames(folder):
             "objectViewCacheHits": detector.cache_hits if detector else 0,
             "cameraMotion": camera.intervals, "cameraMotionMs": round(motion_seconds * 1000),
             "cameraMotionStatus": "ok" if camera.intervals else "unmeasured",
-            "pythonWorkerCpuMs": round(1000 * (usage.ru_utime + usage.ru_stime)),
-            "pythonWorkerPeakMiB": round(usage.ru_maxrss / (1024 ** 2 if sys.platform == "darwin" else 1024), 1),
+            "pythonWorkerCpuMs": cpu_ms,
+            "pythonWorkerPeakMiB": peak_mib,
             "frames": frames, "shotColors": summarize_shot_colors(colors), "uiActivity": ui_activity.summary()}
 
 

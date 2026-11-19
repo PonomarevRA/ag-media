@@ -71,7 +71,7 @@
       "summary": "Bounded local analysis for explicitly selected browser tab fragments.",
       "summaryRu": "Bounded local analysis for explicitly selected browser tab fragments.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "4a972cd9ef9ee30430b58577d0f2365b8ef0881404bf4b0845de82a655e09e23"
+      "sha256": "d1bc9ef433b6d5c78ecae6e2aa60cac3beacfecd7143b7b2ba3c1746e14e70ce"
     },
     {
       "path": "voice_studio/app/media_pipeline.py",
@@ -95,7 +95,7 @@
       "summary": "Serve the single-user ag-media-studio on loopback.",
       "summaryRu": "Serve the single-user ag-media-studio on loopback.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "ac38eb6a295295324f0b255320fa367c12488cfdcd3539ef42f1cb747be0ec55"
+      "sha256": "8656b826803a948bf24d08ad1fb6dab4bb754652a30fd1160d53d687265baf84"
     },
     {
       "path": "voice_studio/app/static_assets.py",
@@ -103,7 +103,7 @@
       "summary": "Shared UI asset catalogue and response policy, with no model or database imports.",
       "summaryRu": "Shared UI asset catalogue and response policy, with no model or database imports.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "b16f39ace3343bb37f5fb52c11381adf8572bb80d89b542c753c15180c1e73a9"
+      "sha256": "16c2eb949b83b3febe654eea073bfda51519e4421516cf8f411f9e30d698068a"
     },
     {
       "path": "voice_studio/app/studio.py",
@@ -223,7 +223,7 @@
       "summary": "Run the local Sherpa-ONNX audio tagger on overlapping PCM windows.",
       "summaryRu": "Run the local Sherpa-ONNX audio tagger on overlapping PCM windows.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "10384a9c38755ba226f2493693a30c044893a0c2f91cfdfa6a6530b9ac3cd8bf"
+      "sha256": "a6fbcec98855a6ee67cb5ccb618ee952e029ea75214a9924e18bf4775b3e8e01"
     },
     {
       "path": "voice_studio/builtin_mods/catalog.py",
@@ -282,6 +282,22 @@
       "sha256": "4f819afbc5b68f0fe3ecde18389c0eced232056482c1d77550bd90f1d8c29265"
     },
     {
+      "path": "voice_studio/core/optional_runtime.py",
+      "group": "core",
+      "summary": "Find optional inference wheels installed outside the application bundle.",
+      "summaryRu": "Find optional inference wheels installed outside the application bundle.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5052957216d8268eb59acf73eedd3f905ea9d99b0cdb6f4bf2e2941980a2832f"
+    },
+    {
+      "path": "voice_studio/core/process_usage.py",
+      "group": "core",
+      "summary": "Collect process timings without requiring Unix-only resource counters.",
+      "summaryRu": "Collect process timings without requiring Unix-only resource counters.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "90cd015a620a07beabed8779e84aa98db0888fbbfeeb128171345222513ce5ae"
+    },
+    {
       "path": "voice_studio/core/storage_cache.py",
       "group": "core",
       "summary": "Coordinate regenerable storage with its readers across Studio and MCP processes.",
@@ -311,7 +327,7 @@
       "summary": "Build child commands for modules owned by the installed Studio package.",
       "summaryRu": "Build child commands for modules owned by the installed Studio package.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "ed0eae31548baecefc3b469c211b7cf5a1845642b6c8927932a65b13fdb70875"
+      "sha256": "95f7d3fff9d901c2bc8327117368ed689e88e24a477cd096dd71910baffcd04f"
     },
     {
       "path": "voice_studio/core/workspace_lock.py",
@@ -335,7 +351,7 @@
       "summary": "Persist successful media-analysis stages so a local graph build can resume.",
       "summaryRu": "Persist successful media-analysis stages so a local graph build can resume.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "121c489fa8efa738be6e59c6702925e3eff2fea6b4e649c53dd3a160e9faf802"
+      "sha256": "865d928abc835712472d1a89832548496109ced81769475512f620eef3a39d71"
     },
     {
       "path": "voice_studio/graph/media_graph_events.py",
@@ -695,7 +711,7 @@
       "summary": "External media mod catalog, explicit activation and durable provider selection.",
       "summaryRu": "External media mod catalog, explicit activation and durable provider selection.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "f3efbbe493b881bf412638b4d05abb140ec202d2906e646274a9d7d4ef0e611f"
+      "sha256": "3c337fc3003573b48139db847fc3ad8fc7ba1c48fd5a0c882f73eb246bd1731a"
     },
     {
       "path": "voice_studio/mods/schema.py",
@@ -810,6 +826,30 @@
       "sha256": "293732501e0b37e4979f5a4fdd91e32184b7d839dbd435ee2ad43f7df242b61a"
     },
     {
+      "path": "voice_studio/provision/assets.py",
+      "group": "provision",
+      "summary": "Verified model artifacts from fixed upstream locations.",
+      "summaryRu": "Verified model artifacts from fixed upstream locations.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "73ab8454c5f0bd618faafb6525efebd110dfe8a3a4998b6f16080c4983ce032e"
+    },
+    {
+      "path": "voice_studio/provision/jobs.py",
+      "group": "provision",
+      "summary": "Coordinate explicit builtin model installs requested from Studio settings.",
+      "summaryRu": "Coordinate explicit builtin model installs requested from Studio settings.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f7352f8dcd93bd35aacf15f72162f69e017929a8bcda7a53836f8c1e6feab6d9"
+    },
+    {
+      "path": "voice_studio/provision/runtime.py",
+      "group": "provision",
+      "summary": "Install compatible wheel runtimes without modifying the bundled interpreter.",
+      "summaryRu": "Install compatible wheel runtimes without modifying the bundled interpreter.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c155b131020f03bdd14ffb3fe858611fef1dd74cfa02a3543e0c9d8c24788e58"
+    },
+    {
       "path": "voice_studio/speech/asr_context_graph.py",
       "group": "speech",
       "summary": "Suggest Russian ASR corrections using typed local evidence links.",
@@ -839,7 +879,7 @@
       "summary": "Run a local, cancellable dialogue audit with content-keyed atomic outputs.",
       "summaryRu": "Run a local, cancellable dialogue audit with content-keyed atomic outputs.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "6a88daa466b2795a5b48238e530e1ea8c6d5bae60dd79f7f8aeb9b0e9caab520"
+      "sha256": "e41006683beb83919fbbfe087851c49c3a97865481a61dbfb5c0eda846519a7e"
     },
     {
       "path": "voice_studio/speech/embedding_protocol.py",
@@ -855,7 +895,7 @@
       "summary": "Own one lazy native speaker process, bounded serial admission and its deadline.",
       "summaryRu": "Own one lazy native speaker process, bounded serial admission and its deadline.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "7b438e804b56f34a0beba2a918e5fd97c55ad61b10352750a4adc4390e21fae8"
+      "sha256": "1d8f5475502e35f5ec7414ee4998caf974d1e8f9e77a1fc5425eda2aae00b208"
     },
     {
       "path": "voice_studio/speech/embedding_worker_server.py",
@@ -895,7 +935,7 @@
       "summary": "Transcribe a local recording with multilingual Whisper.",
       "summaryRu": "Transcribe a local recording with multilingual Whisper.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "2f7ed95ff1d22dcca53055a46c6c740e4769e38a4d621b06131516223b9e3202"
+      "sha256": "fd87d2affad6a0320d01b81faea27c0f61aecd23081dc049d950044f5b435123"
     },
     {
       "path": "voice_studio/speech/short_reply_review.py",
@@ -919,7 +959,7 @@
       "summary": "Run local speaker segmentation and label timed Whisper words.",
       "summaryRu": "Run local speaker segmentation and label timed Whisper words.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "75fbc49b40e35c6c60fb7db5c110885d71519c8ffb01ad85dd9286e38f79cd7c"
+      "sha256": "c75457e9a051cb16b05fd4ce917cf0a93d83784f2befa6005f4e18d4be82f8be"
     },
     {
       "path": "voice_studio/speech/speaker_identity.py",
@@ -959,7 +999,7 @@
       "summary": "Review provisional Sherpa clusters against local voice and active-face references.",
       "summaryRu": "Review provisional Sherpa clusters against local voice and active-face references.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "dfc7eda081a3666970c180a7e212bebc58baa865fccfae2082a3b19e4903e9fc"
+      "sha256": "69c882cb6e3d5cdf42f641430cfe943d58b8422a4ce6d5ed9c20b3d5ce7fa749"
     },
     {
       "path": "voice_studio/speech/speech_overlap.py",
@@ -1039,7 +1079,7 @@
       "summary": "Pinned local MLX checkpoints for reference-based voice synthesis.",
       "summaryRu": "Pinned local MLX checkpoints for reference-based voice synthesis.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "4e56d19455165e3cf4435ed9704f1ff2d81e3fa0be896829da9e7fb3e50b1e26"
+      "sha256": "22d8d6d74168d04c232e17cd972fe1e75fe6fd638dc1ac3369680d213905c0d7"
     },
     {
       "path": "voice_studio/synthesis/corpus.py",
@@ -1111,7 +1151,7 @@
       "summary": "Install exact checkpoint revisions after creating the MLX audio environment.",
       "summaryRu": "Install exact checkpoint revisions after creating the MLX audio environment.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "13164d710595c906029c5eb4033606468714e136e38d32d938fe3793f9500c71"
+      "sha256": "1fa1775dfafa212ac9725b479a5ee530191a4d67d6f238e53e64edcc0e492443"
     },
     {
       "path": "voice_studio/synthesis/setup_dub_background.py",
@@ -1159,7 +1199,7 @@
       "summary": "Reuse the local Light-ASD model across bounded, synchronous requests.",
       "summaryRu": "Reuse the local Light-ASD model across bounded, synchronous requests.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "c35e6aff05caf01e481c0283808dc20685c811274f81233451fd37d720b8317b"
+      "sha256": "0c2b77709168a5c8745bafa3a21298b6ca220c50079c8722f6429f3101baae02"
     },
     {
       "path": "voice_studio/vision/adaptive_faces.py",
@@ -1463,7 +1503,7 @@
       "summary": "Collect visual proposals without rewriting the audio transcript or speaker labels.",
       "summaryRu": "Collect visual proposals without rewriting the audio transcript or speaker labels.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "6b1d0c37a558414aed1e5204f12e1a689c3586fceeb1a491b85101b90287d70d"
+      "sha256": "9dde6e12e295a1830e6be6b381af4b21d91ae645fd4c46110f46c5115c5d8113"
     },
     {
       "path": "voice_studio/vision/video_scene.py",
@@ -1471,7 +1511,7 @@
       "summary": "Plan local scene OCR and object recognition without re-running face detection.",
       "summaryRu": "Plan local scene OCR and object recognition without re-running face detection.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "de1af2fc3fcf9cd1e1791f737da23bbb90329cd2148c086249edb3cfbe6642a7"
+      "sha256": "d43508b5ee5cb7174c00472e5bde62a40f3c1184afd41a9ea1969d982079824c"
     },
     {
       "path": "voice_studio/vision/visual_attributes.py",
@@ -1511,7 +1551,7 @@
       "summary": "Score time-aligned local audio and tracked faces with the pinned Light-ASD model.",
       "summaryRu": "Score time-aligned local audio and tracked faces with the pinned Light-ASD model.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "198b7fde3e31451ebc40262bdd5f8ce80358a92fd1201a477a03a22334dfa5fb"
+      "sha256": "8f27135ea827de28cd0abeae83cd1cc619dac528ace2233264825c98487dc823"
     },
     {
       "path": "voice_studio/workers/live_face_worker.py",
@@ -1543,7 +1583,7 @@
       "summary": "Run body detection, head and gaze estimation, and clothing masks on decoded crops.",
       "summaryRu": "Run body detection, head and gaze estimation, and clothing masks on decoded crops.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "3e5a26bba0630244846fcfd9437bfc85bb9189c4f9440fb10a80a91f610030a5"
+      "sha256": "a22064796abd59fd021931c0d1c5e17b1b651bfa4c157e582aabe336faf97375"
     },
     {
       "path": "web/analysis-stage-selection.js",
@@ -1719,7 +1759,7 @@
       "summary": "English UI message catalogue keyed by the original Russian strings.",
       "summaryRu": "Английский каталог строк интерфейса по исходным русским ключам.",
       "summaryOrigin": "reviewed-wiki-module-responsibility",
-      "sha256": "a48c2afa9efcdc10e413e03adcc288501ff812edaea1b48fbfa5ecb09e6f030a"
+      "sha256": "1163ee9423293c12cd122841ac8f71d7d4c4fdd8bfdd785886fe848b71119c71"
     },
     {
       "path": "web/morpheme-graph.js",
@@ -1842,6 +1882,14 @@
       "sha256": "065bacb6e20099f4c3e08e4d6a524f663e35436879510e37519912dc0a9d90f2"
     },
     {
+      "path": "web/studio-model-install.js",
+      "group": "web",
+      "summary": "Capability-based model installation and progress in Settings.",
+      "summaryRu": "Установка моделей по функциям и вывод прогресса в настройках.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "73399cd8636099af6d090e9c96bee5a8a7c863fa5b934333caecd11453805199"
+    },
+    {
       "path": "web/studio-mods.js",
       "group": "web",
       "summary": "Model-provider list, settings, availability and management.",
@@ -1879,7 +1927,7 @@
       "summary": "Settings page and stored-material actions through current APIs.",
       "summaryRu": "Страница настроек и действия над сохранёнными материалами через текущие API.",
       "summaryOrigin": "reviewed-wiki-module-responsibility",
-      "sha256": "1946dc3edeaae2841589bb13078fe8172c082a328286bba890da9f9c26f06fa5"
+      "sha256": "26faba3fca89d474e1fb7e6f3ef79e4ce075f95dc620b8f9377c5a0042538285"
     },
     {
       "path": "web/studio-shell.js",

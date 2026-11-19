@@ -745,3 +745,46 @@ button.studio-icon.studio-quiet-action:hover:not(:disabled) {
 #storage-dialog { max-inline-size: min(28rem, calc(100vw - 1rem)); min-inline-size: 0; }
 .storage-page :is(h1, h2, p, label, button) { overflow-wrap: anywhere; }
 .storage-toolbar :is(h2, label, button) { min-inline-size: 0; max-inline-size: 100%; }
+
+.studio-model-install {
+  display: grid;
+  gap: .55rem;
+  min-inline-size: 0;
+}
+.studio-model-install :is(h3, p) { margin: 0; }
+.studio-model-install [role="status"]:empty { display: none; }
+.studio-model-install-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.studio-model-install-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: start;
+  gap: .75rem;
+  padding-block: .75rem;
+  border-block-start: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.studio-model-install-row > div {
+  display: grid;
+  gap: .2rem;
+  min-inline-size: 0;
+}
+.studio-model-install-row button {
+  max-inline-size: 100%;
+  min-block-size: 2.75rem;
+  white-space: normal;
+}
+.studio-model-install-row progress {
+  inline-size: min(100%, 24rem);
+  accent-color: var(--accent);
+}
+.studio-model-install-row progress[hidden] { display: none; }
+@media (max-width: 560px) {
+  .studio-model-install-row {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+}

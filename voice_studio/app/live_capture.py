@@ -22,6 +22,7 @@ from voice_studio.speech.media_transcript import segments_from_whisper
 from voice_studio.speech.recognition import MODEL, recognize_file
 from voice_paths import model_path
 from voice_studio.vision.video_revolver import PYTHON, VISION, MODEL as YUNET
+from voice_studio.core.optional_runtime import runtime_environment
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_SECONDS = 6
@@ -77,7 +78,7 @@ class FaceProcess:
             self.process = subprocess.Popen(
                 worker_command(PYTHON, "voice_studio.workers.live_face_worker", unbuffered=True),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                env=worker_environment({**os.environ, "PYTHONPATH": str(VISION)}), text=True,
+                env=runtime_environment("vision", worker_environment({**os.environ, "PYTHONPATH": str(VISION)})), text=True,
             )
         process = self.process
         request = {

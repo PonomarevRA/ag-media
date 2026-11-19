@@ -43,6 +43,8 @@
 | `voice_studio/core/media_event_bus.py` | Bounded job-local scheduling for graph publication and object enrichment. |
 | `voice_studio/core/media_limits.py` | Shared source limits; individual native inference windows remain bounded separately. |
 | `voice_studio/core/media_resources.py` | Plan CPU and memory for concurrent local media inference. |
+| `voice_studio/core/optional_runtime.py` | Find optional inference wheels installed outside the application bundle. |
+| `voice_studio/core/process_usage.py` | Collect process timings without requiring Unix-only resource counters. |
 | `voice_studio/core/storage_cache.py` | Coordinate regenerable storage with its readers across Studio and MCP processes. |
 | `voice_studio/core/tool_names.py` | The finite page-operation allowlist; no legacy aliases or runtime imports. |
 | `voice_studio/core/voice_registry_lock.py` | Serialize writers to one source's private voice registry without locking UI parsing. |
@@ -292,6 +294,7 @@
 | `web/studio-design.js` | Установка дизайн-профиля и темы, палитра сигналов и фабрики поверхностей плееров. |
 | `web/studio-icons.js` | SVG-иконки существующего семейства и подсказки для мыши/клавиатуры. |
 | `web/studio-mod-fields.js` | Поля настроек модели по схеме и проверка типов значений. |
+| `web/studio-model-install.js` | Установка моделей по функциям и вывод прогресса в настройках. |
 | `web/studio-mods.js` | Список провайдеров, параметры, доступность и управление. |
 | `web/studio-navigation.js` | Одна навигация для desktop-sidebar и native мобильного диалога без дублирования ID. |
 | `web/studio-pipeline-model.js` | Проверка зависимостей и раскладка графа обработки. |

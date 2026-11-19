@@ -20,13 +20,6 @@ import json
 
 import cv2
 import numpy as np
-import python_speech_features
-from scipy.io import wavfile
-from scipy.ndimage import median_filter
-import torch
-
-from model.Model import ASD_Model
-from loss import lossAV
 from voice_studio.vision.adaptive_faces import ANCHOR_STEP, ScanFrame, detect_adaptively
 from voice_studio.core.analysis_stages import MAX_ACTIVITY_CUES
 from voice_studio.vision.clothing_review import review_clothing
@@ -37,7 +30,6 @@ from voice_studio.vision.visual_attributes import visible_attributes
 from voice_studio.vision.facial_expression_model import ExpressionClassifier
 
 cv2.setNumThreads(1)
-torch.set_num_threads(stage_threads(4))
 
 def overlap(left, right):
     """Measure IoU between two face boxes."""
@@ -288,6 +280,9 @@ def mouth_crop(frame, size, x_center, y_center):
 
 def build_features(frames, track, samples):
     """Align normalized face crops with 16 kHz MFCC features."""
+    import python_speech_features
+    from scipy.ndimage import median_filter
+
     source_frames, boxes = zip(*track)
     box_matrix = np.array(boxes)
     frame_indices = np.arange(source_frames[0], source_frames[-1] + 1)
@@ -312,6 +307,11 @@ def build_features(frames, track, samples):
 @lru_cache(maxsize=1)
 def load_model(weights_path):
     """Load the pinned CPU checkpoint into its network and classifier."""
+    import torch
+    from model.Model import ASD_Model
+    from loss import lossAV
+
+    torch.set_num_threads(stage_threads(4))
     weights = torch.load(weights_path, map_location='cpu', weights_only=True)
     network = ASD_Model()
     classifier = lossAV()
@@ -322,6 +322,8 @@ def load_model(weights_path):
 
 def audio_visual_scores(network, classifier, video, audio):
     """Average the same six votes, computing identical clipped windows only once."""
+    import torch
+
     votes = []
     windows = {}
     for duration in (1, 2, 3, 4, 5, 6):
@@ -395,18 +397,15 @@ def run(args, *, include_identity=False):
     return result
 
 
-def score_scan(args, signatures, scan, start, *, include_identity=False):
-    """Package a scan, optionally adding descriptors for private window transport."""
-    frames, tracks = scan.frames, scan.tracks
-    qualities = {track: preview[0] for track, preview in scan.previews.items()}
-    aliases, matches = group_tracks(tracks, signatures.samples, qualities=qualities)
-    tracked = perf_counter()
-    spans = [dict(span, candidates=[]) for span in args.spans_ms]
-    if spans:
-        sample_rate, samples = wavfile.read(args.audio)
-        if sample_rate != 16000 or samples.ndim != 1 or samples.dtype != np.int16:
-            raise ValueError('Audio must be 16 kHz mono 16-bit PCM WAV')
-        network, classifier = load_model(model_resource('vision.active-speaker', 'builtin.light-asd', args.weights))
+def score_spans(args, frames, tracks, aliases, spans):
+    """Load Light-ASD dependencies only for windows with audio evidence to score."""
+    import torch
+    from scipy.io import wavfile
+
+    sample_rate, samples = wavfile.read(args.audio)
+    if sample_rate != 16000 or samples.ndim != 1 or samples.dtype != np.int16:
+        raise ValueError('Audio must be 16 kHz mono 16-bit PCM WAV')
+    network, classifier = load_model(model_resource('vision.active-speaker', 'builtin.light-asd', args.weights))
     activity = {}
     with torch.inference_mode():
         for number, track in enumerate(tracks, 1):
@@ -430,6 +429,17 @@ def score_scan(args, signatures, scan, start, *, include_identity=False):
                     result.update(track=number, face=aliases[number],
                                   track_start_ms=first_frame * 40, track_end_ms=last_frame * 40)
                     span['candidates'].append(result)
+    return activity
+
+
+def score_scan(args, signatures, scan, start, *, include_identity=False):
+    """Package a scan, optionally adding descriptors for private window transport."""
+    frames, tracks = scan.frames, scan.tracks
+    qualities = {track: preview[0] for track, preview in scan.previews.items()}
+    aliases, matches = group_tracks(tracks, signatures.samples, qualities=qualities)
+    tracked = perf_counter()
+    spans = [dict(span, candidates=[]) for span in args.spans_ms]
+    activity = score_spans(args, frames, tracks, aliases, spans) if spans else {}
     scored = perf_counter()
     active_faces = appearance_priorities(spans)
     aliases, outfits, clothing = review_clothing(args.video, tracks, signatures.samples, aliases,

@@ -43,6 +43,8 @@ Shared stages, thread budgets, locks and cache lifetime reused by processing han
 | `voice_studio/core/media_event_bus.py` | Bounded job-local scheduling for graph publication and object enrichment. |
 | `voice_studio/core/media_limits.py` | Shared source limits; individual native inference windows remain bounded separately. |
 | `voice_studio/core/media_resources.py` | Plan CPU and memory for concurrent local media inference. |
+| `voice_studio/core/optional_runtime.py` | Find optional inference wheels installed outside the application bundle. |
+| `voice_studio/core/process_usage.py` | Collect process timings without requiring Unix-only resource counters. |
 | `voice_studio/core/storage_cache.py` | Coordinate regenerable storage with its readers across Studio and MCP processes. |
 | `voice_studio/core/tool_names.py` | The finite page-operation allowlist; no legacy aliases or runtime imports. |
 | `voice_studio/core/voice_registry_lock.py` | Serialize writers to one source's private voice registry without locking UI parsing. |
@@ -292,6 +294,7 @@ Forms, navigation, capture, players, timelines, inspectors, overlays and WebMCP.
 | `web/studio-design.js` | Design-profile/theme installation, signal palette and player surface factories. |
 | `web/studio-icons.js` | Existing-family SVG icons and pointer/keyboard hints. |
 | `web/studio-mod-fields.js` | Schema-driven model settings fields and typed value validation. |
+| `web/studio-model-install.js` | Capability-based model installation and progress in Settings. |
 | `web/studio-mods.js` | Model-provider list, settings, availability and management. |
 | `web/studio-navigation.js` | One navigation moved between desktop sidebar and native mobile drawer without duplicate IDs. |
 | `web/studio-pipeline-model.js` | Dependency validation and layout for the processing graph. |

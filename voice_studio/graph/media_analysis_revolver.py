@@ -13,7 +13,7 @@ from tempfile import NamedTemporaryFile
 
 from voice_studio.synthesis.engines import ROOT
 from voice_studio.speech.person_mentions import BRIDGE
-from voice_studio.speech.recognition import CLI, MODEL, RECOVERY_MODEL, SMALL_MODEL
+from voice_studio.speech.recognition import MODEL, RECOVERY_MODEL, SMALL_MODEL, current_cli
 from voice_studio.vision.video_revolver import ASD_WEIGHTS
 from voice_paths import LEGACY_MODELS_DIR, MODELS_DIR
 
@@ -54,7 +54,7 @@ def analysis_fingerprint(source_digest, settings, *, environment_names=None):
         weights.extend(LEGACY_MODELS_DIR.rglob("*"))
     privacy = Path(os.environ.get("AG_PRIVACY_ROOT") or Path.home() / "Documents/ai/ag-privacy")
     external = [
-        CLI, MODEL, SMALL_MODEL, RECOVERY_MODEL, ASD_WEIGHTS,
+        current_cli(), MODEL, SMALL_MODEL, RECOVERY_MODEL, ASD_WEIGHTS,
         Path(os.environ.get("AG_PRIVACY_PERSON_MODEL") or privacy / "models/person-prose.bin"),
         Path(os.environ.get("VOICE_PERSON_MENTIONS_BRIDGE") or BRIDGE),
     ]

@@ -41,6 +41,7 @@ from voice_studio.prosody.revolver import review_prosody
 from voice_studio.mcp.web_graph import read_graph
 from voice_studio.app.wiki_assets import wiki_asset
 from voice_studio.mod_api import mod_operation
+from voice_studio.provision.jobs import ModelInstalls
 from voice_studio.mods import ModError
 from voice_studio.app.ui_bridge import UIBridge, handle_bridge
 from voice_studio.app.static_assets import STATIC
@@ -58,6 +59,7 @@ class StudioServer(ThreadingHTTPServer):
     def __init__(self, *args, **kwargs):
         """Give native and browser servers the same independent, ephemeral page broker."""
         self.ui_bridge = UIBridge()
+        self.model_installs = ModelInstalls()
         super().__init__(*args, **kwargs)
 
     def server_close(self):
@@ -131,6 +133,8 @@ class Handler(LoopbackRequestHandler):
                     self.send_header("Content-Length", str(len(image)))
                     self.end_headers()
                     self.wfile.write(image)
+            elif url.path == "/api/model-install":
+                self.reply(200, self.server.model_installs.inventory())
             elif url.path == "/api/mods/pipeline":
                 self.reply(200, mod_operation("pipeline"))
             elif url.path == "/api/mods/contracts":
@@ -386,6 +390,13 @@ class Handler(LoopbackRequestHandler):
                         self.stream_analysis(analyze)
                     else:
                         self.reply(200, analyze())
+                return
+            if url.path == "/api/model-install":
+                payload = json.loads(self.body(1024))
+                if not isinstance(payload, dict) or set(payload) != {"id"}:
+                    raise ValueError("Выберите набор моделей.")
+                self.server.model_installs.start(payload["id"])
+                self.reply(202, self.server.model_installs.inventory())
                 return
             if url.path.startswith('/api/mods/'):
                 try:

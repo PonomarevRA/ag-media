@@ -125,9 +125,9 @@ def crop_pcm(source, target, start, end):
 
 def decode_local(wav, output, language, model, check, *, threads=None):
     """Run installed Whisper only, killing the child promptly on timeout/cancel."""
-    from voice_studio.speech.recognition import CLI, LOCK
+    from voice_studio.speech.recognition import LOCK, current_cli
     threads = stage_threads(4) if threads is None else threads
-    command = [str(CLI), '-m', str(model), '-l', language, '-ojf', '-mc', '0',
+    command = [str(current_cli()), '-m', str(model), '-l', language, '-ojf', '-mc', '0',
                '-bs', '1', '-bo', '1', '-nf', '-ng', '-t', str(threads), '-f', str(wav), '-of', str(output)]
     while not LOCK.acquire(timeout=.1):
         check()
@@ -273,12 +273,12 @@ def run_audit(report_path, turns_path, source_path, output_dir, *, visual_path=N
                    'effectiveThreads': stage_threads(4) if rerun else None}
     model = None
     if rerun:
-        from voice_studio.speech.recognition import CLI, SMALL_MODEL, ready
+        from voice_studio.speech.recognition import SMALL_MODEL, current_cli, ready
         model = Path(model_path) if model_path else SMALL_MODEL
         if not ready(model):
             raise ValueError('installed local Whisper executable/model unavailable; no download attempted')
         run_options['model'] = {'path': str(model.resolve()), 'sha256': file_hash(model, check)}
-        run_options['executableSha256'] = file_hash(CLI, check)
+        run_options['executableSha256'] = file_hash(current_cli(), check)
         run_options['decodeOptions'] = ['-ojf', '-mc', '0', '-bs', '1', '-bo', '1', '-nf', '-ng', '-t', str(run_options['effectiveThreads'])]
     run_key = stable_hash({'inventoryKey': inventory['cacheKey'], 'runOptions': run_options})
     inventory.update(runKey=run_key, runOptions=run_options)

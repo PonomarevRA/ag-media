@@ -1,4 +1,5 @@
 import {mountStudioPipeline} from "./studio-pipeline.js";
+import {mountModelInstall} from "./studio-model-install.js";
 import {mountStudioMods} from "./studio-mods.js";
 import {uiLocale, uiText} from "./i18n.js";
 import {attachStudioIcon} from "./studio-icons.js";
@@ -10,6 +11,7 @@ const dateFormat = new Intl.DateTimeFormat(uiLocale, {dateStyle: "medium", timeS
 export function mountStudioSettings(find, request, view) {
   const pipeline = mountStudioPipeline(find, request);
   const mods = mountStudioMods(find, request, () => pipeline.catalogChanged());
+  const installers = mountModelInstall(find, request, () => mods.open());
   const language = find("settings-material-language");
   const status = find("settings-material-status");
   const list = find("settings-material-list");
@@ -120,7 +122,7 @@ export function mountStudioSettings(find, request, view) {
         language.value = defaultLanguage;
         language.dataset.initialized = "true";
       }
-      return Promise.all([refresh(), mods.open(), pipeline.open()]);
+      return Promise.all([refresh(), mods.open(), pipeline.open(), installers.open()]);
     },
   };
 }

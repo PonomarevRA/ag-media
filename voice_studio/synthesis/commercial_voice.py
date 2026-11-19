@@ -5,9 +5,11 @@ from voice_studio.mod_runtime import model_resource, worker_environment
 import json
 import os
 import subprocess
+import sys
 
 from voice_paths import PROJECT_ROOT as ROOT, model_path
 from voice_studio.core.worker_process import worker_command
+from voice_studio.core.optional_runtime import runtime_environment, runtime_ready
 
 PYTHON = ROOT / ".engines" / "mlx-tts" / "bin" / "python"
 MODELS = {"qwen": "Qwen3-TTS 0.6B", "chatterbox": "Chatterbox Multilingual V3"}
@@ -21,7 +23,7 @@ REVISIONS = {
 def ready(model):
     """Check the files required for local inference before advertising readiness."""
     directory = model_path("commercial", model, "config.json").parent
-    if not PYTHON.is_file() or not (directory / "config.json").is_file():
+    if not (PYTHON.is_file() or runtime_ready("mlx")) or not (directory / "config.json").is_file():
         return False
     if model == "qwen":
         index = directory / "model.safetensors.index.json"
@@ -54,9 +56,10 @@ def generate(model, job_json, timeout):
     hub = str(hub_path)
     env = dict(os.environ, HF_HOME=hub, HF_HUB_CACHE=hub,
                HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
+    interpreter = sys.executable if runtime_ready("mlx") else PYTHON
     process = subprocess.run(
-        worker_command(PYTHON, "voice_studio.workers.commercial_voice_worker", model),
-        input=job_json, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=worker_environment(env), timeout=timeout,
+        worker_command(interpreter, "voice_studio.workers.commercial_voice_worker", model),
+        input=job_json, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=runtime_environment("mlx", worker_environment(env)), timeout=timeout,
     )
     if process.returncode:
         print(f"{MODELS[model]} failed: {process.stderr[-2500:]}", flush=True)

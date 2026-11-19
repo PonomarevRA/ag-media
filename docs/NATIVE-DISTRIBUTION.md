@@ -19,7 +19,9 @@ dependency constrains the system interpreter to that minor version.
 No model weights, recordings, caches, FFmpeg binaries or private engine environments
 are bundled. The current Homebrew FFmpeg build is not redistributed. Optional
 Whisper, synthesis, OCR and other model providers require separately provisioned,
-compatible runtimes and weights. The native application opens without downloads.
+compatible runtimes and weights. The native application opens without downloads. In Settings → Mods and
+models → Install models, choose a feature to install its model and supported
+runtime from upstream. The installed files stay outside the application bundle.
 To prepare the Whisper Base weights from a source checkout, run
 `python -m voice_studio.app.first_run --models-only`. The same external model
 directory is used by the source and desktop applications on the same platform.

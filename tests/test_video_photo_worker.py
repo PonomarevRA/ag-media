@@ -1,5 +1,6 @@
 """Keep exact-source phrase photos available when the shared activity pass fails."""
 
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -13,7 +14,9 @@ class VideoPhotoWorkerTests(TestCase):
         report = {"stages": {}}
         phrases = [{"startMs": 0, "endMs": 1000}]
         with patch('voice_studio.vision.video_revolver.score_visible_faces', return_value=({}, {"phrasePhotos": photos})) as score, \
-             patch('voice_studio.vision.video_revolver.run_worker') as worker:
+             patch('voice_studio.vision.video_revolver.run_worker') as worker, \
+             patch('voice_studio.vision.video_revolver.LEGACY_PYTHON', Path(__file__)), \
+             patch('voice_studio.vision.video_revolver.ASD_WEIGHTS', Path(__file__)):
             collect_evidence("video", "audio", phrases, 0, "mov", report, events.append)
         self.assertEqual(score.call_args.kwargs["photo_phrases"], [[0, 1000]])
         self.assertEqual(report["phrases"], photos)

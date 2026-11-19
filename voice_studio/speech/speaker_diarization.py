@@ -4,7 +4,6 @@ from voice_studio.mod_runtime import model_resource, worker_environment
 
 from voice_studio.mod_runtime import model_provider
 
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -12,6 +11,7 @@ import sys
 
 from voice_paths import model_path
 from voice_studio.core.media_resources import stage_threads
+from voice_studio.core.optional_runtime import runtime_environment, sherpa_ready
 from voice_studio.core.worker_process import worker_command
 
 MODEL_PATH = model_path("diarization", "segmentation.onnx").parent
@@ -19,7 +19,7 @@ MODEL_PATH = model_path("diarization", "segmentation.onnx").parent
 
 def ready():
     """Check whether the local inference package and both models are installed."""
-    if not importlib.util.find_spec('sherpa_onnx') or not (MODEL_PATH / 'segmentation.onnx').is_file():
+    if not sherpa_ready() or not (MODEL_PATH / 'segmentation.onnx').is_file():
         return False
     embedding = model_resource('speech.embedding-resource', 'builtin.sherpa-embedding', MODEL_PATH / 'embedding.onnx')
     return embedding.is_file()
@@ -34,7 +34,7 @@ def detect_turns(wav, speaker_count, *, merge_similar=False):
         output = subprocess.check_output(
             worker_command(sys.executable, "voice_studio.speech.speaker_diarization", wav, speaker_count or -1,
                            "0.72" if merge_similar else "0.50"),
-            env=worker_environment(), stderr=subprocess.DEVNULL, timeout=180,
+            env=runtime_environment("sherpa", worker_environment()), stderr=subprocess.DEVNULL, timeout=180,
         )
         return json.loads(output)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:

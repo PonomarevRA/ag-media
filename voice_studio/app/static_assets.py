@@ -21,6 +21,7 @@ STATIC = {
     "/studio-pipeline-model.js": ("studio-pipeline-model.js", "text/javascript; charset=utf-8"),
     "/vendor/ag-card-connections.js": ("vendor/ag-card-connections.js", "text/javascript; charset=utf-8"),
     "/studio-mod-fields.js": ("studio-mod-fields.js", "text/javascript; charset=utf-8"),
+    "/studio-model-install.js": ("studio-model-install.js", "text/javascript; charset=utf-8"),
     "/studio-mods.js": ("studio-mods.js", "text/javascript; charset=utf-8"),
     "/dialogue-audit.js": ("dialogue-audit.js", "text/javascript; charset=utf-8"),
     "/browser-ml.js": ("browser-ml.js", "text/javascript; charset=utf-8"),
