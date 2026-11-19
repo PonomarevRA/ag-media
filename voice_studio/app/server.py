@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 import sqlite3
 from tempfile import TemporaryDirectory
+from threading import Thread
+import webbrowser
 
 from voice_paths import ensure_temporary_root, temporary_directory, workspace_temp
 from voice_studio.core.workspace_lock import workspace_lock
@@ -579,6 +581,7 @@ def main():
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--data", type=Path)
     parser.add_argument("--demo", action="store_true", help="Generate labeled test tones in a separate workspace.")
+    parser.add_argument("--open-browser", action="store_true", help="Open the local Studio URL.")
     options = parser.parse_args()
     root = options.data or ROOT / "data" / ("demo" if options.demo else "studio")
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -591,7 +594,10 @@ def main():
             project_data = production_data if not options.demo and root.resolve() == (production_data / "studio").resolve() else root
             server.storage = StudioStorage(root, project_data)
             stop_storage = server.storage.start()
-            print(f"ag-media-studio: http://127.0.0.1:{server.server_port}", flush=True)
+            address = f"http://127.0.0.1:{server.server_port}"
+            print(f"ag-media-studio: {address}", flush=True)
+            if options.open_browser:
+                Thread(target=webbrowser.open, args=(address,), daemon=True).start()
             try:
                 server.serve_forever()
             finally:

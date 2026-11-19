@@ -6,9 +6,19 @@ compatible `voice_studio` name and `VOICE_` environment variables.
 
 ## Install and run
 
-Follow [Getting started](docs/GETTING-STARTED.md) to install Python 3.12 or later,
-set up an isolated environment and launch the browser interface on macOS, Windows
-or Linux. The guide covers a first local import and engine diagnostics.
+To prepare the transcription workflow and open the Studio, run this command
+from the extracted or cloned repository with Python 3.12 or later:
+
+```sh
+python -m voice_studio.app.first_run
+```
+
+On macOS the command can obtain missing tools through Homebrew. On Windows and
+Linux it uses FFmpeg and whisper.cpp already available in PATH. The command
+downloads the verified Whisper Base checkpoint and reuses it on later runs.
+[Setup and platform prerequisites](docs/GETTING-STARTED.md)
+
+The same guide covers a manual installation and the demonstration mode.
 
 Optional media tools and model workers require separately provisioned engines
 and model files. This source package does not include weights, FFmpeg, downloaded

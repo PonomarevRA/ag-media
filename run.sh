@@ -2,6 +2,10 @@
 set -eu
 umask 077
 cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ "${1:-}" = --setup ]; then
+  shift
+  exec python3 -m voice_studio.app.first_run "$@"
+fi
 voice_runtime="$(.venv/bin/python voice_paths.py runtime)"
 mkdir -p "$voice_runtime/matplotlib" "$voice_runtime/huggingface"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-$voice_runtime/matplotlib}"

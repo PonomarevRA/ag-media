@@ -10,11 +10,12 @@ from threading import Lock
 from time import monotonic
 
 from voice_paths import model_path, temporary_directory
-from voice_studio.synthesis.engines import ROOT, bounded_timeout, normalize
+from voice_studio.synthesis.engines import bounded_timeout, normalize
+from voice_studio.speech.whisper_assets import whisper_base_model, whisper_cli
 from voice_studio.audio.pauses import annotate, quiet_spans
 
-CLI = Path(os.getenv("VOICE_WHISPER_CLI", ROOT / ".engines/whisper/build-arm/bin/whisper-cli"))
-MODEL = Path(os.getenv("VOICE_WHISPER_MODEL", model_path("whisper", "ggml-base.bin")))
+CLI = whisper_cli()
+MODEL = whisper_base_model()
 SMALL_MODEL = Path(os.getenv("VOICE_WHISPER_SMALL_MODEL", model_path("whisper", "ggml-small-q5_1.bin")))
 RECOVERY_MODEL = Path(os.getenv("VOICE_WHISPER_RECOVERY_MODEL", model_path("whisper", "ggml-large-v3-turbo-q5_0.bin")))
 LOCK = Lock()

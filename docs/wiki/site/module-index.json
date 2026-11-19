@@ -42,6 +42,14 @@
       "sha256": "2bffc072a312bbe6a3ac3eb4abb48d1ca5778256ee23e2cd71c667fba860394a"
     },
     {
+      "path": "voice_studio/app/first_run.py",
+      "group": "app",
+      "summary": "Prepare local transcription from a checkout, then open the Studio.",
+      "summaryRu": "Prepare local transcription from a checkout, then open the Studio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5befd023f032daae3bfc25298700c13a145a5686d35bdfb7dd6df39a1f56bce1"
+    },
+    {
       "path": "voice_studio/app/http_transport.py",
       "group": "app",
       "summary": "HTTP transport for the studio's loopback server.",
@@ -87,7 +95,7 @@
       "summary": "Serve the single-user ag-media-studio on loopback.",
       "summaryRu": "Serve the single-user ag-media-studio on loopback.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "3158c5b97d6771ad7b83d23ad3953cef81a705052cd98d32722a9957b5d00b1e"
+      "sha256": "ac38eb6a295295324f0b255320fa367c12488cfdcd3539ef42f1cb747be0ec55"
     },
     {
       "path": "voice_studio/app/static_assets.py",
@@ -887,7 +895,7 @@
       "summary": "Transcribe a local recording with multilingual Whisper.",
       "summaryRu": "Transcribe a local recording with multilingual Whisper.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "0cf42e2e987afa247e91abed8d8a159e95651ac7f4cc531fa9310342636b31f0"
+      "sha256": "2f7ed95ff1d22dcca53055a46c6c740e4769e38a4d621b06131516223b9e3202"
     },
     {
       "path": "voice_studio/speech/short_reply_review.py",
@@ -1000,6 +1008,14 @@
       "summaryRu": "Reconcile one clean Sherpa turn with a confirmed talker in a wider subtitle.",
       "summaryOrigin": "source-module-docstring",
       "sha256": "14849648985e61bdb70ad01934dba03d0e909f3b397bae28753a59495ffcc1c1"
+    },
+    {
+      "path": "voice_studio/speech/whisper_assets.py",
+      "group": "speech",
+      "summary": "Resolve and provision the multilingual Whisper Base runtime assets.",
+      "summaryRu": "Resolve and provision the multilingual Whisper Base runtime assets.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "00e4cfd401404410ff403e201e5ff371f2a653db5a78830404d58b196fea832d"
     },
     {
       "path": "voice_studio/synthesis/auto_synthesis.py",

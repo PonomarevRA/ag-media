@@ -17,6 +17,7 @@
 | `voice_studio/app/desktop_runtime.py` | Owned loopback service for the native desktop hosts; never attaches to another instance. |
 | `voice_studio/app/desktop_updates.py` | Read stable native release metadata on demand and report matching packages. |
 | `voice_studio/app/dialogue_audit_service.py` | Validate and serialize source-bound dialogue audits for UI and local agents. |
+| `voice_studio/app/first_run.py` | Prepare local transcription from a checkout, then open the Studio. |
 | `voice_studio/app/http_transport.py` | HTTP transport for the studio's loopback server. |
 | `voice_studio/app/image_analysis.py` | Adapt a bounded browser image upload to the same local vision worker used by screenshot MCP. |
 | `voice_studio/app/live_capture.py` | Bounded local analysis for explicitly selected browser tab fragments. |
@@ -79,6 +80,7 @@
 | `voice_studio/speech/voice_profile_public.py` | Whitelist vector-free profile/evidence facts at every public JSON boundary. |
 | `voice_studio/speech/voice_profiles.py` | Bounded, source-scoped acoustic identities with explicit speaking-video priority. |
 | `voice_studio/speech/voiced_speaker_review.py` | Reconcile one clean Sherpa turn with a confirmed talker in a wider subtitle. |
+| `voice_studio/speech/whisper_assets.py` | Resolve and provision the multilingual Whisper Base runtime assets. |
 
 ## Анализ и обработка звука
 
