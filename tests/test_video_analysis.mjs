@@ -106,4 +106,5 @@ test("checkpoint hits, shared inference and real recomputation have distinct tru
   assert.equal(analysisStageStatus({state: "running"}, "recompute"), "Пересчитывается");
   assert.equal(analysisStageStatus({state: "done", elapsedMs: 1250}, "recompute"), "Пересчитано · 1.3 с");
   assert.equal(analysisStageStatus({state: "failed"}, "recompute"), "Ошибка");
+  assert.equal(analysisStageStatus({state: "skipped", reason: "Нет весов Light-ASD"}), "Пропущен · Нет весов Light-ASD");
 });

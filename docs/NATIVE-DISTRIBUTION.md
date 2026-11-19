@@ -106,9 +106,9 @@ browser. The active Studio document remains open. On GTK, Help is inside the
 native Studio menu.
 
 **Help → Check for Updates** compares the installed version with the latest
-public stable GitHub release. Set `releaseRepository` to the intended
-`owner/repository` in `packaging/desktop-product.json` before building an
-edition. The operator can override it with `VOICE_RELEASE_REPOSITORY` when
+public stable GitHub release. The official build uses `PonomarevRA/ag-media`.
+Other editions can set `releaseRepository` in `packaging/desktop-product.json`
+before building. The operator can override it with `VOICE_RELEASE_REPOSITORY` when
 launching the application. With no repository configured the dialog reports the
 installed version. A private GitHub repository requires a public release
 channel for this check to see its metadata.

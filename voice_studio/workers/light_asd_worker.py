@@ -280,7 +280,7 @@ def mouth_crop(frame, size, x_center, y_center):
 
 def build_features(frames, track, samples):
     """Align normalized face crops with 16 kHz MFCC features."""
-    import python_speech_features
+    from voice_studio.vendor.speech_features.base import mfcc as speech_mfcc
     from scipy.ndimage import median_filter
 
     source_frames, boxes = zip(*track)
@@ -293,7 +293,7 @@ def build_features(frames, track, samples):
         for value in [np.maximum(width, height) / 2, x + width / 2, y + height / 2]
     ]
     audio = samples[source_frames[0] * 640:(source_frames[-1] + 1) * 640]
-    mfcc = python_speech_features.mfcc(audio, 16000, numcep=13, winlen=.025, winstep=.01)
+    mfcc = speech_mfcc(audio, 16000, numcep=13, winlen=.025, winstep=.01)
     count = min(len(frame_indices), len(mfcc) // 4)
     # Only retain the model's 112px crop and reuse one resize buffer.
     crops = np.empty((count, 112, 112), dtype=np.uint8)
@@ -308,8 +308,8 @@ def build_features(frames, track, samples):
 def load_model(weights_path):
     """Load the pinned CPU checkpoint into its network and classifier."""
     import torch
-    from model.Model import ASD_Model
-    from loss import lossAV
+    from voice_studio.vendor.light_asd.Model import ASD_Model
+    from voice_studio.vendor.light_asd.loss import lossAV
 
     torch.set_num_threads(stage_threads(4))
     weights = torch.load(weights_path, map_location='cpu', weights_only=True)

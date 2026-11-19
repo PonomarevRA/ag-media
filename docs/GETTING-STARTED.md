@@ -39,6 +39,7 @@ Python-зависимости в отдельную папку `Dependencies`. �
 | Разделение говорящих | Sherpa-ONNX, Pyannote и ERes2Net |
 | Музыка и фоновые звуки | Sherpa-ONNX и Zipformer Small INT8 |
 | Лица, предметы и выражения | OpenCV, YuNet, SFace, NanoDet и MobileFaceNet |
+| Говорящий в кадре | Light-ASD, YuNet и CPU-рантайм PyTorch. Установщик скачивает веса с репозитория автора и проверяет SHA-256 |
 | Синтез Qwen3-TTS или Chatterbox | MLX Audio и выбранная модель на Apple Silicon с macOS 26 или новее |
 
 Первой установке нужен интернет. Доступность бинарных колёс зависит от ОС,
@@ -103,6 +104,13 @@ py -3 -m venv .venv
 | Qwen3-TTS и Chatterbox на Apple Silicon, исследовательские F5 и Coqui | `mlx-audio` или отдельные окружения F5 и Coqui. Условия использования весов зависят от модели. |
 
 Из корня исходников можно запустить `python -m voice_studio.synthesis.setup_commercial_voices` в окружении MLX или `python -m voice_studio.synthesis.setup_dub_background` в окружении с зависимостями HDemucs. Эти команды загружают веса для соответствующей функции.
+
+Для Light-ASD открой «Моды и модели → Говорящий в кадре». Установщик подготовит
+CPU-библиотеки и проверит веса перед публикацией в локальном хранилище. Код
+инференса и извлечения речевых признаков уже в приложении. Для установки
+нужны Python 3.12–3.13 и Windows/Linux x64 либо Apple Silicon с macOS 14
+или новее. Исходная установка с окружением `.engines/coqui` продолжает работать.
+[Оригинальный Light-ASD](https://github.com/Junhua-Liao/Light-ASD/tree/ed38c232de5efe0261dbd68627c0ade7cdfe14eb)
 
 Перед запуском офлайн подготовь выбранные движки и веса. [Сведения об источниках и лицензиях](../THIRD-PARTY.md)
 

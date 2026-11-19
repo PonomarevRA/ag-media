@@ -12,7 +12,7 @@ from voice_studio.app.first_run import missing_tools, prepare_tools
 from voice_studio.core.optional_runtime import runtime_environment, runtime_ready, sherpa_ready
 from voice_studio.core.worker_process import worker_command
 from voice_studio.core.workspace_lock import workspace_lock
-from voice_studio.provision.assets import SOUNDS, SPEAKERS, VISION, install_assets
+from voice_studio.provision.assets import LIGHT_ASD, SOUNDS, SPEAKERS, VISION, install_assets
 from voice_studio.provision.runtime import install_runtime
 from voice_studio.speech.whisper_assets import install_base, whisper_base_model
 
@@ -31,17 +31,23 @@ GROUPS = {
     "speakers": ModelGroup(SPEAKERS, "sherpa"),
     "sounds": ModelGroup(SOUNDS, "sherpa"),
     "vision": ModelGroup(VISION, "vision"),
+    "light-asd": ModelGroup(LIGHT_ASD, "light-asd"),
     "qwen": ModelGroup(runtime="mlx", voice=True),
     "chatterbox": ModelGroup(runtime="mlx", voice=True),
 }
 
 
 def supported(group):
-    """Limit MLX to the supported macOS and Apple Silicon target."""
-    if not group.voice:
-        return True
+    """Use the platforms with binary wheels for each pinned runtime."""
+    machine = platform.machine().lower()
     major = platform.mac_ver()[0].split(".")[0]
-    return sys.platform == "darwin" and platform.machine() == "arm64" and major.isdecimal() and int(major) >= 26
+    apple_silicon = sys.platform == "darwin" and machine == "arm64" and major.isdecimal()
+    if group.runtime == "light-asd":
+        if sys.version_info[:2] not in {(3, 12), (3, 13)}:
+            return False
+        return ((apple_silicon and int(major) >= 14)
+                or (sys.platform in {"linux", "win32"} and machine in {"x86_64", "amd64"}))
+    return not group.voice or (apple_silicon and int(major) >= 26)
 
 
 def group_ready(key, group):
@@ -51,6 +57,8 @@ def group_ready(key, group):
     if group.voice:
         from voice_studio.synthesis.commercial_voice import ready
         return ready(key)
+    if key == "light-asd" and not group_ready("vision", GROUPS["vision"]):
+        return False
     runtime = sherpa_ready() if group.runtime == "sherpa" else runtime_ready(group.runtime)
     if group.runtime == "vision" and not runtime:
         from voice_studio.vision.video_revolver import LEGACY_PYTHON, VISION as legacy_vision
@@ -65,6 +73,8 @@ def install_group(key, group, progress):
         prepare_tools()
         install_base(lambda received, total: progress("weights", received, total))
         return
+    if key == "light-asd" and not group_ready("vision", GROUPS["vision"]):
+        install_group("vision", GROUPS["vision"], progress)
     if group.runtime != "sherpa" or not sherpa_ready():
         progress("runtime")
         install_runtime(group.runtime)

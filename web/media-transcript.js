@@ -632,7 +632,10 @@ export function mountMediaTranscript(request, currentLanguage) {
         notes.push(uiText`Light-ASD · обработано блоков: ${completed} из ${windows.length}`);
       }
       else if (stages["light-asd"] === "duration-limit") notes.push(uiText("Light-ASD доступен для речи в пределах первой минуты"));
-      else if (stages["light-asd"] && stages["light-asd"] !== "running") notes.push(uiText("Light-ASD недоступен для этого файла"));
+      else if (stages["light-asd"] && stages["light-asd"] !== "running") {
+        notes.push(videoEvidence.activityReason ? apiText(videoEvidence.activityReason)
+          : uiText("Light-ASD недоступен для этого файла"));
+      }
       if (stages.yunet === "unavailable" || stages.yunet === "failed") notes.push(uiText("Фото с YuNet недоступны"));
       if (stages.yunet === "busy") notes.push(uiText("Обработка лиц занята другим видео"));
       if (faceTracking?.status === "ok" && faceTracking.matches.length) {

@@ -19,12 +19,13 @@ def runtime_ready(group):
     return (runtime_path(group) / ".studio-ready").is_file()
 
 
-def runtime_environment(group, environment=None):
-    """Prepend the managed runtime for a worker without changing the host's imports."""
+def runtime_environment(group, environment=None, *, extra_groups=()):
+    """Prepend installed worker runtimes in priority order without changing host imports."""
     env = dict(os.environ if environment is None else environment)
     env.pop("VOICE_WORKER_RUNTIME", None)
-    if runtime_ready(group):
-        env["VOICE_WORKER_RUNTIME"] = str(runtime_path(group))
+    paths = [str(runtime_path(name)) for name in (group, *extra_groups) if runtime_ready(name)]
+    if paths:
+        env["VOICE_WORKER_RUNTIME"] = os.pathsep.join(paths)
     return env
 
 

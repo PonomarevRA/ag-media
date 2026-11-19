@@ -16,7 +16,7 @@ else:
     sys.path.insert(0, source)
 runtime = os.environ.get("VOICE_WORKER_RUNTIME")
 if runtime:
-    sys.path.insert(1, runtime)
+    sys.path[1:1] = runtime.split(os.pathsep)
 runpy.run_module(module, run_name="__main__", alter_sys=True)
 """
 

@@ -78,9 +78,10 @@ def read_package(root):
 
 
 def builtin_package(value):
-    """Validate host-owned metadata; actual callbacks are registered separately by the host."""
+    """Hash host metadata without transient availability; the host registers callbacks."""
     declared = manifest(value, builtin=True)
-    return Package(declared, sha256(json_bytes(declared)).hexdigest(), "builtin", None, {})
+    identity = {key: item for key, item in declared.items() if key != "availability"}
+    return Package(declared, sha256(json_bytes(identity)).hexdigest(), "builtin", None, {})
 
 
 def unmet_requirements(package):

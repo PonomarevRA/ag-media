@@ -164,6 +164,19 @@ class RepositoryExportTests(unittest.TestCase):
                     configuration['profiles'][profile]['files'] = []
                     self.save_configuration(configuration)
 
+    def test_reviewed_attribution_is_limited_to_exact_bytes_and_path(self):
+        """Allow public attribution only at the reviewed path and digest."""
+        path = 'licenses/notice.md'
+        notice = b'Upstream attribution: contributor' + b'@' + b'invalid.example'
+        digest = hashlib.sha256(notice).hexdigest()
+        with patch.dict(EXPORT.REVIEWED_NOTICE_EMAILS, {path: digest}):
+            self.assertEqual(EXPORT.scan_bytes(path, notice), [])
+            self.assertEqual(EXPORT.scan_bytes(path, notice, reference_keys=('upstream attribution',)),
+                             [{'path': path, 'ruleId': 'excluded-reference'}])
+            for candidate, data in [(path, notice + b' changed'), ('other.md', notice)]:
+                self.assertEqual(EXPORT.scan_bytes(candidate, data),
+                                 [{'path': candidate, 'ruleId': 'email-address'}])
+
     def test_overlapping_existing_and_traversal_destinations_are_rejected(self):
         """Protect existing outputs and reject source overlap and unsafe source paths."""
         for target in (self.root / 'output', self.root, self.root.parent):

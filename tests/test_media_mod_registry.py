@@ -143,6 +143,44 @@ class MediaModRegistryTests(unittest.TestCase):
         with self.assertRaises(ModError):
             self.registry.snapshot().invoke("speech.asr", token)
 
+    def test_builtin_upgrade_preserves_opt_in_and_selection_but_rejects_old_worker_snapshot(self):
+        initial = builtin()
+        initial["defaultEnabled"] = False
+        self.registry = ModRegistry(self.root, [initial])
+        self.enable("builtin-asr")
+        self.registry.select("speech.asr", "builtin-asr")
+        self.registry.configure("builtin-asr", {"gain": 1.5})
+        previous = self.registry.snapshot()
+        previous_digest = self.row("builtin-asr")["fingerprint"]
+
+        upgraded = {**initial, "version": "1.1.0"}
+        self.registry = ModRegistry(self.root, [upgraded])
+        current = self.registry.snapshot()
+        self.assertEqual(current.selected("speech.asr"), "builtin-asr")
+        self.assertEqual(self.row("builtin-asr")["settings"], {"gain": 1.5})
+        self.assertNotEqual(current.fingerprint(["speech.asr"]), previous.fingerprint(["speech.asr"]))
+        with self.assertRaisesRegex(ModError, "changed before worker"):
+            self.registry.snapshot_from_wire(previous.to_wire())
+        with self.assertRaisesRegex(ModError, "refresh"):
+            self.registry.enable("builtin-asr", previous_digest)
+
+        self.registry.enable("builtin-asr", None, False)
+        fresh = ModRegistry(self.root, [{**initial, "version": "1.2.0", "defaultEnabled": True}])
+        with self.assertRaisesRegex(ModError, "disabled"):
+            fresh.snapshot().selected("speech.asr")
+
+    def test_builtin_availability_does_not_break_worker_snapshot_after_download(self):
+        model = str(self.root / "whisper.bin")
+        declared = {**builtin(), "models": [{"path": model}],
+                    "availability": {"files": [model], "ready": False, "reason": "missing"}}
+        self.registry = ModRegistry(self.root, [declared])
+        captured = self.registry.snapshot()
+        available = {**declared, "availability": {"files": [model], "ready": True, "reason": "present"}}
+        worker = ModRegistry(self.root, [available])
+        restored = worker.snapshot_from_wire(captured.to_wire())
+        self.assertEqual(restored.selected("speech.asr"), "builtin-asr")
+        self.assertEqual(restored.fingerprint(["speech.asr"]), captured.fingerprint(["speech.asr"]))
+
     def test_capability_fingerprint_excludes_unrelated_settings_and_tracks_dynamic_defaults(self):
         asr = builtin()
         asr["capabilities"][0].pop("default")

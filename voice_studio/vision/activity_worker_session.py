@@ -20,7 +20,8 @@ class ActivityWorkerSession:
     def __init__(self, command, imports):
         """Own one lazy child and one IO thread for sequential window requests."""
         self.command = [*command, "--window-server"]
-        self.env = runtime_environment("vision", {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, imports))})
+        environment = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, imports))}
+        self.env = runtime_environment("vision", environment, extra_groups=("light-asd",))
         self.process = None
         self.reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="light-asd-window")
 

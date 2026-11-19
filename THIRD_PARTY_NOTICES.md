@@ -12,6 +12,8 @@ training corpora. Imports, download scripts and integration code can still name
 optional resources. Their presence does not mean those resources are bundled or
 that their redistribution is authorized.
 
+The native app includes MIT-licensed inference code from [Light-ASD at ed38c23](https://github.com/Junhua-Liao/Light-ASD/tree/ed38c232de5efe0261dbd68627c0ade7cdfe14eb) and MIT-licensed MFCC code from [python_speech_features 0.6](https://pypi.org/project/python_speech_features/0.6/). Their original notices are in [Light-ASD LICENSE](voice_studio/vendor/light_asd/LICENSE.md) and [python_speech_features LICENSE](voice_studio/vendor/speech_features/LICENSE.md). Model checkpoints remain separate downloads.
+
 Original project code is licensed under MIT in `LICENSE`, as selected by the
 project owner. This does not replace or remove any upstream license, copyright,
 attribution, NOTICE or other third-party rights. Any third-party source added to the allowlist
@@ -27,6 +29,14 @@ transitive dependencies and license files depend on the actual build environment
 A source requirements range is not a reproducible binary inventory. The native
 builder must record the resolved package versions and include their notices in
 its build output. System frameworks remain supplied by the operating system.
+
+The macOS Apple Silicon binary includes Sherpa-ONNX 1.13.8 and its ONNX Runtime
+1.28.2 library. Sherpa-ONNX carries its Apache-2.0 license in the installed package
+metadata. The bundle includes the [ONNX Runtime license](voice_studio/vendor/onnxruntime/LICENSE.md)
+and [third-party notices](voice_studio/vendor/onnxruntime/ThirdPartyNotices.md)
+from the [upstream v1.28.2 release](https://github.com/microsoft/onnxruntime/releases/tag/v1.28.2).
+The bundled Certifi 2026.10.23 source files and license are available in the
+[upstream package](https://pypi.org/project/certifi/2026.10.23/).
 
 The existing resource record flags these release questions:
 

@@ -13,7 +13,7 @@ import sys
 from threading import BoundedSemaphore
 
 from voice_studio.core.worker_process import worker_command
-from voice_studio.core.optional_runtime import runtime_environment
+from voice_studio.core.optional_runtime import runtime_environment, runtime_ready
 from voice_studio.vision.activity_worker_session import ActivityWorkerSession
 from voice_studio.vision.facial_expressions import finalize_expressions
 from voice_studio.vision.video_activity_chunks import STEP, ActivityTimeline, activity_windows
@@ -27,8 +27,9 @@ SFACE = model_path("vision", "sface-int8.onnx")
 VISION = dependency_path("vision")
 ASD = dependency_path("light-asd")
 ASD_WEIGHTS = model_path("vision", "light-asd", "pretrain_AVA_CVPR.model")
-if not ASD_WEIGHTS.is_file():
-    ASD_WEIGHTS = ASD / "upstream/weight/pretrain_AVA_CVPR.model"
+ASD_LEGACY_WEIGHTS = ASD / "upstream/weight/pretrain_AVA_CVPR.model"
+if not ASD_WEIGHTS.is_file() and ASD_LEGACY_WEIGHTS.is_file():
+    ASD_WEIGHTS = ASD_LEGACY_WEIGHTS
 LEGACY_PYTHON = ROOT / ".engines/coqui/bin/python"
 PYTHON = LEGACY_PYTHON if LEGACY_PYTHON.is_file() else Path(sys.executable)
 MAX_PHRASES = 24
@@ -72,7 +73,14 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
     observations, photos = {}, None
     clock = video_end_ms or max(duration_ms or 0, phrases[-1]["endMs"] if phrases else 0)
     with stage(emit, "light-asd") as progress:
-        weights_ready = (ASD_WEIGHTS.is_file() and LEGACY_PYTHON.is_file()) or is_replacement('vision.active-speaker', 'builtin.light-asd')
+        replacement = is_replacement('vision.active-speaker', 'builtin.light-asd')
+        runtime_available = LEGACY_PYTHON.is_file() or runtime_ready("light-asd")
+        missing = None
+        if not replacement and not ASD_WEIGHTS.is_file():
+            missing = "Нет весов Light-ASD. Установите модель в разделе «Моды и модели»."
+        elif not replacement and not runtime_available:
+            missing = "Нет библиотек Light-ASD. Установите модель в разделе «Моды и модели»."
+        weights_ready = missing is None
         try:
             activity_cues = [(row["startMs"], row["endMs"]) for row in phrases] if weights_ready and wav else []
             observations, visual = score_visible_faces(
@@ -84,14 +92,18 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
             partial = any(row["status"] != "ok" for row in coverage.get("windows", ()))
             if not weights_ready or not activity_cues:
                 result["stages"]["light-asd"] = "unavailable" if not weights_ready else "no-phrases"
-                progress["state"] = "skipped"
+                reason = missing or "Нет реплик с аудио для оценки говорящего в кадре."
+                progress.update(state="skipped", reason=reason)
+                result["activityReason"] = reason
             else:
                 result["stages"]["light-asd"] = "partial" if partial else "ok"
                 if partial:
                     progress["state"] = "partial"
         except (OSError, ValueError, subprocess.SubprocessError):
             result["stages"]["light-asd"] = "failed"
-            progress["state"] = "failed"
+            reason = "Light-ASD не обработал кадры. Проверьте установку модели и повторите анализ."
+            progress.update(state="failed", reason=reason)
+            result["activityReason"] = reason
     with stage(emit, "yunet") as progress:
         try:
             # The original-source photos are collected by the same worker when ASD succeeds.
@@ -270,7 +282,7 @@ def score_visible_faces(source, wav, audio_start_ms, phrases, formats, *, photo_
     coverage = []
     photos = None
     published = False
-    imports = [VISION, ASD / "python", ASD / "upstream"]
+    imports = [VISION]
     command = worker_command(PYTHON, "voice_studio.workers.light_asd_worker")
     with ActivityWorkerSession(command, imports) as worker:
         for index, (start, end, scan_start, scan_end) in enumerate(plan, 1):

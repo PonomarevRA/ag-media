@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass
 from hashlib import file_digest
+from http.client import HTTPException
 import os
 from pathlib import Path
 import tarfile
 from tempfile import TemporaryDirectory, NamedTemporaryFile
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from voice_paths import model_path
@@ -72,6 +74,11 @@ SOUNDS = (
     Asset("audio-tagging/zipformer-small-int8/class_labels_indices.csv", f"{SHERPA}/audio-tagging-models/{ZIPFORMER}.tar.bz2",
           14675, "cdd1049833c4b86127c2773ac0d14a2754b6a6d0d1798002ed5c66e699708429", f"{ZIPFORMER}/class_labels_indices.csv"),
 )
+LIGHT_ASD = (
+    Asset("vision/light-asd/pretrain_AVA_CVPR.model",
+          "https://raw.githubusercontent.com/Junhua-Liao/Light-ASD/ed38c232de5efe0261dbd68627c0ade7cdfe14eb/weight/pretrain_AVA_CVPR.model",
+          4175289, "d44bc3ea7baa8e0946fa3921311714a630ed8b90a1928fab0dbe30d918909317"),
+)
 VISION = (
     Asset("vision/yunet.onnx", f"{ZOO}/face_detection_yunet/face_detection_yunet_2023mar.onnx",
           232589, "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"),
@@ -85,9 +92,18 @@ VISION = (
 
 
 def fetch_file(url, output, limit, progress):
-    """Download from a fixed source into a caller-owned staging file."""
-    with urlopen(url, timeout=45) as response:
-        return copy_bounded(response, output, limit, progress)
+    """Retry interrupted downloads in the same private file before integrity checks."""
+    for attempt in range(3):
+        try:
+            with urlopen(url, timeout=45) as response:
+                return copy_bounded(response, output, limit, progress)
+        except (ConnectionError, TimeoutError, HTTPException, URLError) as error:
+            permanent = isinstance(error, HTTPError) and 400 <= error.code < 500 and error.code != 429
+            if permanent or attempt == 2:
+                raise
+            output.seek(0)
+            output.truncate()
+    raise RuntimeError("Unreachable download retry state")
 
 
 def check_existing(path, asset):

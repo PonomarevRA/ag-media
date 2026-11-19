@@ -37,6 +37,12 @@ alongside their Python callers under `audio/native/` and `vision/native/`.
 Native staging and source exports include both files. The incremental analysis
 fingerprint includes their paths and contents.
 
+An application update preserves explicit activation, settings and selections for
+built-in mods. A changed user mod requires activation against its current
+fingerprint. Worker snapshots still verify the exact code and model declarations
+captured for the run. A change in reported model availability alone does not
+invalidate that snapshot.
+
 Workspace data, installed dependencies and model weights live outside the
 application bundle. [Storage and model paths](wiki/Models-and-storage.md) documents
 the paths and environment overrides.

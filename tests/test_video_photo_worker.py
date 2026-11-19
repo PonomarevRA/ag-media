@@ -24,6 +24,34 @@ class VideoPhotoWorkerTests(TestCase):
         self.assertTrue(events[-1]["reused"])
         worker.assert_not_called()
 
+    def test_managed_activity_runtime_scores_speech_without_source_environment(self):
+        report = {"stages": {}}
+        phrases = [{"startMs": 0, "endMs": 1000}]
+        with patch('voice_studio.vision.video_revolver.LEGACY_PYTHON', Path(__file__).with_name("missing-python")), \
+             patch('voice_studio.vision.video_revolver.ASD_WEIGHTS', Path(__file__)), \
+             patch('voice_studio.vision.video_revolver.runtime_ready', return_value=True), \
+             patch('voice_studio.vision.video_revolver.score_visible_faces',
+                   return_value=({}, {"phrasePhotos": {}})) as score:
+            collect_evidence("video", "audio", phrases, 0, "mov", report, lambda event: None)
+        self.assertEqual(score.call_args.args[3], [(0, 1000)])
+        self.assertEqual(report["stages"]["light-asd"], "ok")
+
+    def test_missing_activity_runtime_reports_actionable_reason_without_blocking_yunet(self):
+        events = []
+        report = {"stages": {}}
+        phrases = [{"startMs": 0, "endMs": 1000}]
+        with patch('voice_studio.vision.video_revolver.LEGACY_PYTHON', Path(__file__).with_name("missing-python")), \
+             patch('voice_studio.vision.video_revolver.ASD_WEIGHTS', Path(__file__)), \
+             patch('voice_studio.vision.video_revolver.runtime_ready', return_value=False), \
+             patch('voice_studio.vision.video_revolver.score_visible_faces',
+                   return_value=({}, {"phrasePhotos": {}})) as score:
+            collect_evidence("video", "audio", phrases, 0, "mov", report, events.append)
+        self.assertEqual(score.call_args.args[3], [])
+        self.assertEqual(report["stages"]["yunet"], "ok")
+        skipped = next(event for event in events if event["state"] == "skipped")
+        self.assertEqual(skipped["reason"], report["activityReason"])
+        self.assertIn("Нет библиотек Light-ASD", skipped["reason"])
+
     def test_failed_activity_pass_falls_back_to_original_source_photos(self):
         report = {"stages": {}}
         phrases = [{"startMs": 0, "endMs": 1000}]

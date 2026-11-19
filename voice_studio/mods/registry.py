@@ -83,8 +83,12 @@ class ModRegistry:
         records = {}
         for mod_id, package in packages.items():
             pinned = state["enabled"].get(mod_id)
-            implicit = package.origin == "builtin" and package.manifest.get("defaultEnabled", True)
-            enabled = pinned == package.fingerprint or mod_id not in state["enabled"] and implicit
+            if package.origin == "builtin":
+                # The installed application vouches for builtin code across updates.
+                # A saved hash records opt-in; worker snapshots still require exact code.
+                enabled = pinned is not False and (isinstance(pinned, str) or package.manifest.get("defaultEnabled", True))
+            else:
+                enabled = pinned == package.fingerprint
             status = "enabled" if enabled else "changed" if isinstance(pinned, str) else "disabled"
             settings = deepcopy(package.manifest["settings"])
             settings.update(deepcopy(state["settings"].get(mod_id, {})))

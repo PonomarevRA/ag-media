@@ -100,3 +100,24 @@ class RuntimeLaunchTests(TestCase):
             command.insert(1, "-I")
             output = subprocess.check_output(command, env=env, text=True, timeout=10)
             self.assertEqual(output.strip(), "managed runtime imported")
+
+    def test_activity_worker_combines_managed_runtimes_in_order(self):
+        """Vision wheels take priority and the isolated worker can also import activity wheels."""
+        from voice_studio.vision.activity_worker_session import ActivityWorkerSession
+
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            vision = root / "vision"
+            activity = root / "light-asd"
+            for group in (vision, activity):
+                group.mkdir()
+                (group / ".studio-ready").touch()
+                (group / "studio_shared_fixture.py").write_text(f"source = {group.name!r}\n")
+            (activity / "studio_activity_fixture.py").write_text(
+                'from studio_shared_fixture import source\nprint(source)\n')
+            command = worker_command(sys.executable, "studio_activity_fixture")
+            command.insert(1, "-I")
+            with patch.object(optional_runtime, "runtime_path", side_effect=lambda name: root / name):
+                with ActivityWorkerSession(command, []) as worker:
+                    output = subprocess.check_output(worker.command, env=worker.env, text=True, timeout=10)
+            self.assertEqual(output.strip(), "vision")

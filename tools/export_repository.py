@@ -42,6 +42,13 @@ REVIEWED_BRAND_ASSETS = {
     "packaging/icons/AgMediaStudio.ico": "37f372371dba8b2508dcf560889bd64ccc0e7c1e846287a130873c3d331678dd"
 }
 
+# This upstream notice contains public attribution addresses. Keep them only
+# while the complete file matches the reviewed ONNX Runtime 1.28.2 bytes.
+REVIEWED_NOTICE_EMAILS = {
+    'voice_studio/vendor/onnxruntime/ThirdPartyNotices.md':
+        '0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2',
+}
+
 RULES = {
     'private-key': re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'),
     'access-token': re.compile(r'\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b'),
@@ -186,7 +193,13 @@ def scan_bytes(path: str, data: bytes, username: str = '',
     if '\x00' in text:
         findings.append(issue(path, 'binary-source'))
     for rule_id, pattern in RULES.items():
-        if pattern.search(text) or pattern.search(path):
+        if pattern.search(path):
+            findings.append(issue(path, rule_id))
+            continue
+        if pattern.search(text):
+            reviewed_digest = REVIEWED_NOTICE_EMAILS.get(path) if rule_id == 'email-address' else None
+            if reviewed_digest and reviewed_digest == hashlib.sha256(data).hexdigest():
+                continue
             findings.append(issue(path, rule_id))
     # Host account names must not leak even without an accompanying home path.
     # Common CI account words are code vocabulary rather than personal account identifiers.

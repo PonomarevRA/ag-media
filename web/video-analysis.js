@@ -34,14 +34,17 @@ const CACHE_LAYERS = {
  */
 export function analysisStageStatus(event, cacheMode) {
   if (event.cacheHit === true) {
-    if (event.state === "skipped") return uiText("Из кэша · пропущен");
+    if (event.state === "skipped") {
+      return uiText("Из кэша · пропущен") + (event.reason ? " · " + apiText(event.reason) : "");
+    }
     return event.state === "partial" ? uiText("Из кэша · частично") : uiText("Из кэша");
   }
   if (event.reused) return uiText("Готово в общем процессе");
   if (cacheMode === "recompute" && event.state === "running") return uiText("Пересчитывается");
   const measured = typeof event.elapsedMs === "number" && ["done", "partial"].includes(event.state);
   const label = cacheMode === "recompute" && event.state === "done" ? uiText("Пересчитано") : STATE[event.state];
-  return label + (measured ? uiText` · ${(event.elapsedMs / 1000).toFixed(1)} с` : "");
+  const time = measured ? uiText` · ${(event.elapsedMs / 1000).toFixed(1)} с` : "";
+  return label + time + (event.reason ? " · " + apiText(event.reason) : "");
 }
 
 const REPORT_FIELDS = {

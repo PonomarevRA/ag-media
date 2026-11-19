@@ -5,6 +5,7 @@ const MODELS = {
   speakers: ["Разделение говорящих", "Sherpa · определение голосов и границ реплик"],
   sounds: ["Музыка и фоновые звуки", "Zipformer Small INT8 · разметка музыки и шумов"],
   vision: ["Лица, предметы и выражения", "YuNet, SFace, NanoDet и OpenCV"],
+  "light-asd": ["Говорящий в кадре", "Light-ASD · определение того, чьё лицо говорит"],
   qwen: ["Синтез Qwen3-TTS", "MLX · синтез речи по образцу голоса"],
   chatterbox: ["Синтез Chatterbox", "MLX · многоязычный синтез по образцу голоса"],
 };
@@ -49,7 +50,12 @@ export function mountModelInstall(find, request, onComplete) {
   function describe(item, busy) {
     if (item.ready) return uiText("Готово к работе");
     if (item.error) return apiText(item.error);
-    if (!item.supported) return uiText("Нужен Mac с Apple Silicon и macOS 26+");
+    if (!item.supported) {
+      const message = item.id === "light-asd"
+        ? "Нужны Python 3.12–3.13 и Windows или Linux x64 либо Mac с Apple Silicon и macOS 14+"
+        : "Нужен Mac с Apple Silicon и macOS 26+";
+      return uiText(message);
+    }
     if (!busy) return uiText("Можно установить");
     if (item.stage !== "weights") return uiText("Установка зависимостей");
     const status = uiText("Загрузка и проверка весов");
