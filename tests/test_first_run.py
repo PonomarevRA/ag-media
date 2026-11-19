@@ -23,6 +23,7 @@ class FirstRunModelTests(TestCase):
         self.target = Path(directory) / "whisper" / whisper_assets.BASE_NAME
         self.enterContext(patch.dict(os.environ, {}, clear=True))
         self.enterContext(patch.object(whisper_assets, "whisper_base_model", return_value=self.target))
+        self.enterContext(patch.object(whisper_assets.ModelRelease, "copy", return_value=False))
         self.enterContext(patch.object(whisper_assets, "BASE_BYTES", len(self.model_data)))
         self.enterContext(patch.object(whisper_assets, "BASE_SHA256", sha256(self.model_data).hexdigest()))
 

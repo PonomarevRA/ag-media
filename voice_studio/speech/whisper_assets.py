@@ -13,6 +13,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from voice_paths import PROJECT_ROOT, dependency_path, model_path
+from voice_studio.provision.model_release import ModelRelease
 
 
 BASE_NAME = "ggml-base.bin"
@@ -104,7 +105,8 @@ def download_base(target, progress):
     staged_path = Path(staging.name)
     try:
         with staging:
-            fetch_base(staging, progress)
+            if not ModelRelease().copy(f"whisper/{BASE_NAME}", staging, BASE_BYTES, BASE_SHA256, progress):
+                fetch_base(staging, progress)
         try:
             os.link(staged_path, target)
         except FileExistsError:
