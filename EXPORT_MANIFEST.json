@@ -181,7 +181,7 @@
     "tests/test_face_profiles.mjs": "32e5823a74c619a3f4b4b61884472cfea5d5a7af9a9b3c4aba648a88577a2dd4",
     "tests/test_face_reid.py": "10cc36474133f02d5f39684bc94ff60f8d0d38f05d4c9f55fe241f33b7942d31",
     "tests/test_facial_expressions.mjs": "e10ec4f15e9415944cbf20760c60825adfe538233d2ec91bd4175f6857d7439f",
-    "tests/test_first_run.py": "ab719ae7e645bdccc3e556d98eb45e9005417413afdc77430a1fdbd718cf4389",
+    "tests/test_first_run.py": "ea790548b66cc2e72a4bf5cf162a2f654bf6a1bae2ff35ea7899578842681317",
     "tests/test_fragment_similarity.py": "ef476655e4a102185b3c4db518e8676823dacaf6558ee2da437cab2c4f4d93b4",
     "tests/test_http_transport.py": "cb3934d98b9e0d654202e7506750c30e9b64224e824364c372d9813691523f3c",
     "tests/test_image_analysis.mjs": "04813719c9dfce5bf0bf98caa9dff8da17929734e758d795936e75534f232052",
