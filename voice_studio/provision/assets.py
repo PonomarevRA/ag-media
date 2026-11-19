@@ -1,7 +1,7 @@
 """Verified model artifacts from fixed upstream locations."""
 
 from dataclasses import dataclass
-from hashlib import file_digest, sha256
+from hashlib import file_digest
 import os
 from pathlib import Path
 import tarfile
@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory, NamedTemporaryFile
 from urllib.request import urlopen
 
 from voice_paths import model_path
+from voice_studio.provision.model_release import ARCHIVE_NAME, ModelRelease, copy_bounded
 from voice_studio.vision.facial_expressions import MODEL_SHA256
 
 
@@ -83,20 +84,6 @@ VISION = (
 )
 
 
-def copy_bounded(source, output, limit, progress):
-    """Copy bounded chunks and return the exact size and hash."""
-    received = 0
-    digest = sha256()
-    while chunk := source.read(1024 * 1024):
-        received += len(chunk)
-        if received > limit:
-            raise ValueError("Downloaded file exceeds its size limit")
-        output.write(chunk)
-        digest.update(chunk)
-        progress(received)
-    return received, digest.hexdigest()
-
-
 def fetch_file(url, output, limit, progress):
     """Download from a fixed source into a caller-owned staging file."""
     with urlopen(url, timeout=45) as response:
@@ -114,7 +101,8 @@ def check_existing(path, asset):
 
 
 def install_assets(assets, progress):
-    """Verify every model before publishing it and fetch each archive at most once."""
+    """Verify every model and share upstream archives within the installation."""
+    mirror = ModelRelease()
     with TemporaryDirectory(prefix="studio-models-") as directory:
         archives = {}
         for asset in assets:
@@ -122,41 +110,46 @@ def install_assets(assets, progress):
             if path.exists() or path.is_symlink():
                 check_existing(path, asset)
                 continue
-            archive = None
-            if asset.member:
-                archive = archives.get(asset.url)
-                if archive is None:
-                    archive = Path(directory) / str(len(archives))
-                    with archive.open("wb") as output:
-                        _, digest = fetch_file(asset.url, output, 128 * 1024 * 1024,
-                                                  lambda count: progress(asset.name, count, None))
-                    if digest != ARCHIVE_HASHES.get(asset.url):
-                        raise ValueError(f"Archive SHA-256 does not match: {asset.name}")
-                    archives[asset.url] = archive
-            publish_asset(asset, path, archive, progress)
+            publish_asset(asset, path, mirror, Path(directory), archives, progress)
 
 
-def publish_asset(asset, path, archive, progress):
+def copy_upstream(asset, output, directory, archives, progress):
+    """Use the pinned original file or extract it from a verified upstream archive."""
+    def report(received):
+        progress(asset.name, received, asset.size)
+
+    if asset.member is None:
+        return fetch_file(asset.url, output, asset.size, report)
+    archive = archives.get(asset.url)
+    if archive is None:
+        archive = directory / str(len(archives))
+        with archive.open("wb") as bundle:
+            _, digest = fetch_file(asset.url, bundle, 128 * 1024 * 1024,
+                                   lambda count: progress(asset.name, count, None))
+        if digest != ARCHIVE_HASHES.get(asset.url):
+            raise ValueError(f"Archive SHA-256 does not match: {asset.name}")
+        archives[asset.url] = archive
+    with tarfile.open(archive, "r:bz2") as bundle:
+        member = bundle.getmember(asset.member)
+        if not member.isfile() or member.size != asset.size:
+            raise ValueError(f"Unexpected archive contents: {asset.name}")
+        with bundle.extractfile(member) as source:
+            return copy_bounded(source, output, asset.size, report)
+
+
+def publish_asset(asset, path, mirror, directory, archives, progress):
     """Atomically expose a single verified payload without overwriting a local file."""
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     staging = NamedTemporaryFile(dir=path.parent, prefix=".studio-model-", delete=False)
     temporary = Path(staging.name)
     try:
-        def report(received):
-            progress(asset.name, received, asset.size)
-
         with staging:
-            if archive is None:
-                verified = fetch_file(asset.url, staging, asset.size, report)
-            else:
-                with tarfile.open(archive, "r:bz2") as bundle:
-                    member = bundle.getmember(asset.member)
-                    if not member.isfile() or member.size != asset.size:
-                        raise ValueError(f"Unexpected archive contents: {asset.name}")
-                    with bundle.extractfile(member) as source:
-                        verified = copy_bounded(source, staging, asset.size, report)
-        if verified != (asset.size, asset.sha):
-            raise ValueError(f"SHA-256 or size does not match: {asset.name}")
+            copied = mirror.copy(asset.name, staging, asset.size, asset.sha,
+                                 lambda count, total: progress(ARCHIVE_NAME, count, total))
+            if not copied:
+                identity = copy_upstream(asset, staging, directory, archives, progress)
+                if identity != (asset.size, asset.sha):
+                    raise ValueError(f"SHA-256 or size does not match: {asset.name}")
         try:
             os.link(temporary, path)
         except FileExistsError:

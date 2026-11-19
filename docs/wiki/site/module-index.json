@@ -831,7 +831,7 @@
       "summary": "Verified model artifacts from fixed upstream locations.",
       "summaryRu": "Verified model artifacts from fixed upstream locations.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "73ab8454c5f0bd618faafb6525efebd110dfe8a3a4998b6f16080c4983ce032e"
+      "sha256": "6c57f71d5aefaa032b0f008c2e9b6c8ef4769e9564e1a3e56c8de92d95d80692"
     },
     {
       "path": "voice_studio/provision/jobs.py",
@@ -840,6 +840,14 @@
       "summaryRu": "Coordinate explicit builtin model installs requested from Studio settings.",
       "summaryOrigin": "source-module-docstring",
       "sha256": "f7352f8dcd93bd35aacf15f72162f69e017929a8bcda7a53836f8c1e6feab6d9"
+    },
+    {
+      "path": "voice_studio/provision/model_release.py",
+      "group": "provision",
+      "summary": "Install known model weights from a verified GitHub Release archive.",
+      "summaryRu": "Install known model weights from a verified GitHub Release archive.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "66635d08c9a862f1e2fff23b11a148eb2f61093c4749c1753608d5d28edea5c3"
     },
     {
       "path": "voice_studio/provision/runtime.py",
@@ -1055,7 +1063,7 @@
       "summary": "Resolve and provision the multilingual Whisper Base runtime assets.",
       "summaryRu": "Resolve and provision the multilingual Whisper Base runtime assets.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "00e4cfd401404410ff403e201e5ff371f2a653db5a78830404d58b196fea832d"
+      "sha256": "73127c79dfee205f71f900fa66a0d9be483d4f880820be73c230434fed3cc9cb"
     },
     {
       "path": "voice_studio/synthesis/auto_synthesis.py",
