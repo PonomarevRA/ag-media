@@ -1,0 +1,116 @@
+/* Workspace composition uses the host profile palette; media clocks and editor pane geometry stay in their modules. */
+:root[data-studio-shell="true"] {
+  --sidebar-width: 228px;
+  --studio-gap: 12px;
+  --studio-inset: 16px;
+  --shell-rule: color-mix(in srgb, var(--line) 76%, transparent);
+}
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] { --sidebar-width: 64px; }
+:root[data-studio-shell="true"] .shell { width: 100%; max-width: none; margin-inline: 0; padding-inline: clamp(12px, 1.8vw, 24px); }
+:root[data-studio-shell="true"] main.shell { padding-block: 16px 28px; }
+:root[data-studio-shell="true"] .studio-topbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 7;
+  min-block-size: 56px;
+  padding-block: 6px;
+  background: var(--background);
+  border-block-end-color: var(--shell-rule);
+}
+:root[data-studio-shell="true"] .studio-sidebar { z-index: 8; }
+:root[data-studio-shell="true"] .studio-navigation { gap: 16px; padding: 12px 10px; }
+.studio-navigation-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-inline-size: 0; }
+:root[data-studio-shell="true"] .studio-navigation .brand { min-inline-size: 0; margin-inline: 0; gap: 8px; font-size: 1rem; }
+.studio-navigation .brand-name { min-inline-size: 0; overflow-wrap: anywhere; }
+.studio-navigation .mark { inline-size: 28px; block-size: 28px; flex: 0 0 28px; }
+.studio-navigation .brand-icon { display: block; inline-size: 28px; block-size: 28px; flex: 0 0 28px; }
+#nav-collapse { flex: 0 0 44px; padding: 0; border-color: transparent; background: transparent; }
+#nav-collapse svg { transform: scaleX(-1); }
+:root[data-studio-shell="true"] .studio-nav { gap: 4px; }
+:root[data-studio-shell="true"] .studio-nav a { min-block-size: 44px; padding: 8px 11px 8px 9px; border-inline-start-width: 3px; font-size: .87rem; }
+:root[data-studio-shell="true"] .studio-nav a[aria-current="page"] { padding-inline-start: 9px; }
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-navigation-heading { flex-direction: column; gap: 6px; }
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .brand-name,
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-nav-label { display: none; }
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-nav a { inline-size: 44px; justify-content: center; padding-inline: 0 2px; }
+.studio-navigation-hint {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: .45rem .65rem;
+  inline-size: max-content;
+  max-inline-size: min(18rem, calc(100vw - 16px));
+  border: 1px solid var(--control);
+  border-radius: var(--profile-radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: .87rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+:root[data-studio-shell="true"] .intro { margin-block-end: 14px; }
+:root[data-studio-shell="true"] .intro h1 { margin-block-end: 5px; font-size: clamp(1.4rem, 2.2vw, 1.85rem); line-height: 1.15; letter-spacing: -.025em; overflow-wrap: anywhere; }
+:root[data-studio-shell="true"] .intro > p { max-inline-size: 70ch; font-size: .9rem; }
+:root[data-studio-shell="true"] .journey-nav { gap: 5px; margin-block-start: 10px; }
+:root[data-studio-shell="true"] .journey-nav a { min-block-size: 36px; padding: 5px 10px; font-size: .85rem; }
+:root[data-studio-shell="true"] main > .panel,
+:root[data-studio-shell="true"] .work > .panel,
+:root[data-studio-shell="true"] .settings-grid > .panel { padding: var(--studio-inset); border-color: var(--shell-rule); }
+:root[data-studio-shell="true"] .panel > h2 { font-size: 1.15rem; }
+:root[data-studio-shell="true"] .work { margin-block: 14px; gap: var(--studio-gap); }
+:root[data-studio-shell="true"] .panel.next { margin-block-start: var(--studio-gap); }
+:root[data-studio-shell="true"] .engines { margin-block: 12px; }
+:root[data-studio-shell="true"] .engine { padding: 12px; }
+:root[data-studio-shell="true"] .engine label { font-size: .95rem; }
+:root[data-studio-shell="true"] .comparison-choices { gap: 12px; align-items: end; }
+:root[data-studio-shell="true"] .synthesis-actions { padding-block-start: 12px; border-block-start: 1px solid var(--shell-rule); }
+:root[data-studio-shell="true"] .results-heading { padding-block-end: 10px; border-block-end: 1px solid var(--shell-rule); }
+:root[data-studio-shell="true"] .results-list { margin-block-start: 12px; }
+:root[data-studio-shell="true"] .studio-list :is(.take, .candidate) { border-color: var(--shell-rule); }
+:root[data-studio-shell="true"] .settings-grid { gap: var(--studio-gap); align-items: start; }
+:root[data-studio-shell="true"] .settings-grid h2 { margin-block-end: 12px; }
+:root[data-studio-shell="true"] .settings-materials { border-block-start: 2px solid var(--accent); }
+:root[data-studio-shell="true"] .storage-toolbar { gap: 8px 16px; }
+
+/* Preparation is a native set of disclosures; imports and all original form IDs keep their existing handlers. */
+.media-workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-inline-size: 0; margin-block-end: 12px; }
+.media-workspace-heading h2 { margin: 0; font-size: 1.15rem; }
+.media-preparation { min-inline-size: 0; padding-block-end: 12px; margin-block-end: 12px; border-block-end: 1px solid var(--shell-rule, var(--line)); }
+.media-import-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-inline-size: 0; }
+.media-import-row .media-import { max-inline-size: 100%; overflow-wrap: anywhere; text-align: start; }
+.media-import-row > .muted { flex: 1 1 12rem; font-size: .82rem; }
+.media-preparation-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 6px 10px; min-inline-size: 0; margin-block-start: 10px; }
+.media-preparation-options > .capture-options { min-inline-size: 0; margin: 0; padding-inline: 10px; border: 1px solid var(--shell-rule, var(--line)); border-radius: var(--profile-radius); }
+.media-preparation-options > .capture-options > summary { min-block-size: 44px; padding-block: 10px; font-size: .86rem; color: var(--ink); }
+.media-preparation-options > .capture-options[open] { grid-column: 1 / -1; padding-block-end: 10px; }
+.media-preparation-options .media-analysis-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 12px; }
+.media-preparation-options :is(.capture-fields, .capture-form, .media-analysis-group) { min-inline-size: 0; }
+.media-preparation-options .capture-fields > .select-field { min-inline-size: 0; }
+.media-preparation-options :is(input, select, button) { max-inline-size: 100%; }
+.media-preparation-options .media-analysis-group { padding: 12px; }
+#media-status:empty { display: none; }
+
+@media (max-width: 52rem) {
+  :root[data-studio-shell="true"] body { padding-inline-start: 0; }
+  :root[data-studio-shell="true"] .studio-topbar { min-block-size: 56px; }
+  #nav-collapse { display: none; }
+  .studio-navigation-heading { justify-content: flex-start; }
+  :root[data-studio-shell="true"] .studio-drawer .studio-navigation { padding: 12px; }
+}
+@media (pointer: coarse) {
+  :root[data-studio-shell="true"] .journey-nav a { min-block-size: 44px; }
+}
+@media (max-width: 36rem) {
+  :root[data-studio-shell="true"] main.shell { padding-block-start: 12px; }
+  :root[data-studio-shell="true"] .intro h1 { font-size: 1.4rem; }
+  :root[data-studio-shell="true"] main > .panel,
+  :root[data-studio-shell="true"] .work > .panel,
+  :root[data-studio-shell="true"] .settings-grid > .panel { padding: 12px; }
+  .media-import-row .media-import { inline-size: 100%; }
+  .media-preparation-options { grid-template-columns: minmax(0, 1fr); }
+}
+@media (forced-colors: active) {
+  .studio-navigation-hint { border-color: CanvasText; }
+}

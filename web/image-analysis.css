@@ -1,0 +1,42 @@
+/* The still-image workspace shares host colours and a reading column, without a fabricated video clock. */
+.image-analysis { min-inline-size: 0; margin-block: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--profile-radius, 8px); }
+.image-analysis[hidden] { display: none; }
+.image-analysis-header, .image-analysis-settings, .image-analysis-layers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.image-analysis-header { justify-content: space-between; }
+.image-analysis-header > div { min-inline-size: 0; }
+.image-analysis-header h3 { margin: 0; }
+.image-analysis button { max-inline-size: 100%; overflow-wrap: anywhere; }
+.image-analysis-actions { flex: none; gap: 4px; margin: 0; }
+.image-analysis-actions .studio-icon { border: 0; border-radius: 4px; background: transparent; box-shadow: none; }
+.image-analysis-actions .studio-icon:hover:not(:disabled) { background: var(--surface-alt); }
+#image-source { overflow-wrap: anywhere; margin-block: 4px; }
+.image-analysis-settings { display: grid; grid-template-columns: minmax(0, 1fr); margin-block: 12px; gap: 12px; }
+.image-analysis-choices, .image-analysis-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.image-analysis-controls { align-items: flex-end; }
+.image-analysis-settings .select-field { min-inline-size: 0; font-size: .875rem; font-weight: 600; }
+.image-analysis-settings select { max-inline-size: 100%; }
+/* Adapt AG's native-select contract locally: a separate 12px indicator slot, host colours and a 44px target.
+   Keep the system popup/keyboard semantics; do not inherit the host's experimental base-select picker. */
+#image-detail { appearance: none; display: block; font-size: 1rem; line-height: 1.5; min-block-size: 44px; padding: 8px 36px 8px 12px;
+  background-image: linear-gradient(45deg, transparent 42%, currentColor 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, currentColor 42% 58%, transparent 58%);
+  background-size: 6px 6px; background-repeat: no-repeat; background-position: right 18px center, right 12px center; }
+#image-detail:dir(rtl) { padding-inline: 12px 36px; background-position: left 12px center, left 18px center; }
+#image-detail:focus-visible { outline-width: 2px; outline-offset: 2px; }
+@media (forced-colors: active) { #image-detail { appearance: auto; background-image: none; } }
+.image-analysis-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(12em, 1fr); align-items: start; gap: 12px; }
+.image-analysis-frame { position: relative; min-inline-size: 0; margin: 0; line-height: 0; background: var(--background); }
+.image-analysis-frame img { display: block; inline-size: 100%; block-size: auto; }
+#image-overlay { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: none; }
+.image-box { fill: none; stroke-width: 1.5; }
+.image-box-objects { stroke: #53ccb5; }
+.image-box-ui { stroke: #ffa347; stroke-dasharray: 5 2; }
+.image-box-text { stroke: #7bbcff; }
+.image-box.selected { stroke: white; stroke-width: 3; filter: drop-shadow(0 0 2px #000); }
+.image-analysis-layers { margin-block-end: 10px; }
+.image-analysis-list { min-inline-size: 0; max-block-size: min(60vh, 640px); overflow: auto; border-block-start: 1px solid var(--line); }
+.image-detection { display: flex; inline-size: 100%; min-inline-size: 0; justify-content: space-between; text-align: start; gap: 10px; border: 0; border-block-end: 1px solid var(--line); border-radius: 0; background: transparent; }
+.image-detection span { min-inline-size: 0; overflow-wrap: anywhere; }
+.image-detection small { flex: none; color: var(--muted); }
+.image-detection[aria-pressed="true"] { background: var(--surface-alt); box-shadow: inset 3px 0 var(--accent); }
+.image-analysis-note { font-size: .85rem; color: var(--muted); margin-block: 10px; }
+@media (max-width: 840px) { .image-analysis-layout { grid-template-columns: minmax(0, 1fr); } .image-analysis-list { max-block-size: 20rem; } }

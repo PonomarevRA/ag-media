@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AgMediaStudio</AssemblyName>
+    <ApplicationIcon>../icons/AgMediaStudio.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <!-- Normalize compiler documents and embedded debug metadata on every build machine. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PathMap>$(MSBuildProjectDirectory)=/_/ag-media-studio/windows</PathMap>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <!-- WinForms does not use the WPF assembly shipped by the SDK. -->
+  <Target Name="ExcludeWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup><Reference Remove="@(Reference)" Condition="$([System.String]::Copy('%(Reference.Identity)').EndsWith('Microsoft.Web.WebView2.Wpf.dll'))" /></ItemGroup>
+  </Target>
+  <ItemGroup><PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" /></ItemGroup>
+</Project>

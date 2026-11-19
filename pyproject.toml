@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ag-media-studio"
+version = "0.1.0"
+description = "Local media analysis and editing with native desktop hosts"
+requires-python = ">=3.12"
+license = "MIT"
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+py-modules = ["voice_paths"]
+
+[tool.setuptools.packages.find]
+include = ["voice_studio*"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements-core.txt"]}

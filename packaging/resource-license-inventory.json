@@ -1,0 +1,204 @@
+{
+  "schema": "ag-media-resource-license-inventory-v1",
+  "basis": "Existing THIRD-PARTY.md record dated 2026-11-15 through 2026-11-17; not newly verified license advice.",
+  "sourceExportBundlesWeights": false,
+  "sourceExportBundlesThirdPartyPackages": false,
+  "beforeAnyResourceRedistribution": [
+    "pin exact code and artifact revision",
+    "verify artifact SHA-256",
+    "review primary license and NOTICE",
+    "retain upstream copyright and notices",
+    "resolve explicit permission gaps"
+  ],
+  "resources": [
+    {
+      "resource": "Apple SoundAnalysis / Vision",
+      "status": "system-framework",
+      "officialSource": "https://developer.apple.com/documentation/vision",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Sherpa ONNX Zipformer Small INT8 2024-04-15",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-small-audio-tagging-2024-04-15",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Tesseract / tessdata_fast RU EN",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://github.com/tesseract-ocr/tessdata_fast",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "OpenCV Zoo NanoDet / SFace / YuNet",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://github.com/opencv/opencv_zoo",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "OpenCV Zoo MobileFaceNet FER 2022july",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://huggingface.co/opencv/facial_expression_recognition/tree/b473270576eabddaacffd08adb4bed27b3fc54e6",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": "b473270576eabddaacffd08adb4bed27b3fc54e6",
+      "sha256InExistingRecord": "4f61307602fc089ce20488a31d4e4614e3c9753a7d6c41578c854858b183e1a9"
+    },
+    {
+      "resource": "MediaPipe SelfieMulticlass / Face Landmarker",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://github.com/google-ai-edge/mediapipe",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "OpenVINO age-gender-recognition-retail-0013 FP16",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://github.com/openvinotoolkit/open_model_zoo/tree/master/models/intel/age-gender-recognition-retail-0013",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Whisper / whisper.cpp Base and Small quantizations",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://github.com/ggml-org/whisper.cpp",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Light-ASD pretrain_AVA_CVPR.model ed38c23",
+      "status": "redistribution-unconfirmed-in-existing-record",
+      "officialSource": "https://github.com/Junhua-Liao/Light-ASD/tree/ed38c232de5efe0261dbd68627c0ade7cdfe14eb",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": "ed38c232de5efe0261dbd68627c0ade7cdfe14eb",
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Sherpa diarization ONNX segmentation / 3D-Speaker",
+      "status": "redistribution-unconfirmed-in-existing-record",
+      "officialSource": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-segmentation-models",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "FFmpeg / OpenCV codecs x264 x265",
+      "status": "exact-binary-license-closure-review-required",
+      "officialSource": "https://ffmpeg.org/legal.html",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "RNNoise cb.rnnn",
+      "status": "redistribution-unconfirmed-in-existing-record",
+      "officialSource": "https://github.com/richardpl/arnndn-models",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "TorchAudio HDemucs High MUSDB Plus",
+      "status": "redistribution-unconfirmed-in-existing-record",
+      "officialSource": "https://docs.pytorch.org/audio/2.8/generated/torchaudio.pipelines.HDEMUCS_HIGH_MUSDB_PLUS.html",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "MERL MRX SNR loss",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://github.com/merlresearch/cocktail-fork-separation/tree/19b3de827ebc4bfb014570cf92dd32b4ee3b6921",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": "19b3de827ebc4bfb014570cf92dd32b4ee3b6921",
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "F5-TTS Russian / accent-tune variants",
+      "status": "model-restrictions-in-existing-record",
+      "officialSource": "https://github.com/SWivid/F5-TTS",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Coqui XTTS-v2 2.0.3",
+      "status": "model-restrictions-in-existing-record",
+      "officialSource": "https://huggingface.co/coqui/XTTS-v2/blob/v2.0.3/LICENSE.txt",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Fish Speech server and weights",
+      "status": "exact-version-and-permission-review-required",
+      "officialSource": "https://github.com/fishaudio/fish-speech",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Vocos mel 24 kHz",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://huggingface.co/charactr/vocos-mel-24khz",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Qwen3-TTS 12Hz 0.6B Base MLX 4-bit",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit/tree/0d6bb6fe33f92d47a507e23b9148940e8366ab5b",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": "0d6bb6fe33f92d47a507e23b9148940e8366ab5b",
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "Chatterbox Multilingual V3 MLX / S3TokenizerV2",
+      "status": "tokenizer-provenance-review-in-existing-record",
+      "officialSource": "https://huggingface.co/mlx-community/S3TokenizerV2",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": null
+    },
+    {
+      "resource": "ERes2Net embedding.onnx",
+      "status": "artifact-not-bundled",
+      "officialSource": "https://huggingface.co/onemira/eres2net-base-3dspeaker-onnx",
+      "bundled": false,
+      "exactRedistributionVerifiedByThisExport": false,
+      "revisionInExistingRecord": null,
+      "sha256InExistingRecord": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b"
+    }
+  ]
+}

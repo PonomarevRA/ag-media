@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "ag-media-studio Live",
+  "version": "0.1.0",
+  "description": "Локальные субтитры и рамки лиц в выбранной вкладке.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "tabCapture", "offscreen", "storage"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {"service_worker": "worker.js", "type": "module"},
+  "action": {"default_title": "ag-media-studio Live", "default_popup": "popup.html"}
+}

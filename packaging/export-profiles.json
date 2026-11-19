@@ -1,0 +1,174 @@
+{
+  "schema": "ag-media-source-export-v1",
+  "common": {
+    "files": [
+      "ag_media_studio.py",
+      "ag_media_studio_mcp.py",
+      "clothing_sample_worker.py",
+      "commercial_voice_worker.py",
+      "dub_background_worker.py",
+      "light_asd_worker.py",
+      "live_face_worker.py",
+      "model_worker.py",
+      "mrx_audio_worker.py",
+      "person_layer_worker.py",
+      "server.py",
+      "setup_commercial_voices.py",
+      "setup_dub_background.py",
+      "speaker_diarization.py",
+      "speaker_metric.py",
+      "speaker_photos.py",
+      "speaker_review.py",
+      "speech_metrics.py",
+      "video_scene.py",
+      "voice_mcp.py",
+      "voice_paths.py",
+      "zipformer_audio.py",
+      ".gitignore",
+      ".gitattributes",
+      "LICENSE",
+      "PUBLISHING.md",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "THIRD-PARTY.md",
+      "THIRD_PARTY_NOTICES.md",
+      "requirements.txt",
+      "pyproject.toml",
+      "project.json",
+      "run.sh",
+      "audio_scene.swift",
+      "scene_ocr.swift",
+      {
+        "source": "packaging/public-README.md",
+        "target": "README.md"
+      },
+      "docs/NATIVE-DISTRIBUTION.md",
+      "docs/GETTING-STARTED.md",
+      "docs/AGENT-SETUP.md",
+      "docs/MCP-TOOLS.md",
+      "docs/UI-MCP-BRIDGE.md",
+      "docs/DIALOGUE_AUDIT.md",
+      "MEDIA-GRAPH.md",
+      "skills/README.md",
+      "skills/ag-media-setup/SKILL.md",
+      "skills/ag-media-interval-review/SKILL.md",
+      "skills/ag-media-ui-review/SKILL.md",
+      "skills/ag-media-dialogue-audit/SKILL.md",
+      "requirements-core.txt",
+      "docs/WINDOWS-DISTRIBUTION.md",
+      "requirements-desktop.txt",
+      "web/brand/icon-32.png",
+      "web/brand/icon-180.png",
+      "web/brand/icon-512.png",
+      "web/brand/favicon.ico",
+      "packaging/icons/AgMediaStudio.icns",
+      "packaging/icons/AgMediaStudio.ico"
+    ],
+    "trees": [
+      {
+        "path": "voice_studio",
+        "extensions": [
+          ".py",
+          ".json"
+        ]
+      },
+      {
+        "path": "web",
+        "extensions": [
+          ".js",
+          ".css",
+          ".html",
+          ".svg"
+        ]
+      },
+      {
+        "path": "tests",
+        "extensions": [
+          ".py",
+          ".mjs"
+        ]
+      },
+      {
+        "path": "adapters",
+        "extensions": [
+          ".cs",
+          ".csproj"
+        ]
+      },
+      {
+        "path": "trainers",
+        "extensions": [
+          ".py"
+        ]
+      },
+      {
+        "path": "browser-extension",
+        "extensions": [
+          ".js",
+          ".mjs",
+          ".json",
+          ".html",
+          ".css",
+          ".md"
+        ]
+      },
+      {
+        "path": "docs/wiki",
+        "extensions": [
+          ".md",
+          ".json",
+          ".html",
+          ".css",
+          ".svg"
+        ]
+      },
+      {
+        "path": "packaging",
+        "extensions": [
+          ".py",
+          ".swift",
+          ".json",
+          ".md",
+          ".spec",
+          ".cs",
+          ".csproj",
+          ".ps1"
+        ]
+      },
+      {
+        "path": "scripts",
+        "extensions": [
+          ".py",
+          ".sh"
+        ]
+      },
+      {
+        "path": "tools",
+        "extensions": [
+          ".py"
+        ]
+      },
+      {
+        "path": ".github/workflows",
+        "extensions": [
+          ".yml",
+          ".yaml"
+        ]
+      }
+    ],
+    "exclude": [
+      "tests/test_facial_expressions.py",
+      "tests/test_voice_profiles.py",
+      "tests/test_media_graph_interval.py"
+    ]
+  },
+  "profiles": {
+    "public": {},
+    "private": {
+      "files": [
+        "ARCHITECTURE.md",
+        "AUDIO-PROCESSING.md"
+      ]
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "apiVersion": 1,
+  "id": "asr-seconds",
+  "name": "ASR vendor seconds conversion example",
+  "version": "1.0.0",
+  "description": "Deterministic model fixture demonstrating input preparation and conversion of vendor seconds into Studio millisecond offsets. Replace model.py with your installed model inference.",
+  "capabilities": [{
+    "id": "speech.asr",
+    "kind": "provider",
+    "entrypoint": "model.py:run",
+    "inputContract": {"id": "studio.named-input", "version": 1},
+    "contract": {"id": "studio.asr", "version": 1},
+    "prepare_input": "adapter.py:prepare_input",
+    "convert_output": "adapter.py:convert_output",
+    "rawOutputSchema": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "language": {"type": "string"},
+          "utterances": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "begin_seconds": {"type": "number", "minimum": 0},
+                "end_seconds": {"type": "number", "minimum": 0},
+                "content": {"type": "string"}
+              },
+              "required": ["begin_seconds", "end_seconds", "content"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["language", "utterances"],
+        "additionalProperties": false
+      }
+    }
+  }],
+  "settingsSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+  "settings": {},
+  "requires": [],
+  "requirements": {"python": ">=3.10"},
+  "license": "MIT",
+  "provenance": {"author": "Voice Studio example", "source": "Synthetic vendor model fixture, no external model or weights"}
+}

@@ -1,0 +1,8 @@
+# Exact direct core dependencies from the qualified desktop source environment.
+mlflow-skinny==3.18.0
+SQLAlchemy==2.1.8
+alembic==1.20.1
+msgpack==1.2.4
+mcp==1.30.0
+fastapi==0.162.7
+uvicorn==0.54.0

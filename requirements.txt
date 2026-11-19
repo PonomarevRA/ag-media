@@ -1,0 +1,6 @@
+mlflow-skinny>=3.7,<4
+sqlalchemy>=2,<3
+alembic>=1,<2
+msgpack>=1,<2
+mcp>=1.12,<2
+sherpa-onnx>=1.13.8,<2

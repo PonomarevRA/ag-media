@@ -1,0 +1,54 @@
+/* Reading grid: a stable navigation rail and a bounded article; no model or app UI state. */
+:root { color-scheme: light dark; --paper:#f6f4ef; --surface:#fffefa; --ink:#182e33; --muted:#425a60; --line:#aebdb9; --accent:#155a54; --selected:#d9e9e2; font:100%/1.65 system-ui,sans-serif; background:var(--paper); color:var(--ink); }
+* { box-sizing:border-box; }
+body { margin:0; }
+a { color:var(--accent); text-underline-offset:.2em; }
+a:hover { text-decoration-thickness:2px; }
+a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+.skip { position:absolute; left:1rem; top:-6rem; padding:.5rem; background:var(--surface); z-index:3; }
+.skip:focus { top:.5rem; }
+.wiki-header { display:flex; align-items:center; flex-wrap:wrap; gap:.6rem 1.5rem; padding:1rem 2rem; border-bottom:1px solid var(--line); background:var(--surface); }
+.wiki-header a { min-block-size:2.75rem; display:inline-flex; align-items:center; }
+.wiki-header .brand { font-weight:750; text-decoration:none; color:var(--ink); letter-spacing:-.035em; font-size:1.15rem; overflow-wrap:anywhere; }
+.wiki-header span { color:var(--muted); margin-inline-end:auto; font-size:.875rem; }
+.wiki-layout { display:grid; grid-template-columns:14rem minmax(0,1fr); gap:3rem; max-inline-size:90rem; padding:2rem; margin-inline:auto; }
+.wiki-nav { display:flex; flex-direction:column; align-self:start; gap:.2rem; position:sticky; top:1rem; }
+.wiki-nav a { display:flex; align-items:center; min-block-size:2.75rem; padding:.4rem .8rem; text-decoration:none; border-inline-start:3px solid transparent; color:var(--muted); overflow-wrap:anywhere; }
+.wiki-nav [aria-current] { background:var(--selected); border-color:var(--accent); color:var(--ink); font-weight:650; }
+main { min-inline-size:0; max-inline-size:64rem; }
+main:focus { outline:none; }
+h1 { font-size:2.4rem; letter-spacing:-.035em; line-height:1.15; margin:.25rem 0 1.5rem; overflow-wrap:anywhere; }
+h2 { margin:2.25rem 0 .75rem; font-size:1.4rem; line-height:1.35; overflow-wrap:anywhere; }
+p { margin:0 0 1rem; max-inline-size:78ch; }
+li { padding-inline-start:.15rem; margin:.5rem 0; }
+ul { padding-inline-start:1.4rem; }
+.eyebrow { font-size:.8rem; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+figure { margin:1.5rem 0 2rem; }
+figure a { display:block; border:1px solid var(--line); border-radius:.5rem; overflow:hidden; background:#17232e; }
+img { display:block; inline-size:100%; block-size:auto; }
+figcaption { margin-block-start:.6rem; font-size:.875rem; color:var(--muted); max-inline-size:85ch; }
+table { inline-size:100%; border-collapse:collapse; font-size:.9rem; table-layout:fixed; }
+th,td { padding:.8rem .75rem; border-bottom:1px solid var(--line); vertical-align:top; text-align:start; overflow-wrap:anywhere; }
+th { background:var(--selected); font-weight:650; }
+th:first-child { inline-size:40%; }
+.table-scroll { min-inline-size:0; margin-block:1rem 1.75rem; }
+code { font-family:ui-monospace,monospace; font-size:.9em; overflow-wrap:anywhere; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:1rem; background:var(--selected); border-inline-start:3px solid var(--accent); }
+footer { margin-block-start:3rem; padding-block:1.5rem; border-top:1px solid var(--line); color:var(--muted); font-size:.85rem; }
+@media (max-width:56rem) {
+ .wiki-header { padding:.75rem 1rem; gap:.4rem 1rem; }
+ .wiki-layout { grid-template-columns:minmax(0,1fr); gap:1.5rem; padding:1rem; }
+ .wiki-nav { position:static; display:flex; flex-direction:row; flex-wrap:wrap; gap:.2rem; border-bottom:1px solid var(--line); padding-block-end:.75rem; }
+ .wiki-nav a { padding:.35rem .6rem; font-size:.875rem; }
+ h1 { font-size:2rem; }
+ th,td { padding:.6rem .4rem; }
+}
+@media (prefers-color-scheme:dark) {
+ :root { --paper:#121b23; --surface:#19242f; --ink:#edf3f3; --muted:#b8c8ce; --line:#52656e; --accent:#91d5c6; --selected:#243b43; }
+}
+@media print {
+ .wiki-nav,.wiki-header,.skip { display:none; }
+ .wiki-layout { display:block; padding:0; }
+ :root { color-scheme:light; --paper:white; --surface:white; --ink:black; --muted:#333; }
+ figure,table { break-inside:avoid; }
+}

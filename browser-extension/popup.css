@@ -1,0 +1,28 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  background: #211a15;
+  color: #fbf2e8;
+}
+body { margin: 0; }
+main { width: 19rem; max-width: 100%; padding: 1rem; box-sizing: border-box; }
+h1 { margin: 0; font-size: 1.1rem; color: #ffc190; }
+p { margin: .55rem 0 .85rem; line-height: 1.4; }
+form { display: grid; gap: .48rem; }
+label { font-size: .82rem; }
+input, select, button {
+  min-height: 44px;
+  padding: .35rem .6rem;
+  box-sizing: border-box;
+  border: 1px solid #9b7b61;
+  border-radius: 6px;
+  background: #38291f;
+  color: #fbf2e8;
+  font: inherit;
+}
+button { margin-block-start: .25rem; cursor: pointer; }
+button:disabled { cursor: default; opacity: .7; }
+:focus-visible { outline: 2px solid #ffc190; outline-offset: 2px; }
+#status { color: #efcbb0; font-size: .82rem; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }

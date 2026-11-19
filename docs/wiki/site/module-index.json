@@ -1,0 +1,2037 @@
+{
+  "schemaVersion": "ag-media-studio-modules/1",
+  "modules": [
+    {
+      "path": "voice_studio/app/desktop_config.py",
+      "group": "app",
+      "summary": "Explicit native-instance discovery and MCP launch configuration, with no development-port fallback.",
+      "summaryRu": "Explicit native-instance discovery and MCP launch configuration, with no development-port fallback.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "6a1b3bae9a3b3d098a6d8c3d7d5a8b8f636b8b30df7766b7901e0524ce0d10a9"
+    },
+    {
+      "path": "voice_studio/app/desktop_linux.py",
+      "group": "app",
+      "summary": "Native GTK3/WebKit2 desktop host; packaged Linux uses explicit distro GUI dependencies.",
+      "summaryRu": "Native GTK3/WebKit2 desktop host; packaged Linux uses explicit distro GUI dependencies.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4382475c1e9e012f127d9c881a94ed130047b7d36e92b27b317a94e4d92fbc44"
+    },
+    {
+      "path": "voice_studio/app/desktop_runtime.py",
+      "group": "app",
+      "summary": "Owned loopback service for the native desktop hosts; never attaches to another instance.",
+      "summaryRu": "Owned loopback service for the native desktop hosts; never attaches to another instance.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "63e0f2b55f38f43e29914e29b79537cf30cb1d69a11079a6dfcd137c148887b5"
+    },
+    {
+      "path": "voice_studio/app/desktop_updates.py",
+      "group": "app",
+      "summary": "Read stable native release metadata on demand and report matching packages.",
+      "summaryRu": "Read stable native release metadata on demand and report matching packages.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "bcb1dd6b200cbb3599a9ab4556882f800aa0a8079cd60ff676de6774acab3efc"
+    },
+    {
+      "path": "voice_studio/app/dialogue_audit_service.py",
+      "group": "app",
+      "summary": "Validate and serialize source-bound dialogue audits for UI and local agents.",
+      "summaryRu": "Validate and serialize source-bound dialogue audits for UI and local agents.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2bffc072a312bbe6a3ac3eb4abb48d1ca5778256ee23e2cd71c667fba860394a"
+    },
+    {
+      "path": "voice_studio/app/image_analysis.py",
+      "group": "app",
+      "summary": "Adapt a bounded browser image upload to the same local vision worker used by screenshot MCP.",
+      "summaryRu": "Adapt a bounded browser image upload to the same local vision worker used by screenshot MCP.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e5d4000edccea554dfde807f729245d542b05a346d0c2479e7744adcabc0298d"
+    },
+    {
+      "path": "voice_studio/app/live_capture.py",
+      "group": "app",
+      "summary": "Bounded local analysis for explicitly selected browser tab fragments.",
+      "summaryRu": "Bounded local analysis for explicitly selected browser tab fragments.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e1170e835cc3377772211273d22b094415e0ba96259b39f278c30df6f81f80ee"
+    },
+    {
+      "path": "voice_studio/app/media_pipeline.py",
+      "group": "app",
+      "summary": "Reuse the graph's bounded source pipeline for long uploads instead of truncating audio.",
+      "summaryRu": "Reuse the graph's bounded source pipeline for long uploads instead of truncating audio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f698ba4bfd4f1184cf7d77755abb6391e000a47bca813eb57138fe2d349e7e78"
+    },
+    {
+      "path": "voice_studio/app/scroll_previews.py",
+      "group": "app",
+      "summary": "Keep the latest successful set of scroll mosaics in the Studio's private cache.",
+      "summaryRu": "Keep the latest successful set of scroll mosaics in the Studio's private cache.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f958af5c964eb9aeca3465d65a53b5627a9bbc4c4e7d4dec66e35d643275676b"
+    },
+    {
+      "path": "voice_studio/app/server.py",
+      "group": "app",
+      "summary": "Serve the single-user ag-media-studio on loopback.",
+      "summaryRu": "Serve the single-user ag-media-studio on loopback.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ae44d00a7900683920078d8e35f6929e5d82a8f6e10f638d5dae79066b8714cd"
+    },
+    {
+      "path": "voice_studio/app/static_assets.py",
+      "group": "app",
+      "summary": "Shared UI asset catalogue and response policy, with no model or database imports.",
+      "summaryRu": "Shared UI asset catalogue and response policy, with no model or database imports.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b16f39ace3343bb37f5fb52c11381adf8572bb80d89b542c753c15180c1e73a9"
+    },
+    {
+      "path": "voice_studio/app/studio.py",
+      "group": "app",
+      "summary": "Persist voice samples, queue model runs, and assemble approved audio.",
+      "summaryRu": "Persist voice samples, queue model runs, and assemble approved audio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "26e45d98ec442c884ffd1d9696128a98105182625d5812cefd71e8aa5a69c649"
+    },
+    {
+      "path": "voice_studio/app/studio_storage.py",
+      "group": "app",
+      "summary": "Inspect this Studio workspace and expire its explicitly registered disposable caches.",
+      "summaryRu": "Inspect this Studio workspace and expire its explicitly registered disposable caches.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e9b2c578c0b4ffdc95ce0f08cbeea5b1a74ec9b7677e290a39d77b4325017d3e"
+    },
+    {
+      "path": "voice_studio/app/transcript_editor.py",
+      "group": "app",
+      "summary": "Store timed transcript material and revision-checked edits in the local studio.",
+      "summaryRu": "Store timed transcript material and revision-checked edits in the local studio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "a41f26cd091e51cc5df1c3aefb04616c3f94fdbae791c05dfc0a0b723916ee36"
+    },
+    {
+      "path": "voice_studio/app/ui_bridge.py",
+      "group": "app",
+      "summary": "Bounded, in-memory rendezvous between local MCP and an explicitly connected page.",
+      "summaryRu": "Bounded, in-memory rendezvous between local MCP and an explicitly connected page.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b5b49f454ca232ca9a1ed9f17f6de956f39c5d43b4d9397bf8ecc115d604a1d2"
+    },
+    {
+      "path": "voice_studio/app/ui_bridge_gateway.py",
+      "group": "app",
+      "summary": "Serve the updated UI/bridge while relaying domain requests to an untouched local Studio.",
+      "summaryRu": "Serve the updated UI/bridge while relaying domain requests to an untouched local Studio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "58901b7dc5e6212b04e1a8057be61b478632ee53a93dfb1ebcf22bd281d8deaf"
+    },
+    {
+      "path": "voice_studio/app/wiki_assets.py",
+      "group": "app",
+      "summary": "Resolve only versioned, generated documentation assets, never workspace data.",
+      "summaryRu": "Resolve only versioned, generated documentation assets, never workspace data.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2f82f46fddada6fb69d537502d38b7279c414bc211df95a068c492af7b9c73d4"
+    },
+    {
+      "path": "voice_studio/audio/agent_audio.py",
+      "group": "audio",
+      "summary": "Export aligned dialogue, music and effects for local MCP clients.",
+      "summaryRu": "Export aligned dialogue, music and effects for local MCP clients.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "879d5c5efc212efdd74ba6de9439ade3caa2239ec582a212707f94758b62ec69"
+    },
+    {
+      "path": "voice_studio/audio/audio_processing.py",
+      "group": "audio",
+      "summary": "Prepare a separate WAV preview with local noise reduction and broad EQ.",
+      "summaryRu": "Prepare a separate WAV preview with local noise reduction and broad EQ.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f93b9565a162dfa0154f6f0a2044b96b617f3d9d4e8043d3cd992743fe01cb05"
+    },
+    {
+      "path": "voice_studio/audio/audio_scene.py",
+      "group": "audio",
+      "summary": "Classify independent music and sound cues on prepared audio and attach pitch evidence.",
+      "summaryRu": "Classify independent music and sound cues on prepared audio and attach pitch evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "9ac178053e666cff57bb4f67db9c380310bfab289d13570c19e116f39eca2d44"
+    },
+    {
+      "path": "voice_studio/audio/dialogue_pauses.py",
+      "group": "audio",
+      "summary": "Measure edit-review intervals on the same millisecond clock as dialogue cues.",
+      "summaryRu": "Measure edit-review intervals on the same millisecond clock as dialogue cues.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2fc81d7c7b60a6e66c0cb7a6ce788ce8dfdf36c7d0f4cb8eacee5405c5e39673"
+    },
+    {
+      "path": "voice_studio/audio/music_sample.py",
+      "group": "audio",
+      "summary": "Prepare a short original clip and the signal removed by local denoising.",
+      "summaryRu": "Prepare a short original clip and the signal removed by local denoising.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "cd33f60f3efe954cdbd79ca1ddddd4a5ed79d37e142f6ebe22962e341df5e97e"
+    },
+    {
+      "path": "voice_studio/audio/pauses.py",
+      "group": "audio",
+      "summary": "Measure quiet spans and suggest punctuation at recognized boundaries.",
+      "summaryRu": "Measure quiet spans and suggest punctuation at recognized boundaries.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c7179a015f3cd1cf58c7c29826f15cf8b8b4fba5c1fa38d1f274e4a16426b66d"
+    },
+    {
+      "path": "voice_studio/audio/pitch_vdsp.py",
+      "group": "audio",
+      "summary": "Use Accelerate to compute the same autocorrelation numerators on macOS.",
+      "summaryRu": "Use Accelerate to compute the same autocorrelation numerators on macOS.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "bc89638e1e2a79a60e1054aa971370150797ae1b1238d3e4aa8668668b79c200"
+    },
+    {
+      "path": "voice_studio/audio/speech_intonation.py",
+      "group": "audio",
+      "summary": "Estimate phrase-level pitch contours from the original speech PCM.",
+      "summaryRu": "Estimate phrase-level pitch contours from the original speech PCM.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b9355747cb02fda528cde27b1fa35312247220263c7e3ab6db5903f57674fef9"
+    },
+    {
+      "path": "voice_studio/audio/zipformer_audio.py",
+      "group": "audio",
+      "summary": "Run the local Sherpa-ONNX audio tagger on overlapping PCM windows.",
+      "summaryRu": "Run the local Sherpa-ONNX audio tagger on overlapping PCM windows.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "fa05721e3fc667d8d03cad953734e8b3516c3fa5013fed3e9563c61e6d3d0211"
+    },
+    {
+      "path": "voice_studio/builtin_mods/catalog.py",
+      "group": "builtin_mods",
+      "summary": "Metadata-only inventory of the existing installed inference adapters.",
+      "summaryRu": "Metadata-only inventory of the existing installed inference adapters.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5e12f0b63f0ac47fe9d5de2df25facb8133e7b5692386db7109dc5d602c5db10"
+    },
+    {
+      "path": "voice_studio/builtin_mods/synthesis.py",
+      "group": "builtin_mods",
+      "summary": "Keep queued multi-phrase synthesis on one mod revision and publish provenance.",
+      "summaryRu": "Keep queued multi-phrase synthesis on one mod revision and publish provenance.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "90b9c142b035ab6a28e89d5508563c7a134d33aff58e98a1f59178ced754963a"
+    },
+    {
+      "path": "voice_studio/core/analysis_stages.py",
+      "group": "core",
+      "summary": "Report real analysis boundaries to optionally subscribed media clients.",
+      "summaryRu": "Report real analysis boundaries to optionally subscribed media clients.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e671e72db3a59b274708fd580e2b18d38061a7b3040e8dac40097d0a1d74ac54"
+    },
+    {
+      "path": "voice_studio/core/mcp_lanes.py",
+      "group": "core",
+      "summary": "Bound blocking MCP operations without blocking the server event loop or other media lanes.",
+      "summaryRu": "Bound blocking MCP operations without blocking the server event loop or other media lanes.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "934228dfad4e38e20b4a1b8b295becfae7e2ed0cbc30507ce3d19b5b108d2978"
+    },
+    {
+      "path": "voice_studio/core/media_event_bus.py",
+      "group": "core",
+      "summary": "Bounded job-local scheduling for graph publication and object enrichment.",
+      "summaryRu": "Bounded job-local scheduling for graph publication and object enrichment.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "a80d8777e821cd7406f4054f587d266779e0a1a137c910907aa513b4fdbf38fc"
+    },
+    {
+      "path": "voice_studio/core/media_limits.py",
+      "group": "core",
+      "summary": "Shared source limits; individual native inference windows remain bounded separately.",
+      "summaryRu": "Shared source limits; individual native inference windows remain bounded separately.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2cf84c069cb5dab3baa86ebccae72d8e1b6b5cfe4392989d54d9f9b77ed2d657"
+    },
+    {
+      "path": "voice_studio/core/media_resources.py",
+      "group": "core",
+      "summary": "Plan CPU and memory for concurrent local media inference.",
+      "summaryRu": "Plan CPU and memory for concurrent local media inference.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4f819afbc5b68f0fe3ecde18389c0eced232056482c1d77550bd90f1d8c29265"
+    },
+    {
+      "path": "voice_studio/core/storage_cache.py",
+      "group": "core",
+      "summary": "Coordinate regenerable storage with its readers across Studio and MCP processes.",
+      "summaryRu": "Coordinate regenerable storage with its readers across Studio and MCP processes.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "9cc2ad49e2c916d38de7809e79df24c665bc44479ec4fdfdc84b7eece581186f"
+    },
+    {
+      "path": "voice_studio/core/tool_names.py",
+      "group": "core",
+      "summary": "The finite page-operation allowlist; no legacy aliases or runtime imports.",
+      "summaryRu": "The finite page-operation allowlist; no legacy aliases or runtime imports.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5bfa9f467f95a429248cd8790d662490cfbdf9cfb8204d7dc162eb79fa358155"
+    },
+    {
+      "path": "voice_studio/core/voice_registry_lock.py",
+      "group": "core",
+      "summary": "Serialize writers to one source's private voice registry without locking UI parsing.",
+      "summaryRu": "Serialize writers to one source's private voice registry without locking UI parsing.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b44bdeafac9b716e9cf7af7957183f3a815f1b3e20aeaac5c7dd4767f451285f"
+    },
+    {
+      "path": "voice_studio/core/workspace_lock.py",
+      "group": "core",
+      "summary": "Cross-platform, process-lifetime ownership for one writable Studio workspace.",
+      "summaryRu": "Cross-platform, process-lifetime ownership for one writable Studio workspace.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c86bd2d26634b82ab31ce72d6208f3b4953f0e7741b480ed25dd8a871e389a8a"
+    },
+    {
+      "path": "voice_studio/graph/dialogue_audit_graph.py",
+      "group": "graph",
+      "summary": "Publish vector-free voice identities and review-required dialogue issues beside raw evidence.",
+      "summaryRu": "Publish vector-free voice identities and review-required dialogue issues beside raw evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "9d217e77c6549af70e92671a28511ed80260bcae70053287bc34859aadc8a63a"
+    },
+    {
+      "path": "voice_studio/graph/media_analysis_revolver.py",
+      "group": "graph",
+      "summary": "Persist successful media-analysis stages so a local graph build can resume.",
+      "summaryRu": "Persist successful media-analysis stages so a local graph build can resume.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3a7ac8762f201ce652b022891f74a6964d667b374e7528d64fd20c8f66a3f2c8"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_events.py",
+      "group": "graph",
+      "summary": "Detach cumulative graph reports before asynchronous immutable publication.",
+      "summaryRu": "Detach cumulative graph reports before asynchronous immutable publication.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8c4aa1e0506d5cbbccb9734c1a3efd1486ee5ade52a2511e9b5cda1d2bca26ba"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_expressions.py",
+      "group": "graph",
+      "summary": "Keep facial-expression classifier evidence queryable with explicit temporal provenance.",
+      "summaryRu": "Keep facial-expression classifier evidence queryable with explicit temporal provenance.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0b413e7a4510fde8622a6e29f2b3fc33151c0d81dcf781b8741dca8fa0961b9a"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_frame.py",
+      "group": "graph",
+      "summary": "Render a source frame at a media-graph time without storing screenshot blobs.",
+      "summaryRu": "Render a source frame at a media-graph time without storing screenshot blobs.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e56a8f42c2244dd77515b4b16ba7623d965baef3b8e25c5a5fedcf39f23ea006"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_frame_cache.py",
+      "group": "graph",
+      "summary": "Bounded process-local reuse of undecorated source PNGs and color measurements.",
+      "summaryRu": "Bounded process-local reuse of undecorated source PNGs and color measurements.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "d9ce17239f9c04985e51b9788d7453bfa41d82fb6489702424d76de3e5da9aa1"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_health.py",
+      "group": "graph",
+      "summary": "Expose evidence gaps without interpreting detection counts as people or model accuracy.",
+      "summaryRu": "Expose evidence gaps without interpreting detection counts as people or model accuracy.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2b67710a0dba973734e20cc09815c74fcc82e32a234cde6fde8660ccd118a154"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_ingest.py",
+      "group": "graph",
+      "summary": "Index local media on its playback clock using bounded transcription windows.",
+      "summaryRu": "Index local media on its playback clock using bounded transcription windows.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "032acd86586084cbb850c036ad9473318357b955df4b8aa4897ccb4683b8355f"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_interfaces.py",
+      "group": "graph",
+      "summary": "Project sampled visual screen evidence onto the source-clock media graph.",
+      "summaryRu": "Project sampled visual screen evidence onto the source-clock media graph.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "901c4866c55bddf9298d1b4bc20801eace64f97c6213b03a28f21b041b68fa26"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_interval.py",
+      "group": "graph",
+      "summary": "Bounded, source-clock evidence briefs from one immutable media graph.",
+      "summaryRu": "Bounded, source-clock evidence briefs from one immutable media graph.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ea96007c3284d7266b7357c5e5567934de7fbfa496f671421bec73f7b816f00b"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_interval_frames.py",
+      "group": "graph",
+      "summary": "Build a bounded source-frame grid with measured timestamps and separate captions.",
+      "summaryRu": "Build a bounded source-frame grid with measured timestamps and separate captions.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5cad08fe26a9f232ebcaeec688ce4bc21b51807277104ba81244b4b850f490f7"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_interval_wire.py",
+      "group": "graph",
+      "summary": "Reversibly tabulate an interval packet without selecting or interpreting evidence.",
+      "summaryRu": "Reversibly tabulate an interval packet without selecting or interpreting evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "702153f869c18f851d6505728c959b92c2af3d31d39534216b0e742fe92eb822"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_mod_extensions.py",
+      "group": "graph",
+      "summary": "Validate and project bounded user-defined graph facts without changing native nodes.",
+      "summaryRu": "Validate and project bounded user-defined graph facts without changing native nodes.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "520b4e6d6179658961cde59d31dabac08bb774c25fd585936a0b801f60cd2b87"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_model.py",
+      "group": "graph",
+      "summary": "Build a typed, source-clock graph from local media analysis observations.",
+      "summaryRu": "Build a typed, source-clock graph from local media analysis observations.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "1ef1f74ec8c54416d6525f93f92ec2c6628704fee84a472234fe97698506deda"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_objects.py",
+      "group": "graph",
+      "summary": "Track sampled object boxes within cuts and describe their relation to stable speakers.",
+      "summaryRu": "Track sampled object boxes within cuts and describe their relation to stable speakers.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "662a7e75cfbb696362801afa31bc003aa81430bc4532872a82efdad9bb4e6c8a"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_placement.py",
+      "group": "graph",
+      "summary": "Fit a transparent replacement asset to one measured object on the source clock.",
+      "summaryRu": "Fit a transparent replacement asset to one measured object on the source clock.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f49e957db5cb84cac593cbe28e01e7ac587c07bb148032daa4ee55d71bbf15f6"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_progress.py",
+      "group": "graph",
+      "summary": "Bounded progress state for immutable snapshots created by one graph build.",
+      "summaryRu": "Bounded progress state for immutable snapshots created by one graph build.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b0ba35925f78c46e11843fd934f268ea7b4665b70d9ad1eb00d015c27d4ef140"
+    },
+    {
+      "path": "voice_studio/graph/media_graph_store.py",
+      "group": "graph",
+      "summary": "Immutable local media snapshots with indexed time ranges, text and relations.",
+      "summaryRu": "Immutable local media snapshots with indexed time ranges, text and relations.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "452373dee0e02469a9b507810f443f30f10df894b9138638dd7d5108674d3961"
+    },
+    {
+      "path": "voice_studio/graph/media_object_profiles.py",
+      "group": "graph",
+      "summary": "Describe shot-local objects using detector labels and text on their surface.",
+      "summaryRu": "Describe shot-local objects using detector labels and text on their surface.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "bacc00bc55807b63777d1c9984e056c51a94f00b3dcad27edb1ec9464f375f10"
+    },
+    {
+      "path": "voice_studio/graph/media_object_review.py",
+      "group": "graph",
+      "summary": "Cache the optional final identity review independently from scene detection.",
+      "summaryRu": "Cache the optional final identity review independently from scene detection.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "9e1b3a9f15c9dc9d449eeb9524e8c21895a533b15d1628e733700558bde5aee9"
+    },
+    {
+      "path": "voice_studio/graph/media_stage_cache.py",
+      "group": "graph",
+      "summary": "Dependency-keyed checkpoints for the common short-media pipeline.",
+      "summaryRu": "Dependency-keyed checkpoints for the common short-media pipeline.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2445838bc67a0f46a0ae2f614bd5cab14bdb976611fb0892be019504cf0d55e7"
+    },
+    {
+      "path": "voice_studio/graph/media_stage_selection.py",
+      "group": "graph",
+      "summary": "Validate selective media runs and expose pending work without starting a worker.",
+      "summaryRu": "Validate selective media runs and expose pending work without starting a worker.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "22efa6dd8391abf84dd796a3575cdf110014c1347feff4aebd3d1cc039d79838"
+    },
+    {
+      "path": "voice_studio/graph/object_reappearance.py",
+      "group": "graph",
+      "summary": "Link non-overlapping object track groups using bounded comparisons of measured views.",
+      "summaryRu": "Link non-overlapping object track groups using bounded comparisons of measured views.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "53eba60f83d3463c2d700b484059fd5fbc833781d0316b4524e2d016a80c8177"
+    },
+    {
+      "path": "voice_studio/graph/object_reconciliation.py",
+      "group": "graph",
+      "summary": "Optional conservative identity reconciliation from measured source-crop parts.",
+      "summaryRu": "Optional conservative identity reconciliation from measured source-crop parts.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8770967d0e977f9723bc7bf7eca4059146ed5eea3e273a2d170df459c96ccc07"
+    },
+    {
+      "path": "voice_studio/graph/object_screens.py",
+      "group": "graph",
+      "summary": "Infer display context from timed UI evidence without replacing detector observations.",
+      "summaryRu": "Infer display context from timed UI evidence without replacing detector observations.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "1321fb9d766163115559d7ce7d1210ad4a6f808cf3eff7b777043af7c747b04e"
+    },
+    {
+      "path": "voice_studio/graph/scene_hierarchy.py",
+      "group": "graph",
+      "summary": "Build a frame-local containment tree while preserving the identity and timing graphs.",
+      "summaryRu": "Build a frame-local containment tree while preserving the identity and timing graphs.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8de3c828f22aa5178e68d182f6d5981462b6fb11c3caab9e3fec5f7bb734eacc"
+    },
+    {
+      "path": "voice_studio/graph/ui_activity_graph.py",
+      "group": "graph",
+      "summary": "Publish raw sampled UI anchors without turning their changes into speech identity.",
+      "summaryRu": "Publish raw sampled UI anchors without turning their changes into speech identity.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "beed44805b460c5486bbc869ab9627451dcf495f0635733aea5b927dda626769"
+    },
+    {
+      "path": "voice_studio/mcp/agent_audio_mcp.py",
+      "group": "mcp",
+      "summary": "Publish bounded, pollable audio work to MCP clients.",
+      "summaryRu": "Publish bounded, pollable audio work to MCP clients.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "80ec8f33a5530c0af6910fbb506279c2e73481e6bb1beb14133480b662263b71"
+    },
+    {
+      "path": "voice_studio/mcp/dialogue_audit_mcp.py",
+      "group": "mcp",
+      "summary": "Expose independently queued dialogue checks and vector-free voice profiles to agents.",
+      "summaryRu": "Expose independently queued dialogue checks and vector-free voice profiles to agents.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "fc2a4b8da8fd0df305a796ed1777e82a707c1c2fa535529787f956f903ed2055"
+    },
+    {
+      "path": "voice_studio/mcp/media_graph_mcp.py",
+      "group": "mcp",
+      "summary": "Register the Video as Code workflow on the existing local MCP server.",
+      "summaryRu": "Register the Video as Code workflow on the existing local MCP server.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4e1e5dd630061b0b31f232e939dc25876bb4a0239d536f521616baac736d1eb6"
+    },
+    {
+      "path": "voice_studio/mcp/runtime_info.py",
+      "group": "mcp",
+      "summary": "Describe the MCP source baseline so clients can detect a long-lived process after updates.",
+      "summaryRu": "Describe the MCP source baseline so clients can detect a long-lived process after updates.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "6526d2c9c0af3ca67e9b66ef2e0a9a25f4ddbd06455d040fac3775251a749be1"
+    },
+    {
+      "path": "voice_studio/mcp/screen_mcp.py",
+      "group": "mcp",
+      "summary": "Expose local screenshot OCR and geometry as an editable first-pass description.",
+      "summaryRu": "Expose local screenshot OCR and geometry as an editable first-pass description.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "322caa0a104a63e4f5961f9cbc5b41108af795824b5af09bf90d34aa6846aea9"
+    },
+    {
+      "path": "voice_studio/mcp/ui_bridge_mcp.py",
+      "group": "mcp",
+      "summary": "MCP access to shared semantic tools in a selected live Studio page.",
+      "summaryRu": "MCP access to shared semantic tools in a selected live Studio page.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f9e553f30ca1497b9a30d49fbe60ab6bf070a380e65c678915764093c63e6bc3"
+    },
+    {
+      "path": "voice_studio/mcp/voice_catalog.py",
+      "group": "mcp",
+      "summary": "Discover registered MCP tools by media domain and task.",
+      "summaryRu": "Discover registered MCP tools by media domain and task.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0f27ff05e089c57d30e2bf185aa48c2d03a64e2f4e4829fc833a4b97a4b148b7"
+    },
+    {
+      "path": "voice_studio/mcp/voice_mcp.py",
+      "group": "mcp",
+      "summary": "ag-media-studio MCP over stdio, backed by the running local studio.",
+      "summaryRu": "ag-media-studio MCP over stdio, backed by the running local studio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c7f5ef1c618918f8f48948db1a350eaaba2a8d44d46372f9a011eea42d4c9230"
+    },
+    {
+      "path": "voice_studio/mcp/web_graph.py",
+      "group": "mcp",
+      "summary": "Expose the named read operations of the local media graph to the Studio UI.",
+      "summaryRu": "Expose the named read operations of the local media graph to the Studio UI.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "66340590802de7ac8c22edc7c41033d68792aea8214b876afe4a828bbbe9f289"
+    },
+    {
+      "path": "voice_studio/mod_api.py",
+      "group": "voice_studio",
+      "summary": "Shared local HTTP/MCP operations for mod settings and explicit test runs.",
+      "summaryRu": "Shared local HTTP/MCP operations for mod settings and explicit test runs.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0a410db785e6a5c8126e502199e347f712e0cfc1bdbe241f3c249ba0452817d0"
+    },
+    {
+      "path": "voice_studio/mod_contract_bridge.py",
+      "group": "voice_studio",
+      "summary": "Apply the application's canonical contracts at existing provider boundaries.",
+      "summaryRu": "Apply the application's canonical contracts at existing provider boundaries.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5374901e4f36b8ea8d9b3369483bdd828c687abf112a0748a9ea8038eee56051"
+    },
+    {
+      "path": "voice_studio/mod_contracts.py",
+      "group": "voice_studio",
+      "summary": "Public host contract discovery and canonical validation for media mod adapters.",
+      "summaryRu": "Public host contract discovery and canonical validation for media mod adapters.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "a3466e313438921712b2236f84c5dddfed2f9300605a5a93443708988a23753a"
+    },
+    {
+      "path": "voice_studio/mod_pipeline.py",
+      "group": "voice_studio",
+      "summary": "Bounded, captured dependency plans for additional media mod stages.",
+      "summaryRu": "Bounded, captured dependency plans for additional media mod stages.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "23c1308ac9cb15edff69de46bd14abb9c9dec4459e465aeb1e29fef9eefa4f94"
+    },
+    {
+      "path": "voice_studio/mod_runtime.py",
+      "group": "voice_studio",
+      "summary": "Connect immutable mod selections to existing native model entrypoints.",
+      "summaryRu": "Connect immutable mod selections to existing native model entrypoints.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "05e10ad16736718ec3f0ce3526d5430938e1f47955ea67aa331d9c66b9510f5e"
+    },
+    {
+      "path": "voice_studio/mod_stage_results.py",
+      "group": "voice_studio",
+      "summary": "Checkpoint additional-stage outputs independently of the seven native layers.",
+      "summaryRu": "Checkpoint additional-stage outputs independently of the seven native layers.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "99b3c115e590a4a175500db04f023347ac64390887a5d6e6104e2a3acd0f4152"
+    },
+    {
+      "path": "voice_studio/mods/contracts.py",
+      "group": "mods",
+      "summary": "Host-owned versioned JSON contracts, units and semantic media validation.",
+      "summaryRu": "Host-owned versioned JSON contracts, units and semantic media validation.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4eb963d1f96d8599e5fc21a964b992960e3c36f059904474d8d673b3aada76b7"
+    },
+    {
+      "path": "voice_studio/mods/discovery.py",
+      "group": "mods",
+      "summary": "Read bounded package metadata and code bytes without importing optional providers.",
+      "summaryRu": "Read bounded package metadata and code bytes without importing optional providers.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "20882876099236f8a3193a480a05de643bf6849e965a4e1efdb785686d514853"
+    },
+    {
+      "path": "voice_studio/mods/errors.py",
+      "group": "mods",
+      "summary": "Public failures for media package discovery, activation and execution.",
+      "summaryRu": "Public failures for media package discovery, activation and execution.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b077dd5b2253c23044909a971ba0fb96e58844585b58db16e1e4f34c41e03581"
+    },
+    {
+      "path": "voice_studio/mods/execution.py",
+      "group": "mods",
+      "summary": "Bounded subprocess execution of an already captured, explicitly trusted package.",
+      "summaryRu": "Bounded subprocess execution of an already captured, explicitly trusted package.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "7b78f79189815be2558592ffbfd51c27ec272066f37c5f9a4a424ab8608cf6c1"
+    },
+    {
+      "path": "voice_studio/mods/registry.py",
+      "group": "mods",
+      "summary": "External media mod catalog, explicit activation and durable provider selection.",
+      "summaryRu": "External media mod catalog, explicit activation and durable provider selection.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "f3efbbe493b881bf412638b4d05abb140ec202d2906e646274a9d7d4ef0e611f"
+    },
+    {
+      "path": "voice_studio/mods/schema.py",
+      "group": "mods",
+      "summary": "Strict, dependency-free media mod v1 manifest and JSON value validation.",
+      "summaryRu": "Strict, dependency-free media mod v1 manifest and JSON value validation.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "eb08fafa594a31c25df773cb68bbc648afed5292b73ffeb5b0981ef84f046aac"
+    },
+    {
+      "path": "voice_studio/mods/snapshot.py",
+      "group": "mods",
+      "summary": "Request-scoped provider selection and reproducible media mod execution.",
+      "summaryRu": "Request-scoped provider selection and reproducible media mod execution.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4e8bef98ba20d4283df8605fdd245803f5bdc9c746b3932fb0cefddab1015033"
+    },
+    {
+      "path": "voice_studio/mods/state.py",
+      "group": "mods",
+      "summary": "Atomic, process-locked media mod configuration outside the application bundle.",
+      "summaryRu": "Atomic, process-locked media mod configuration outside the application bundle.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8ac9c547daf82102819dae1eb13f6319f262556fbce3cf8f252a3cd657569208"
+    },
+    {
+      "path": "voice_studio/mods/templates/asr-seconds/adapter.py",
+      "group": "asr-seconds",
+      "summary": "Explicit format conversion; model inference and both hooks share the same bounded worker.",
+      "summaryRu": "Explicit format conversion; model inference and both hooks share the same bounded worker.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4c971eef00ed8a4deb56b66765cde79fc51f3bc31b8cd340a1df6f7d3346c206"
+    },
+    {
+      "path": "voice_studio/mods/templates/asr-seconds/model.py",
+      "group": "asr-seconds",
+      "summary": "Synthetic vendor response fixture; replace run with an already installed local model.",
+      "summaryRu": "Synthetic vendor response fixture; replace run with an already installed local model.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c428b1f0b7aec1c1b4dee12bd6d6353e52188dafbbdd88f352ac8a56205e3023"
+    },
+    {
+      "path": "voice_studio/mods/templates/word-count/worker.py",
+      "group": "word-count",
+      "summary": "Editable additive analysis stage using only the Python standard library.",
+      "summaryRu": "Editable additive analysis stage using only the Python standard library.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c6aefb581a759edd8eabb50b160f32f563f914e2bdee97f79bd09fa72f886147"
+    },
+    {
+      "path": "voice_studio/mods/worker.py",
+      "group": "mods",
+      "summary": "Disposable trusted-code JSON worker. This process is not an operating-system sandbox.",
+      "summaryRu": "Disposable trusted-code JSON worker. This process is not an operating-system sandbox.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3319cdbd0c6cc010d5a93daa79fed7cd4e665f205522056d2615170a53852c88"
+    },
+    {
+      "path": "voice_studio/prosody/morpheme_graph.py",
+      "group": "prosody",
+      "summary": "Build a versioned word alignment and optional dictionary morphology layer.",
+      "summaryRu": "Build a versioned word alignment and optional dictionary morphology layer.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "d5aaa49a493a91f8644536304996eaca688c8265530796575dbb0923121502ca"
+    },
+    {
+      "path": "voice_studio/prosody/prosody.py",
+      "group": "prosody",
+      "summary": "Plan opt-in prosody and separate transcript corrections from canonical text.",
+      "summaryRu": "Plan opt-in prosody and separate transcript corrections from canonical text.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e7dfa5006a7ef5d987af63f7fd72243b97fc299796d72fd5681a5682c493bac9"
+    },
+    {
+      "path": "voice_studio/prosody/reading_story.py",
+      "group": "prosody",
+      "summary": "Russian voice recording script. Each part also works as a separate reference.",
+      "summaryRu": "Russian voice recording script. Each part also works as a separate reference.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "090ec86cb8974863b5ef10214b8271e79379d5fa1fd2d7628c1fe1470694ca71"
+    },
+    {
+      "path": "voice_studio/prosody/revolver.py",
+      "group": "prosody",
+      "summary": "Prepare independent synthesis candidates and review the resulting speech.",
+      "summaryRu": "Prepare independent synthesis candidates and review the resulting speech.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2db011975e2224fb685415471ff4d65cbfe73503d66e2b34df89428492746294"
+    },
+    {
+      "path": "voice_studio/prosody/stress.py",
+      "group": "prosody",
+      "summary": "Compact character model and dictionary for Russian lexical stress.",
+      "summaryRu": "Compact character model and dictionary for Russian lexical stress.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "97b9f816e3b402fd9ebd46b75139a9f355ad7b29cb20e8de776ce17bab0438a6"
+    },
+    {
+      "path": "voice_studio/prosody/stress_char_runtime.py",
+      "group": "prosody",
+      "summary": "Dependency-free inference for the local Russian character stress model.",
+      "summaryRu": "Dependency-free inference for the local Russian character stress model.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "43076cb226d775041211222c4bb6dd0ebf9cf7be46f6db30be9bbed5de0e9b02"
+    },
+    {
+      "path": "voice_studio/prosody/stress_context.py",
+      "group": "prosody",
+      "summary": "Sparse local context model for Russian homographs.",
+      "summaryRu": "Sparse local context model for Russian homographs.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "293732501e0b37e4979f5a4fdd91e32184b7d839dbd435ee2ad43f7df242b61a"
+    },
+    {
+      "path": "voice_studio/speech/asr_context_graph.py",
+      "group": "speech",
+      "summary": "Suggest Russian ASR corrections using typed local evidence links.",
+      "summaryRu": "Suggest Russian ASR corrections using typed local evidence links.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "7dc0cb9c2a1aa4c566107514e8c409ef3a98d83edf12ff70d49b375b5f682d73"
+    },
+    {
+      "path": "voice_studio/speech/asr_recovery.py",
+      "group": "speech",
+      "summary": "Retry structurally unreliable clip transcripts on their original PCM clock.",
+      "summaryRu": "Retry structurally unreliable clip transcripts on their original PCM clock.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3a4611e1108c65f03e260438f5bc01f0dc6b3fea18ad1fabf01f26480f9e4af0"
+    },
+    {
+      "path": "voice_studio/speech/dialogue_audit.py",
+      "group": "speech",
+      "summary": "Find reviewable dialogue defects without editing ASR or inferring identities.",
+      "summaryRu": "Find reviewable dialogue defects without editing ASR or inferring identities.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ad720eb8f505f9f392adebddd2e32da8aaedcbf5ffecbe38412324f13a91fdda"
+    },
+    {
+      "path": "voice_studio/speech/dialogue_audit_runner.py",
+      "group": "speech",
+      "summary": "Run a local, cancellable dialogue audit with content-keyed atomic outputs.",
+      "summaryRu": "Run a local, cancellable dialogue audit with content-keyed atomic outputs.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "6a88daa466b2795a5b48238e530e1ea8c6d5bae60dd79f7f8aeb9b0e9caab520"
+    },
+    {
+      "path": "voice_studio/speech/embedding_protocol.py",
+      "group": "speech",
+      "summary": "Bounded wire values shared by the native embedding parent and child.",
+      "summaryRu": "Bounded wire values shared by the native embedding parent and child.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "31e3a52dddfffb2c20129469f72b9742e96d25a204d1d0e3604afa7a1751f895"
+    },
+    {
+      "path": "voice_studio/speech/embedding_worker.py",
+      "group": "speech",
+      "summary": "Own one lazy native speaker process, bounded serial admission and its deadline.",
+      "summaryRu": "Own one lazy native speaker process, bounded serial admission and its deadline.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "72ac83157e07a63d6dcc0a8c026553d7c0c525b695c662c6c88802b1e944dfd8"
+    },
+    {
+      "path": "voice_studio/speech/embedding_worker_server.py",
+      "group": "speech",
+      "summary": "Native-only JSONL service; model resources are resolved exclusively by its parent.",
+      "summaryRu": "Native-only JSONL service; model resources are resolved exclusively by its parent.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4591ebe5c590252aeaca0027d663fc05ca37c38e046ee57a4d242b86fae09efd"
+    },
+    {
+      "path": "voice_studio/speech/media_transcript.py",
+      "group": "speech",
+      "summary": "Extract local media audio and return segment timestamps and SRT subtitles.",
+      "summaryRu": "Extract local media audio and return segment timestamps and SRT subtitles.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ce57364006cc9f77308df6c0edb33fc3a438a56f53e71b9ad21bf5aa51379280"
+    },
+    {
+      "path": "voice_studio/speech/native_turn_bounds.py",
+      "group": "speech",
+      "summary": "Adapt bounded native EOF rounding for dialogue audits without changing raw facts.",
+      "summaryRu": "Adapt bounded native EOF rounding for dialogue audits without changing raw facts.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "1187ca85a9b4731979bf9740803bef38875bf585dede311fa02c27bc491bdc06"
+    },
+    {
+      "path": "voice_studio/speech/person_mentions.py",
+      "group": "speech",
+      "summary": "Find text positions with the local ag-privacy model and leave cue text intact.",
+      "summaryRu": "Find text positions with the local ag-privacy model and leave cue text intact.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b0d52d6e07d114b6dbc84b0ba3f82e556905acedfe6f474345f5123cb4d33470"
+    },
+    {
+      "path": "voice_studio/speech/recognition.py",
+      "group": "speech",
+      "summary": "Transcribe a local recording with multilingual Whisper.",
+      "summaryRu": "Transcribe a local recording with multilingual Whisper.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0cf42e2e987afa247e91abed8d8a159e95651ac7f4cc531fa9310342636b31f0"
+    },
+    {
+      "path": "voice_studio/speech/short_reply_review.py",
+      "group": "speech",
+      "summary": "Recover a missed short speaker turn from independent face and voice evidence.",
+      "summaryRu": "Recover a missed short speaker turn from independent face and voice evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2ba668f82c2c7f5d7edebbebed9c88a2ebe64f96c2f6b83cde4daea653d3768d"
+    },
+    {
+      "path": "voice_studio/speech/speaker_context.py",
+      "group": "speech",
+      "summary": "Reapply explicit speaker anchors to exact cues while retaining competing evidence.",
+      "summaryRu": "Reapply explicit speaker anchors to exact cues while retaining competing evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5ad0b6162559efb20da4b4d8f061ac4af257de5d6005a655bcf6af24ac3422f2"
+    },
+    {
+      "path": "voice_studio/speech/speaker_diarization.py",
+      "group": "speech",
+      "summary": "Run local speaker segmentation and label timed Whisper words.",
+      "summaryRu": "Run local speaker segmentation and label timed Whisper words.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "d017a43a4aa8b36e44685fe90fc8c4f9547419e31f228cb5186b9b4f81e04052"
+    },
+    {
+      "path": "voice_studio/speech/speaker_identity.py",
+      "group": "speech",
+      "summary": "Replay confirmed same-person groups on an exact source using timed evidence.",
+      "summaryRu": "Replay confirmed same-person groups on an exact source using timed evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8c9dd26ff14506795f34aa20907c11ba1d39b6a922743acfc285494323aea4c4"
+    },
+    {
+      "path": "voice_studio/speech/speaker_photos.py",
+      "group": "speech",
+      "summary": "Sample visible faces from local video using YuNet in the vision runtime.",
+      "summaryRu": "Sample visible faces from local video using YuNet in the vision runtime.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0ea07bb57432cb1085d57af291fc02960b7f47d8de2971895bc9d3f3555ca8b7"
+    },
+    {
+      "path": "voice_studio/speech/speaker_pipeline.py",
+      "group": "speech",
+      "summary": "Connect source-scoped voice profiles and non-destructive dialogue evidence to stages.",
+      "summaryRu": "Connect source-scoped voice profiles and non-destructive dialogue evidence to stages.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ba76c7b59a42ab1f39cedd3145f6149db235493a07a2af8be47a8a75d4795674"
+    },
+    {
+      "path": "voice_studio/speech/speaker_profiles.py",
+      "group": "speech",
+      "summary": "Catalog reviewed speaker references for repeated analysis of an exact upload.",
+      "summaryRu": "Catalog reviewed speaker references for repeated analysis of an exact upload.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "7f5c31a2ebe12cea9c0fcb786846a7d1a9b51dbe2688e18b2ff39301d9242d4a"
+    },
+    {
+      "path": "voice_studio/speech/speaker_review.py",
+      "group": "speech",
+      "summary": "Review provisional Sherpa clusters against local voice and active-face references.",
+      "summaryRu": "Review provisional Sherpa clusters against local voice and active-face references.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "020913cd05604a3e5a9b6f78a5a1228c7e140f99b10ae8b6784e6bc74179b1a4"
+    },
+    {
+      "path": "voice_studio/speech/speech_overlap.py",
+      "group": "speech",
+      "summary": "Represent simultaneous audio or visual speech without assigning mixed words.",
+      "summaryRu": "Represent simultaneous audio or visual speech without assigning mixed words.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4906ceac005e25e6c7d7e289119bcbebfac28763a04e5c4eb448f8bc66032ab0"
+    },
+    {
+      "path": "voice_studio/speech/transcription_languages.py",
+      "group": "speech",
+      "summary": "Keep clip recognition languages separate from studio languages and live capture.",
+      "summaryRu": "Keep clip recognition languages separate from studio languages and live capture.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "bacfdb22ceb4f7e7a1daa73cbe9cdbfd6f73610d3bc54c9d554ccc8033a5c877"
+    },
+    {
+      "path": "voice_studio/speech/voice_profile_evidence.py",
+      "group": "speech",
+      "summary": "Validate speaking evidence separately from face presence and acoustic identity.",
+      "summaryRu": "Validate speaking evidence separately from face presence and acoustic identity.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ca0fede905b21d4774a93d64bbb866981cc58b7beb8ba3ad4907ed633ae133c1"
+    },
+    {
+      "path": "voice_studio/speech/voice_profile_public.py",
+      "group": "speech",
+      "summary": "Whitelist vector-free profile/evidence facts at every public JSON boundary.",
+      "summaryRu": "Whitelist vector-free profile/evidence facts at every public JSON boundary.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "d1faf9268b5d8ddb9f01ad4c89ddf817bae1fcbe25bb9f30359382f2165f9631"
+    },
+    {
+      "path": "voice_studio/speech/voice_profiles.py",
+      "group": "speech",
+      "summary": "Bounded, source-scoped acoustic identities with explicit speaking-video priority.",
+      "summaryRu": "Bounded, source-scoped acoustic identities with explicit speaking-video priority.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "9c88623b15848c9e2020d3ce27b217d0e8a207e05178162968765e498c88f4ae"
+    },
+    {
+      "path": "voice_studio/speech/voiced_speaker_review.py",
+      "group": "speech",
+      "summary": "Reconcile one clean Sherpa turn with a confirmed talker in a wider subtitle.",
+      "summaryRu": "Reconcile one clean Sherpa turn with a confirmed talker in a wider subtitle.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "14849648985e61bdb70ad01934dba03d0e909f3b397bae28753a59495ffcc1c1"
+    },
+    {
+      "path": "voice_studio/synthesis/auto_synthesis.py",
+      "group": "synthesis",
+      "summary": "Persist and run bounded synthesis trials with an immutable evaluation recording.",
+      "summaryRu": "Persist and run bounded synthesis trials with an immutable evaluation recording.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b926fd84d8d9d31e00a486d88857f8e918ca79ba58cdcce479598e439cf56518"
+    },
+    {
+      "path": "voice_studio/synthesis/block_assembly.py",
+      "group": "synthesis",
+      "summary": "Validate time ranges from approved takes and join their normalized PCM.",
+      "summaryRu": "Validate time ranges from approved takes and join their normalized PCM.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c22fc4305b5af9afa9737c52849b7def5c545136394315056e27a6de316ba4af"
+    },
+    {
+      "path": "voice_studio/synthesis/commercial_voice.py",
+      "group": "synthesis",
+      "summary": "Pinned local MLX checkpoints for reference-based voice synthesis.",
+      "summaryRu": "Pinned local MLX checkpoints for reference-based voice synthesis.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0e98cecee6b04c831360aed1321cb1c5bcd7f8c3d01e82eb3689508ee3aeb642"
+    },
+    {
+      "path": "voice_studio/synthesis/corpus.py",
+      "group": "synthesis",
+      "summary": "Stable reading prompts and separate evaluation material.",
+      "summaryRu": "Stable reading prompts and separate evaluation material.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8c5fcce0d91f845ed2374e813c725a64a567f1f9167e9204090f6d449896bba7"
+    },
+    {
+      "path": "voice_studio/synthesis/dub_background.py",
+      "group": "synthesis",
+      "summary": "Separate a continuous source bed and mix it with an aligned dub.",
+      "summaryRu": "Separate a continuous source bed and mix it with an aligned dub.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "7b8e0e20f328dbd2a0a9dc8e5750855d4b3aa3c655b3514e64d59da645859c24"
+    },
+    {
+      "path": "voice_studio/synthesis/dub_timing.py",
+      "group": "synthesis",
+      "summary": "Measure conservative speech edges in 16-bit mono PCM.",
+      "summaryRu": "Measure conservative speech edges in 16-bit mono PCM.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3c60745111cb4a1b4c0e43690daa6b27b060a73e1c20f441df1fb54733aa3d25"
+    },
+    {
+      "path": "voice_studio/synthesis/dub_voice_profiles.py",
+      "group": "synthesis",
+      "summary": "Build bounded speaker prompts for cross-language dubbing.",
+      "summaryRu": "Build bounded speaker prompts for cross-language dubbing.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "450638b4810d6dbdb406bc52f04610b364cbb104ba4214ec262b14056a5ce3a7"
+    },
+    {
+      "path": "voice_studio/synthesis/engines.py",
+      "group": "synthesis",
+      "summary": "Local engine adapters and audio preparation for Voice Studio.",
+      "summaryRu": "Local engine adapters and audio preparation for Voice Studio.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "44d1eabe6fa37eced8069bebb7ca84ea1b38c5c42f77240c41ba107ec81bf08d"
+    },
+    {
+      "path": "voice_studio/synthesis/fragment_similarity.py",
+      "group": "synthesis",
+      "summary": "Compare the voice in matching, timed word windows from an original and a take.",
+      "summaryRu": "Compare the voice in matching, timed word windows from an original and a take.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "054755fcd2316c9cece1d7329c3f363d8e0304873f513b75b2506b9d5a968b30"
+    },
+    {
+      "path": "voice_studio/synthesis/prosody_alignment.py",
+      "group": "synthesis",
+      "summary": "Acoustic phrase placement and conservative F0 transfer, independent of any TTS model.",
+      "summaryRu": "Acoustic phrase placement and conservative F0 transfer, independent of any TTS model.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "9e885c1eaad2ad10830bad468128f5f74a677fff42d8784d83b4a2f8d895470e"
+    },
+    {
+      "path": "voice_studio/synthesis/prosody_evaluation.py",
+      "group": "synthesis",
+      "summary": "Conservative experiment-only promotion rules; scores are proxies, never perceptual truth.",
+      "summaryRu": "Conservative experiment-only promotion rules; scores are proxies, never perceptual truth.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "11d5e4298c102598d595ef63e968b74b196b608725c69d9975d4508019b10c71"
+    },
+    {
+      "path": "voice_studio/synthesis/setup_commercial_voices.py",
+      "group": "synthesis",
+      "summary": "Install exact checkpoint revisions after creating the MLX audio environment.",
+      "summaryRu": "Install exact checkpoint revisions after creating the MLX audio environment.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "13164d710595c906029c5eb4033606468714e136e38d32d938fe3793f9500c71"
+    },
+    {
+      "path": "voice_studio/synthesis/setup_dub_background.py",
+      "group": "synthesis",
+      "summary": "Install the fixed TorchAudio accompaniment checkpoint for local dubbing.",
+      "summaryRu": "Install the fixed TorchAudio accompaniment checkpoint for local dubbing.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "7193a9c0021e029f85ffff5521879df4399d11c49ca94a52a10ba2a67abacad4"
+    },
+    {
+      "path": "voice_studio/synthesis/speaker_metric.py",
+      "group": "synthesis",
+      "summary": "Measure the cosine of normalized speaker embeddings using the fixed base XTTS encoder.",
+      "summaryRu": "Measure the cosine of normalized speaker embeddings using the fixed base XTTS encoder.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "be6410d67896f2c7e7ede9f7fa0e380dfe5bb96e17074e47bc5ef2d3511d5c2d"
+    },
+    {
+      "path": "voice_studio/synthesis/speech_metrics.py",
+      "group": "synthesis",
+      "summary": "Measure words and speaker similarity independently for a local WAV pair.",
+      "summaryRu": "Measure words and speaker similarity independently for a local WAV pair.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5d191c1726cb7c89789e3c16048099779263d102c41a15c6961997612879e0b6"
+    },
+    {
+      "path": "voice_studio/synthesis/video_dub.py",
+      "group": "synthesis",
+      "summary": "Render an English dub from a reviewed transcript on the source video's clock.",
+      "summaryRu": "Render an English dub from a reviewed transcript on the source video's clock.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0012482ba06aa9f8c12ce5595c7e3de46a6d0feccf74bc9d36cc5596beab73f0"
+    },
+    {
+      "path": "voice_studio/synthesis/voice_controls.py",
+      "group": "synthesis",
+      "summary": "Explicit pronunciation conditioning supported by the pinned local MLX backends.",
+      "summaryRu": "Explicit pronunciation conditioning supported by the pinned local MLX backends.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "0ca0f36e489d3fa97e5d84855029770ffe11c280195661854bc0618f4dabece6"
+    },
+    {
+      "path": "voice_studio/vision/activity_worker_session.py",
+      "group": "vision",
+      "summary": "Reuse the local Light-ASD model across bounded, synchronous requests.",
+      "summaryRu": "Reuse the local Light-ASD model across bounded, synchronous requests.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "028ce44c6576e45da1f8d04ee4fa93d74c67bafacffe30e19df63233a46098d8"
+    },
+    {
+      "path": "voice_studio/vision/adaptive_faces.py",
+      "group": "vision",
+      "summary": "Reduce YuNet calls at 25 fps by refining unstable six-frame intervals.",
+      "summaryRu": "Reduce YuNet calls at 25 fps by refining unstable six-frame intervals.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "e6dca7f98c0061a14b4718bfdefdff01f4aa3e79cb3a8668b88568bdccc0e5a0"
+    },
+    {
+      "path": "voice_studio/vision/camera_motion.py",
+      "group": "vision",
+      "summary": "Estimate shot-local apparent camera motion from sparse background matches.",
+      "summaryRu": "Estimate shot-local apparent camera motion from sparse background matches.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "54d79f7b3afaad88d4ed54d49675cb15edf985ce027358a23b838ba23a3536eb"
+    },
+    {
+      "path": "voice_studio/vision/clothing_match.py",
+      "group": "vision",
+      "summary": "Use segmented clothing as corroboration for borderline within-video face matches.",
+      "summaryRu": "Use segmented clothing as corroboration for borderline within-video face matches.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "ae2da68b9a3bd297c6a7c1a8df69139acd64d67fc7de37f7d6657b0599e13dc2"
+    },
+    {
+      "path": "voice_studio/vision/clothing_review.py",
+      "group": "vision",
+      "summary": "Sample a small set of outfit references between the face and audio stages.",
+      "summaryRu": "Sample a small set of outfit references between the face and audio stages.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b2cfcf2756230d599c619010221c59d2e3f353529de561e47fc2ef2478e1d59d"
+    },
+    {
+      "path": "voice_studio/vision/face_appearance.py",
+      "group": "vision",
+      "summary": "Summarize sampled face appearance without using demographics to match identities.",
+      "summaryRu": "Summarize sampled face appearance without using demographics to match identities.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "16234292e4131abd6acfc177c9d5c5915cc4936795994cf9dadc20e52b60ab25"
+    },
+    {
+      "path": "voice_studio/vision/face_reid.py",
+      "group": "vision",
+      "summary": "Match separate visual tracks within one upload using bounded face signatures.",
+      "summaryRu": "Match separate visual tracks within one upload using bounded face signatures.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "6a3ea5719695e4f9c40d65c272855d04db6e904230ac81f9151c8e7b83351f06"
+    },
+    {
+      "path": "voice_studio/vision/face_speakers.py",
+      "group": "vision",
+      "summary": "Bind the numbered face boxes to transcript speakers using aligned evidence.",
+      "summaryRu": "Bind the numbered face boxes to transcript speakers using aligned evidence.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "df14ef9ef1993ea6ae5f69bda271cd86d4a12b4b34f7af8d5916a2f7167c309e"
+    },
+    {
+      "path": "voice_studio/vision/facial_expression_model.py",
+      "group": "vision",
+      "summary": "Classify visible facial expression using the pinned OpenCV Zoo model locally.",
+      "summaryRu": "Classify visible facial expression using the pinned OpenCV Zoo model locally.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8985989c0ac1476fac7d7cbf0a28dc58fa69d0858857804b31318fd57aeae29f"
+    },
+    {
+      "path": "voice_studio/vision/facial_expressions.py",
+      "group": "vision",
+      "summary": "Project measured expression samples onto source time without inferring mental states.",
+      "summaryRu": "Project measured expression samples onto source time without inferring mental states.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "bd93a52048be29de83dbb73832e51b03845bfd3b52d8f370e7beab0b6da787de"
+    },
+    {
+      "path": "voice_studio/vision/head_pose.py",
+      "group": "vision",
+      "summary": "Estimate screen-relative head orientation from a tracked Face Landmarker crop.",
+      "summaryRu": "Estimate screen-relative head orientation from a tracked Face Landmarker crop.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b152470e94bb657ecf2b2bfe5c4d4306a9d6efc83b0a377766e7b779d2e59c70"
+    },
+    {
+      "path": "voice_studio/vision/image_input.py",
+      "group": "vision",
+      "summary": "Shared bounds and decoder validation for browser image uploads and MCP screenshots.",
+      "summaryRu": "Shared bounds and decoder validation for browser image uploads and MCP screenshots.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5f1ee403664fb029e5bd491b91c52f4f9fd8339775ecafb30fdb12f824c12eab"
+    },
+    {
+      "path": "voice_studio/vision/image_objects.py",
+      "group": "vision",
+      "summary": "Use the scene detector for one still image, without creating video tracks or speaker identities.",
+      "summaryRu": "Use the scene detector for one still image, without creating video tracks or speaker identities.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "91756cb1ddee7f3ef0c29076b9b92fa487583707e7b92e3b6f087be9d7fdcf12"
+    },
+    {
+      "path": "voice_studio/vision/image_status.py",
+      "group": "vision",
+      "summary": "Reduce screenshot OCR coverage without hiding failed crops behind successful control-label reads.",
+      "summaryRu": "Reduce screenshot OCR coverage without hiding failed crops behind successful control-label reads.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3756b311253f68c9f555b76502946358923ac2b7f26c11ce17ebcb6e62e86dbe"
+    },
+    {
+      "path": "voice_studio/vision/object_appearance.py",
+      "group": "vision",
+      "summary": "Measure object appearance on the scene worker's decoded frames.",
+      "summaryRu": "Measure object appearance on the scene worker's decoded frames.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "59142d3546c239ea73819e603ba28065ac475ff09ab926863de1eb47474dd45a"
+    },
+    {
+      "path": "voice_studio/vision/object_reconciliation.py",
+      "group": "vision",
+      "summary": "Run optional local-part crop measurement in the existing vision environment.",
+      "summaryRu": "Run optional local-part crop measurement in the existing vision environment.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "d1c00d32faf360df9edb3c2058ca56b96d94c53cc9bdcfc59f9c0f1670ee2f01"
+    },
+    {
+      "path": "voice_studio/vision/object_reconciliation_parts.py",
+      "group": "vision",
+      "summary": "Bounded optional local-part measurements on original video object crops.",
+      "summaryRu": "Bounded optional local-part measurements on original video object crops.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "68ac2da2dff318617ff2f983fe768791f976bdd94055e2135c4d9bf608c6aaac"
+    },
+    {
+      "path": "voice_studio/vision/person_face_pilot.py",
+      "group": "vision",
+      "summary": "Sample visible people and retry YuNet on source-resolution head crops.",
+      "summaryRu": "Sample visible people and retry YuNet on source-resolution head crops.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c14a667860c5f893b600b8d4f6873728a4db80771e7ad71743a42ce5a80c0c1a"
+    },
+    {
+      "path": "voice_studio/vision/person_layers.py",
+      "group": "vision",
+      "summary": "Select and execute bounded body, gaze or clothing-mask tasks.",
+      "summaryRu": "Select and execute bounded body, gaze or clothing-mask tasks.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "241224d1577f9146f1327385cb995f59c24aec60245c49d6321a1694d0afc31d"
+    },
+    {
+      "path": "voice_studio/vision/person_motion.py",
+      "group": "vision",
+      "summary": "Estimate shot-local person motion and relative depth from existing geometry.",
+      "summaryRu": "Estimate shot-local person motion and relative depth from existing geometry.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "368c016bf9500c6a0f4c9d4803cb38cfb78bc699bb778e3d1f72379ec1fc3324"
+    },
+    {
+      "path": "voice_studio/vision/scene_objects.py",
+      "group": "vision",
+      "summary": "Decode COCO NanoDet-Plus predictions using the existing OpenCV DNN runtime.",
+      "summaryRu": "Decode COCO NanoDet-Plus predictions using the existing OpenCV DNN runtime.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "a040d21baa6f3f51de6e91149b875237c9f312f89eb77226991e7d2879c7d14b"
+    },
+    {
+      "path": "voice_studio/vision/scene_ocr.py",
+      "group": "vision",
+      "summary": "Run local bilingual OCR and project sector coordinates back onto the video.",
+      "summaryRu": "Run local bilingual OCR and project sector coordinates back onto the video.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "96745c056d18ebf5852eb97b9b37753c195f0521f48c20d2c94d77486a6f961c"
+    },
+    {
+      "path": "voice_studio/vision/scene_sampling.py",
+      "group": "vision",
+      "summary": "Allocate native object and OCR samples on the source playback clock.",
+      "summaryRu": "Allocate native object and OCR samples on the source playback clock.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b9a6f6a714590fa66db985ac4a80f4df947d7488ee79d8db5f386fb331fca685"
+    },
+    {
+      "path": "voice_studio/vision/scene_transcript.py",
+      "group": "vision",
+      "summary": "Reconcile a near-miss surname with repeated title-card OCR during the same cue.",
+      "summaryRu": "Reconcile a near-miss surname with repeated title-card OCR during the same cue.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4114db784336a3dfb1c7de52ddb34fdd0698ece9ef56f06a727eaae8d829df1b"
+    },
+    {
+      "path": "voice_studio/vision/screen_analysis.py",
+      "group": "vision",
+      "summary": "Select screen crops and run local OCR without increasing ordinary scene sampling.",
+      "summaryRu": "Select screen crops and run local OCR without increasing ordinary scene sampling.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "76f6716bfa77fa72ec04a734fc95aa33c2e70abd2c1e8b3bf82d8b8acf4e26d0"
+    },
+    {
+      "path": "voice_studio/vision/screen_layout.py",
+      "group": "vision",
+      "summary": "Recover visible layout evidence from an already decoded frame and its OCR boxes.",
+      "summaryRu": "Recover visible layout evidence from an already decoded frame and its OCR boxes.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2d57143e57f4a5b90c307afdc68ecdaf00b9e7a8c6f313a573549f4ff7bc32c4"
+    },
+    {
+      "path": "voice_studio/vision/screen_scroll.py",
+      "group": "vision",
+      "summary": "Register vertical screen motion and keep each OCR reading on the source clock.",
+      "summaryRu": "Register vertical screen motion and keep each OCR reading on the source clock.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5467f443b3ba4c80c82f0d3e947d858b220d9fa686ed1bacb510fcf0d2913e5b"
+    },
+    {
+      "path": "voice_studio/vision/screen_session.py",
+      "group": "vision",
+      "summary": "Bound private screenshot results by both session age and generation count.",
+      "summaryRu": "Bound private screenshot results by both session age and generation count.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "952577815381015eae39245b833ef30848867e6c22973a4265ff06e628af659d"
+    },
+    {
+      "path": "voice_studio/vision/screenshot_structure.py",
+      "group": "vision",
+      "summary": "Turn OCR lines into conservative list and title-bar evidence for a still image.",
+      "summaryRu": "Turn OCR lines into conservative list and title-bar evidence for a still image.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "01fcc72b8b1695517b4237a16b4e6410a14f735f10ceafb8cbbeb6ae7b4d74de"
+    },
+    {
+      "path": "voice_studio/vision/shot_moodbook.py",
+      "group": "vision",
+      "summary": "Extract a compact shot palette and visible-person statistics from sampled video pixels.",
+      "summaryRu": "Extract a compact shot palette and visible-person statistics from sampled video pixels.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "a6b33d1963f6669da884e3eb591b5c38323e01119a94ad436ad9094239ce7119"
+    },
+    {
+      "path": "voice_studio/vision/small_object_pass.py",
+      "group": "vision",
+      "summary": "Add detail from production anchor crops without replacing the baseline observations.",
+      "summaryRu": "Add detail from production anchor crops without replacing the baseline observations.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c992a0aa590dd456f683d1440bdafb849037cd01400bc9696e4e81eda323e3b7"
+    },
+    {
+      "path": "voice_studio/vision/static_face_evidence.py",
+      "group": "vision",
+      "summary": "Conservative static/frozen face-crop veto for unverified visual inferences.",
+      "summaryRu": "Conservative static/frozen face-crop veto for unverified visual inferences.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3bb2724c6b269b139842759924ca14399bd732f80ed77a40793fc4d8eb409b51"
+    },
+    {
+      "path": "voice_studio/vision/tracking.py",
+      "group": "vision",
+      "summary": "Record experiment metadata in a local MLflow SQLite store.",
+      "summaryRu": "Record experiment metadata in a local MLflow SQLite store.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "8bd732b4662c998449e126b26c76a9939cf8255694de02938a7570c032d9291b"
+    },
+    {
+      "path": "voice_studio/vision/ui_activity.py",
+      "group": "vision",
+      "summary": "Track sampled visual anchors without inferring speech, people, or identity.",
+      "summaryRu": "Track sampled visual anchors without inferring speech, people, or identity.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "c3ff22b85f423079f5f92a317914f48f09d26c265261449b1b7eb53c987670a9"
+    },
+    {
+      "path": "voice_studio/vision/ui_static_regions.py",
+      "group": "vision",
+      "summary": "Cheap, color-independent geometry proposals from an already decoded BGR frame.",
+      "summaryRu": "Cheap, color-independent geometry proposals from an already decoded BGR frame.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "5ba9525ddeee55fb324db199b77d7386e081ae848c774ce0d03cd1fbfc938947"
+    },
+    {
+      "path": "voice_studio/vision/video_activity_chunks.py",
+      "group": "vision",
+      "summary": "Accumulate independent Light-ASD windows on the video playback clock.",
+      "summaryRu": "Accumulate independent Light-ASD windows on the video playback clock.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "2d3912224795148952ec8db45006df4974f7147a2aa53ed1490e3a39183fae28"
+    },
+    {
+      "path": "voice_studio/vision/video_colors.py",
+      "group": "vision",
+      "summary": "Measure representative colors and caption contrast from source video pixels.",
+      "summaryRu": "Measure representative colors and caption contrast from source video pixels.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3db14d30cb9278d4b48cec1d5892ffbfbff3e4bcf0416638072ab7cb17d93201"
+    },
+    {
+      "path": "voice_studio/vision/video_export.py",
+      "group": "vision",
+      "summary": "Bake timed face boxes, shot numbers and captions into a local MP4.",
+      "summaryRu": "Bake timed face boxes, shot numbers and captions into a local MP4.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "aeeb9e33726b2c486b25c665f39d6c1bdfce4faa256ee28e8480052dd2303290"
+    },
+    {
+      "path": "voice_studio/vision/video_revolver.py",
+      "group": "vision",
+      "summary": "Collect visual proposals without rewriting the audio transcript or speaker labels.",
+      "summaryRu": "Collect visual proposals without rewriting the audio transcript or speaker labels.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "84ffa4f93e4c84f8cdf07f4e8d1ba25e48dd232b7eb8f2aaec737424c0663396"
+    },
+    {
+      "path": "voice_studio/vision/video_scene.py",
+      "group": "vision",
+      "summary": "Plan local scene OCR and object recognition without re-running face detection.",
+      "summaryRu": "Plan local scene OCR and object recognition without re-running face detection.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "95f94a58c2a4ac31818065ced5fa6d19d0b2beee0f312db5b657eb09f23f5c7f"
+    },
+    {
+      "path": "voice_studio/vision/visual_attributes.py",
+      "group": "vision",
+      "summary": "Estimate head turn and a dominant clothing patch from a clear detector sample.",
+      "summaryRu": "Estimate head turn and a dominant clothing patch from a clear detector sample.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b56986bf9c48ec34520d72e410084f0812bd351bcef2fba1e5e501e16a5d6a3b"
+    },
+    {
+      "path": "voice_studio/workers/clothing_sample_worker.py",
+      "group": "workers",
+      "summary": "Extract small clothing descriptors in the existing MediaPipe CPU environment.",
+      "summaryRu": "Extract small clothing descriptors in the existing MediaPipe CPU environment.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "b00d2c5ae8f4e011350fe5c0e23725fd5b22b67ab08f8c9b772419fc6bc95f71"
+    },
+    {
+      "path": "voice_studio/workers/commercial_voice_worker.py",
+      "group": "workers",
+      "summary": "Render one speech segment with the pinned MLX runtime.",
+      "summaryRu": "Render one speech segment with the pinned MLX runtime.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "413bb0d6c61aede2a7246bd2e6234aefe7506cf56830c18281a7a80ab299131d"
+    },
+    {
+      "path": "voice_studio/workers/dub_background_worker.py",
+      "group": "workers",
+      "summary": "Extract the accompaniment of a stereo WAV using the installed HDemucs weights.",
+      "summaryRu": "Extract the accompaniment of a stereo WAV using the installed HDemucs weights.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "569d1e48d1bcf8d80ab19dc33cafe4198370135078accb1cab1869e463b25208"
+    },
+    {
+      "path": "voice_studio/workers/light_asd_worker.py",
+      "group": "workers",
+      "summary": "Score time-aligned local audio and tracked faces with the pinned Light-ASD model.",
+      "summaryRu": "Score time-aligned local audio and tracked faces with the pinned Light-ASD model.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "198b7fde3e31451ebc40262bdd5f8ce80358a92fd1201a477a03a22334dfa5fb"
+    },
+    {
+      "path": "voice_studio/workers/live_face_worker.py",
+      "group": "workers",
+      "summary": "Track sampled tab faces in one bounded, warm local OpenCV process.",
+      "summaryRu": "Track sampled tab faces in one bounded, warm local OpenCV process.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "4ec8436251e24f7b223b29ded6a590e449704d30bcca2523ea0c4ea59d7e7a84"
+    },
+    {
+      "path": "voice_studio/workers/model_worker.py",
+      "group": "workers",
+      "summary": "Run inference in the separately installed F5 or XTTS environment.",
+      "summaryRu": "Run inference in the separately installed F5 or XTTS environment.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "55fa08e9511be68e48f9c1f8dfc6c57edd87b6b62604fe16adb0e8822eabc4d9"
+    },
+    {
+      "path": "voice_studio/workers/mrx_audio_worker.py",
+      "group": "workers",
+      "summary": "Run the pinned MERL three-source model in the existing TorchAudio environment.",
+      "summaryRu": "Run the pinned MERL three-source model in the existing TorchAudio environment.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "aaac3fb973afd2953bcad112e486705732bd5f5a6be107572ca524346143a54c"
+    },
+    {
+      "path": "voice_studio/workers/person_layer_worker.py",
+      "group": "workers",
+      "summary": "Run body detection, head and gaze estimation, and clothing masks on decoded crops.",
+      "summaryRu": "Run body detection, head and gaze estimation, and clothing masks on decoded crops.",
+      "summaryOrigin": "source-module-docstring",
+      "sha256": "3e5a26bba0630244846fcfd9437bfc85bb9189c4f9440fb10a80a91f610030a5"
+    },
+    {
+      "path": "web/analysis-stage-selection.js",
+      "group": "web",
+      "summary": "Checkboxes and statuses for partial media analyses and reruns.",
+      "summaryRu": "Переключатели и статусы выборочного анализа и повторного запуска.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "9e34f33f6ea5d71be6c2e054bcd7ea7eaa474400428a1519335e221e28b94605"
+    },
+    {
+      "path": "web/app.js",
+      "group": "web",
+      "summary": "Application state, recording/profile/synthesis forms, result loading and workspace routing.",
+      "summaryRu": "Состояние приложения, формы записи/профилей/синтеза, загрузка результатов и маршрутизация рабочих страниц.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "6a2716899bbcc417c02d93b9396668328a19e3a29370faadb3d4c5fe48597f58"
+    },
+    {
+      "path": "web/auto-synthesis.js",
+      "group": "web",
+      "summary": "Automatic-synthesis attempt cards with timing, scores, auditioning and selected-result presentation.",
+      "summaryRu": "Граф карточек попыток автосинтеза, время, оценки, прослушивание и отображение выбранного результата.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "c8c969f74d4c6456741ff0c04e3deb6eb646f53be06f860529fdc34484030e5b"
+    },
+    {
+      "path": "web/browser-ml-kernel.js",
+      "group": "web",
+      "summary": "Vector normalization and cosine kernel with WebNN and a reference JavaScript path.",
+      "summaryRu": "Проверяемое ядро нормализации векторов и косинусного сходства с WebNN и эталонным JS-путём.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "56f16ddf4cf996724bb06ed939151a5e6ec76e17b354ac69dcf8a56bb91eb4ba"
+    },
+    {
+      "path": "web/browser-ml-worker.js",
+      "group": "web",
+      "summary": "Isolated worker for bounded backend probes and cosine-similarity execution.",
+      "summaryRu": "Изолированный worker для ограниченных проверок backend и вычислений косинусного сходства.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "d382f48c26cece44870e0ada690ba365f1fa0ce08f173153a230e81e9419a63b"
+    },
+    {
+      "path": "web/browser-ml.js",
+      "group": "web",
+      "summary": "Browser-ML worker client with one active request, error handling and lifecycle.",
+      "summaryRu": "Клиент браузерного ML worker: один активный запрос, обработка ошибок и управление жизненным циклом.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "66551f45832720e52c91ca998d66b917e06a3e07bc8fdda6ac88519765f7c37e"
+    },
+    {
+      "path": "web/capture-audio.js",
+      "group": "web",
+      "summary": "MediaStream audio capture and browser PCM/WAV chunk assembly.",
+      "summaryRu": "Захват аудио из MediaStream и сборка PCM/WAV фрагментов в браузере.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "bb69b1730732f7a4cff51b4202e6e4b3787a41aa8353a258216c2911138d7bbb"
+    },
+    {
+      "path": "web/capture-worklet.js",
+      "group": "web",
+      "summary": "AudioWorklet sample transfer from the realtime audio graph to capture.",
+      "summaryRu": "AudioWorklet для передачи аудиосэмплов из realtime audio graph в поток захвата.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "6f783f76ce52bbacb17ba8a201a5a4482b0eaea260ec3fd402d085c1a93cc9bb"
+    },
+    {
+      "path": "web/deck.js",
+      "group": "web",
+      "summary": "Multitrack TrackDeck with shared audition position, track control and deck indicators.",
+      "summaryRu": "Многодорожечный TrackDeck: общая позиция прослушивания, управление дорожками и индикация деки.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "4aae1ebf4a1dbfc2d0cb2f55be16eda0b0f5cd25b36fc4b0708a893788610075"
+    },
+    {
+      "path": "web/dialogue-audit.js",
+      "group": "web",
+      "summary": "Independent dialogue boundary review, source-clock candidate navigation and non-destructive ASR drafts.",
+      "summaryRu": "Независимая проверка границ диалога, переход к кандидатам по времени исходника и черновики ASR без замены исходного текста.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "97ec3243e75e0d070c2c5ff4ef93772ef0373a9ae5433716d50e96e124531e62"
+    },
+    {
+      "path": "web/editor-monitor-actions.js",
+      "group": "web",
+      "summary": "Compact monitor actions: reuse export/overlay controls, mirror clothing disclosure state and restore owned nodes on dispose.",
+      "summaryRu": "Компактные действия монитора: перенос существующих контролов экспорта/разметки, раскрытие масок и восстановление при dispose.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "ad07186c17d6b679d7f4e90b186dad84f9aba590931b0f8f3eb04605684d598d"
+    },
+    {
+      "path": "web/editor-panel-resizer.js",
+      "group": "web",
+      "summary": "Reusable AG panel resize adapter for pointer and keyboard interaction.",
+      "summaryRu": "Переиспользуемый AG-adapter изменения размеров панели мышью и клавиатурой.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "df100a966f088c377eb12986c6f7fde668b0892e82224167a37240cf5c7702f4"
+    },
+    {
+      "path": "web/editor-workspace.js",
+      "group": "web",
+      "summary": "Monitor/inspector/timeline layout, size constraints and persisted workspace preferences.",
+      "summaryRu": "Компоновка монитора/инспектора/шкалы, ограничения размеров и сохранение предпочтений рабочей области.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "5685a108ba97b5b33fca9e59810aab644b91bbd73a089fcdd63bd42950f1d589"
+    },
+    {
+      "path": "web/expression-frame-preview.js",
+      "group": "web",
+      "summary": "Expression source-frame preview with head box drawing and video-time synchronization.",
+      "summaryRu": "Открытие исходного кадра выражения лица и отрисовка рамки головы с синхронизацией времени video.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "0560186dabc93a62552d099e79489b9f4c329c942e87d7a3df37ea887569f211"
+    },
+    {
+      "path": "web/facial-expression-view.js",
+      "group": "web",
+      "summary": "Compact presentation of measured expression statistics in face/speaker profiles.",
+      "summaryRu": "Краткое представление измеренной статистики выражений в профиле лица/спикера.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "bea4ff8b8a7f9b52e5c2267b0159636c252a69201e06b212c982318ab9e732e0"
+    },
+    {
+      "path": "web/facial-expressions.js",
+      "group": "web",
+      "summary": "Expression interval/label normalization, lane groups and bounded UI/MCP statistics.",
+      "summaryRu": "Нормализация интервалов/меток выражений, группы дорожек и ограниченные выборки статистики для UI/MCP.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "7e57eec885a98e6836c71c2116498c802618caacd1f4b59a29ab20d2391ee5fa"
+    },
+    {
+      "path": "web/i18n.js",
+      "group": "web",
+      "summary": "RU/EN interface selection, message translation and persisted browser locale.",
+      "summaryRu": "Выбор RU/EN интерфейса, переводы сообщений и сохранение языковой настройки браузера.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "22e5e8ee5e5c458c3123d7a4883661034c579a2c6447d977a514dbca301a4ac4"
+    },
+    {
+      "path": "web/image-analysis-model.js",
+      "group": "web",
+      "summary": "Image import validation and normalized visual result groups.",
+      "summaryRu": "Проверка импорта изображений и нормализация групп результатов.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "5a4d001562ca3efb5d3b0bae3905cca29e5c1d6fd903ae4efc1ddc0e21c73e8d"
+    },
+    {
+      "path": "web/image-analysis.js",
+      "group": "web",
+      "summary": "Image import, background analysis, preview overlays and result inspection.",
+      "summaryRu": "Импорт изображения, фоновый анализ, разметка предпросмотра и просмотр результата.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "760385734daa654ca617b0af5c53ae2d2430cafb745d77591ba0b4da6fd8783d"
+    },
+    {
+      "path": "web/mcp-bridge.js",
+      "group": "web",
+      "summary": "Context revisions and the live page channel for local MCP clients.",
+      "summaryRu": "Ревизии контекста и канал страницы для локальных MCP-клиентов.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "a405e3d4e3cc4b6b127fc09e030d59f810745c6bdc23210a1c9470576b5ba41e"
+    },
+    {
+      "path": "web/media-transcript.js",
+      "group": "web",
+      "summary": "Media upload/analysis and saved-transcript UI controller with shared report-layer installation.",
+      "summaryRu": "UI-контроллер загрузки/анализа медиа, сохранённых транскриптов и общей установки слоёв отчёта.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "b662f3e475ba66957e5b37cc20828c81523cf2be31edf1995840a51220cc87fb"
+    },
+    {
+      "path": "web/messages-en.js",
+      "group": "web",
+      "summary": "English UI message catalogue keyed by the original Russian strings.",
+      "summaryRu": "Английский каталог строк интерфейса по исходным русским ключам.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "a48c2afa9efcdc10e413e03adcc288501ff812edaea1b48fbfa5ecb09e6f030a"
+    },
+    {
+      "path": "web/morpheme-graph.js",
+      "group": "web",
+      "summary": "Morpheme/syllable graph, synthesis block and fragment presentation.",
+      "summaryRu": "Просмотр графа морфем и слогов, блоков синтеза и связанных фрагментов.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "86415de61f92434bccb914a7bc34522e358da85cfc6c0ae209df20c5db975ec7"
+    },
+    {
+      "path": "web/music-sample.js",
+      "group": "web",
+      "summary": "Background-music sample extraction and auditioning UI.",
+      "summaryRu": "UI выделения и прослушивания фрагмента фоновой музыки для дальнейшей проверки.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "9449d3c9e156470358eff8dc2607318b960ae136e32f4b4e396361e7a2d4e71c"
+    },
+    {
+      "path": "web/person-layer.js",
+      "group": "web",
+      "summary": "Clothing-mask export requests and packing source/settings for the existing contract.",
+      "summaryRu": "Запрос масок одежды и упаковка исходника/настроек в существующий экспортный контракт.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "30f5bd03827026fe1935d89849a1e6546aabf1fcb8d60bfe1cf8fc943258ac43"
+    },
+    {
+      "path": "web/player.js",
+      "group": "web",
+      "summary": "Accessible WAV player transport, position, volume and handler lifecycle.",
+      "summaryRu": "Доступный плеер WAV: транспорт, позиция, громкость и жизненный цикл обработчиков.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "af6aa20de4f67b188775b955a296b839d5a3bec355031d1eb1aba5f8562642b0"
+    },
+    {
+      "path": "web/processing.js",
+      "group": "web",
+      "summary": "Processing-track selection, denoise/EQ controls, processed-WAV requests and result download.",
+      "summaryRu": "Управление дорожками обработки, шумоподавлением/EQ, запросом обработанного WAV и скачиванием результата.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "161014c4119cbc633154253750637eba511c082d705c48af4131698933e7f8fc"
+    },
+    {
+      "path": "web/profile-moment-timeline.js",
+      "group": "web",
+      "summary": "Shared compact profile-moment timeline with markers, timestamps and time paging.",
+      "summaryRu": "Общая компактная шкала моментов профиля с маркерами, таймкодами и выборкой по времени.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "1239625db2188f5086f0942bf2987378aa88a19f693a952ab91a7a9e62b53f2d"
+    },
+    {
+      "path": "web/speaker-gaze.js",
+      "group": "web",
+      "summary": "Speaker gaze intervals, labels/icons and direction statistics.",
+      "summaryRu": "Интервалы направления взгляда, их метки/иконки и статистика по спикеру.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "bf8c7dffec5d3a2fef18fea9a3039b349c4845f158e93a07fbe273b8e555473c"
+    },
+    {
+      "path": "web/speaker-label.js",
+      "group": "web",
+      "summary": "Shared effective speaker labels including editorial overrides and mixed turns.",
+      "summaryRu": "Единая эффективная метка спикера с учётом редакторских исправлений и смешанных реплик.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "bff703279d5d5505d467437c8003ea812b417564c5dfe6f044c2d8b5f7e739ea"
+    },
+    {
+      "path": "web/speaker-profile-dialog.js",
+      "group": "web",
+      "summary": "Speaker profile dialog: attributes, JSON, gaze, expressions and timestamp navigation.",
+      "summaryRu": "Диалог цифрового профиля спикера: свойства, JSON, взгляд, выражения и переходы ко времени.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "2108f6aa46487b56700809dd1cc5ee7a33e052a686e30dee9b81734a447ed0c3"
+    },
+    {
+      "path": "web/speaker-profiles.js",
+      "group": "web",
+      "summary": "Browser speaker profiles and face bindings for lists, dialogs and editorial actions.",
+      "summaryRu": "Сборка браузерных профилей и привязок face/speaker для списка, диалога и редакторских действий.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "730b2e499265b2e73967f8730933ecd6dd927587a0fb2344f6386a33e764832e"
+    },
+    {
+      "path": "web/spectrum.js",
+      "group": "web",
+      "summary": "Spectrum-band and equalizer-response calculation and drawing.",
+      "summaryRu": "Расчёт/отрисовка спектральных полос и частотной характеристики эквалайзера.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "dba8ff81cc8a4b7bdfd496c4198ceece7a3f9e4740029f99693f68a735305099"
+    },
+    {
+      "path": "web/stress-comparison.js",
+      "group": "web",
+      "summary": "Stress and prosody-pilot A/B UI with take labels and grouping.",
+      "summaryRu": "A/B UI проверок ударения и пилота просодии, подписи и группировка дублей.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "f88d782613fd37db04228302d8b9ac0a6390593c76e2d2bb3b1b6d31df118b96"
+    },
+    {
+      "path": "web/studio-design.js",
+      "group": "web",
+      "summary": "Design-profile/theme installation, signal palette and player surface factories.",
+      "summaryRu": "Установка дизайн-профиля и темы, палитра сигналов и фабрики поверхностей плееров.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "00f3c96a201ed4c3611e8f81feb8668a34c073c030506b4bc374168092cc6a50"
+    },
+    {
+      "path": "web/studio-icons.js",
+      "group": "web",
+      "summary": "Existing-family SVG icons and pointer/keyboard hints.",
+      "summaryRu": "SVG-иконки существующего семейства и подсказки для мыши/клавиатуры.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "ef27a5b5c5fd8f22e55d4aaad10122110e267a66fb51a77b11c3a1928c5e0508"
+    },
+    {
+      "path": "web/studio-mod-fields.js",
+      "group": "web",
+      "summary": "Schema-driven model settings fields and typed value validation.",
+      "summaryRu": "Поля настроек модели по схеме и проверка типов значений.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "065bacb6e20099f4c3e08e4d6a524f663e35436879510e37519912dc0a9d90f2"
+    },
+    {
+      "path": "web/studio-mods.js",
+      "group": "web",
+      "summary": "Model-provider list, settings, availability and management.",
+      "summaryRu": "Список провайдеров, параметры, доступность и управление.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "8bb573b2aef5d5b136a6ab29240787f979fe24e969b87c44a82d6d54cda4146d"
+    },
+    {
+      "path": "web/studio-navigation.js",
+      "group": "web",
+      "summary": "One navigation moved between desktop sidebar and native mobile drawer without duplicate IDs.",
+      "summaryRu": "Одна навигация для desktop-sidebar и native мобильного диалога без дублирования ID.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "cbaebfafbb35427d1b2be7cb5bcd5fc00d1f59f47376d0e324411d096301b2d7"
+    },
+    {
+      "path": "web/studio-pipeline-model.js",
+      "group": "web",
+      "summary": "Dependency validation and layout for the processing graph.",
+      "summaryRu": "Проверка зависимостей и раскладка графа обработки.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "b2b08630783139386d1f0c6eb6ea7f187fc09e92a088fbfffc1a60d1683d7fb7"
+    },
+    {
+      "path": "web/studio-pipeline.js",
+      "group": "web",
+      "summary": "Editable processing graph, dependency controls and provider states.",
+      "summaryRu": "Редактируемый граф обработки, управление зависимостями и статусы провайдеров.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "2dd9f126b38b0885f1374e91c5322b6b9ff806ecff343394cf1659528b001bce"
+    },
+    {
+      "path": "web/studio-settings.js",
+      "group": "web",
+      "summary": "Settings page and stored-material actions through current APIs.",
+      "summaryRu": "Страница настроек и действия над сохранёнными материалами через текущие API.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "1946dc3edeaae2841589bb13078fe8172c082a328286bba890da9f9c26f06fa5"
+    },
+    {
+      "path": "web/studio-shell.js",
+      "group": "web",
+      "summary": "Sidebar-to-icon-rail collapse, preference persistence and hidden-label hints.",
+      "summaryRu": "Сворачивание sidebar в icon rail, хранение предпочтения и подсказки скрытых подписей.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "28f8258780beaf0a76c1344d4549f947a001a3778fbb0de2611408072c8cd204"
+    },
+    {
+      "path": "web/studio-storage.js",
+      "group": "web",
+      "summary": "Storage inventory, cleanup candidates and explicit user operations.",
+      "summaryRu": "Представление инвентаря хранения, кандидатов очистки и явных операций пользователя.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "2ffbd728d1339caace41ea58c8e102d116e3598608c220e796d273fe50467d80"
+    },
+    {
+      "path": "web/tool-names.js",
+      "group": "web",
+      "summary": "Canonical registrations shared by WebMCP and the live page bridge.",
+      "summaryRu": "Общие актуальные имена инструментов WebMCP и моста открытой страницы.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "ad987ee466752aedeefb7f19dfeb902d6351a6658073b5095a90cb08ff06433f"
+    },
+    {
+      "path": "web/transcript-chat.js",
+      "group": "web",
+      "summary": "Compact transcript messages retaining original editing actions and analysis evidence.",
+      "summaryRu": "Компактные сообщения расшифровки, сохраняющие исходные действия и подробности анализа.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "9640878404b0f5be71236601e673f839f39ebc7e529230b70c1b3fcb6e03931d"
+    },
+    {
+      "path": "web/transcript-editor.js",
+      "group": "web",
+      "summary": "Saved-transcript and cue editing with current-revision control.",
+      "summaryRu": "Редактирование сохранённого транскрипта и отдельных реплик с контролем текущей ревизии.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "f380c05c4c5d2856e1c16c1d48092368af6159aeed4095428cdf34172c8498a2"
+    },
+    {
+      "path": "web/transcript-inspector.js",
+      "group": "web",
+      "summary": "Right transcript-inspector collapse/restore without removing the source video.",
+      "summaryRu": "Сворачивание и восстановление правой панели расшифровки без удаления исходного video.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "96017807acaa419ef3242f3014160a9df0578e9163b6741a26c4aedaaaf57117"
+    },
+    {
+      "path": "web/ui-measurement-geometry.js",
+      "group": "web",
+      "summary": "Viewport rectangles, text insets and pairwise alignment in CSS pixels.",
+      "summaryRu": "Рамки экрана, отступы текста и попарное выравнивание в CSS-пикселях.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "a07d5f96cd9b2b0f1586f07235431b9ed0acebf110edb0b8f5225e67495da996"
+    },
+    {
+      "path": "web/ui-measurements.js",
+      "group": "web",
+      "summary": "Bounded DOM measurements and rendered control discovery for Studio agents.",
+      "summaryRu": "Измерение DOM и поиск отображаемых элементов для агентов студии.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "0e6bc8b63204e810a93086f2582ca3b97ccbc405bf039738e31657f224920ca0"
+    },
+    {
+      "path": "web/video-analysis.js",
+      "group": "web",
+      "summary": "Analysis progress stream parsing, partial-result merging and recovery presentation.",
+      "summaryRu": "Чтение потока прогресса, слияние частичных результатов и восстановление состояния анализа.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "4e127a7161570b342f1fbd1a2de45025a6ce0bf9d6cffd22dc5df15b7d81fdc4"
+    },
+    {
+      "path": "web/video-color-palette.js",
+      "group": "web",
+      "summary": "Measured frame/object palette with readable colour values.",
+      "summaryRu": "Палитра измеренных цветов кадра/предмета и доступные текстовые значения.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "f60ad134df09d346bbd10fb3d39719c9c019e931fb8c49f9b8d9d234cd98e2d3"
+    },
+    {
+      "path": "web/video-dub.js",
+      "group": "web",
+      "summary": "English translation/dubbing UI, job state and result delivery.",
+      "summaryRu": "UI перевода и сборки английского дубляжа, состояния задания и выдачи результата.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "7c8b20d59364fd51b149a11ef645ab6d6d78ce41dfd4e79f2f084a91849c1f61"
+    },
+    {
+      "path": "web/video-evidence.js",
+      "group": "web",
+      "summary": "Per-cue face-photo candidates, Light-ASD basis and attachment/removal of a confirmed speaker photo.",
+      "summaryRu": "Кандидаты фото лица для реплики, основания Light-ASD и действия прикрепления/удаления подтверждённого фото спикера.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "d3a3cdeed1aebf735d6704e43d8cdc8be6053eab51ed33081d804149ce2d109e"
+    },
+    {
+      "path": "web/video-frame-details.js",
+      "group": "web",
+      "summary": "Compact current-frame details for shots, speech, faces, bodies and objects.",
+      "summaryRu": "Компактные сведения текущего кадра: планы, речь, лица, фигуры и предметы.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "2800b58aff8530fbe297571ea3ae705e870ffde0b1acad7c17e86554b79b17d2"
+    },
+    {
+      "path": "web/video-object-appearance-timeline.js",
+      "group": "web",
+      "summary": "Compact object-reappearance timeline with positions, intervals and time hints.",
+      "summaryRu": "Мини-шкала повторных появлений предмета с позициями, интервалами и подсказками времени.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "e5ac8bb13439abb7a758c0779d74da48fa733925b20019e0c365f1ea05595fc3"
+    },
+    {
+      "path": "web/video-object-profile.js",
+      "group": "web",
+      "summary": "Object profile presentation, original labels/confidence, frame previews and scroll mosaics.",
+      "summaryRu": "Представление цифрового профиля предмета, исходных меток/уверенности, кадров и склейки прокрутки.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "7744f52e2bac77ced517e431fa135c9cf9827ad1ee0d9dad8837842fc18bc9e6"
+    },
+    {
+      "path": "web/video-overlay.js",
+      "group": "web",
+      "summary": "Shared technical-layer plan and canvas rendering for speakers, boxes, objects, captions and export.",
+      "summaryRu": "Единый план и canvas-отрисовка технического слоя: спикеры, рамки, предметы, реплики и экспорт.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "b0b4d6bb51db5fe940ed94c3f76f226c142c720f3dd34335beab7755940c0af9"
+    },
+    {
+      "path": "web/video-scene.js",
+      "group": "web",
+      "summary": "Scene evidence, OCR/object/profile presentation and source-frame navigation.",
+      "summaryRu": "Просмотр визуального отчёта сцены, OCR/предметов, профилей и переходов к соответствующим кадрам.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "61da00720571255a1f2264650673aa0bb4b5d8bcafe7df022d057cce05a43d49"
+    },
+    {
+      "path": "web/video-shortcuts.js",
+      "group": "web",
+      "summary": "Video transport and shortcuts with time bounds and text-field/modal exclusions.",
+      "summaryRu": "Транспорт video и горячие клавиши с границами времени, исключением полей ввода и модальных окон.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "5796d38f4d039fa890f213e9b684bfdb1b7a739ff7d6c273e9b635a32e41c47b"
+    },
+    {
+      "path": "web/video-statistics-chart.js",
+      "group": "web",
+      "summary": "Responsive SVG statistics chart with discrete intervals, exact pointer/keyboard/touch inspection and observer cleanup.",
+      "summaryRu": "Адаптивный SVG-график статистики: дискретные интервалы, точные подсказки и выбор с мыши, клавиатуры или касания; освобождение наблюдателей.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "df7e864b18423138ecf26690ded4fe5ec54a058fab37ea505672e453732a8483"
+    },
+    {
+      "path": "web/video-statistics-view.js",
+      "group": "web",
+      "summary": "Native statistics dialog with bounded SVG charts, exact tables and navigation to source video.",
+      "summaryRu": "Нативный диалог статистики с SVG-графиками, точными таблицами и переходом в исходное видео.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "06f4995efc866248cbf755c41df79f45e1e7775bf20c0a04a48cacef5371f537"
+    },
+    {
+      "path": "web/video-statistics.js",
+      "group": "web",
+      "summary": "Pure report aggregation: unique profiles, literal word counts and bounded source-time series without running models.",
+      "summaryRu": "Агрегация готового отчёта: уникальные профили, слова и измеренные временные ряды без запуска моделей.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "8d999c03e12e076136ddfb0ab20bfb69989296bc0da7cdce9401e507d5206dd5"
+    },
+    {
+      "path": "web/video-timeline.js",
+      "group": "web",
+      "summary": "Layered timeline construction and control: tracks, seek, zoom, fit and density.",
+      "summaryRu": "Построение и управление многослойной монтажной шкалой: дорожки, seek, масштаб, fit и плотность.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "0715aff78265c70933b034551278e392a85739c2d5bb3f9789c5f8cf8d8f2830"
+    },
+    {
+      "path": "web/web-mcp.js",
+      "group": "web",
+      "summary": "Browser MCP tool registration for the current page and connection-status UI.",
+      "summaryRu": "Регистрация браузерных MCP-инструментов для текущей страницы и UI управления подключением.",
+      "summaryOrigin": "reviewed-wiki-module-responsibility",
+      "sha256": "7f7a23914715833d83ce5950c39140052afc512d4831f908231295c99d8af793"
+    }
+  ]
+}

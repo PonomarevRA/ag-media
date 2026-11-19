@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 24 24">
+  <title>AG Media Studio</title>
+  <rect x="1" y="1" width="22" height="22" rx="5" fill="#193137"/>
+  <path d="M6 10v4m3-6v8m3-10v12m3-10v8m3-6v4" fill="none" stroke="#70dfcf" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="18" cy="6" r="1" fill="#ffa347"/>
+</svg>

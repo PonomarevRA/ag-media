@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ag-media-studio</title>
+  <link rel="icon" href="/brand/studio.svg" type="image/svg+xml" sizes="any">
+  <link rel="icon" href="/brand/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/brand/icon-180.png" sizes="180x180">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/studio-design.css">
+  <link rel="stylesheet" href="/studio-shell.css">
+  <link rel="stylesheet" href="/editor-workspace.css">
+  <link rel="stylesheet" href="/video-statistics.css">
+  <link rel="stylesheet" href="/image-analysis.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <aside class="studio-sidebar" id="desktop-navigation" data-ag-width="fill">
+    <div id="studio-navigation" class="studio-navigation" data-ag-width="fill">
+      <div class="studio-navigation-heading" data-ag-width="fill">
+        <a class="brand" href="/" aria-label="ag-media-studio" data-ag-width="content" data-ag-width-min-em="0.5">
+          <img class="brand-icon" src="/brand/studio.svg" width="28" height="28" alt="" aria-hidden="true">
+          <span class="brand-name">ag-media-studio</span>
+        </a>
+        <button id="nav-collapse" class="studio-icon" type="button" data-icon="inspector" data-hint
+                aria-label="Свернуть панель навигации" aria-controls="desktop-navigation" aria-expanded="true"></button>
+      </div>
+      <nav class="studio-nav" aria-label="Страницы студии">
+        <a id="studio-link" href="/" data-icon="studio" aria-label="Студия"><span class="studio-nav-label">Студия</span></a>
+        <a id="tools-link" href="/tools" data-icon="mic" aria-label="Запись и транскрипция"><span class="studio-nav-label">Запись и транскрипция</span></a>
+        <a id="history-link" href="/history" data-icon="history" aria-label="История записей"><span class="studio-nav-label">История записей</span></a>
+        <a id="storage-link" href="/storage" data-icon="storage" aria-label="Хранилище"><span class="studio-nav-label">Хранилище</span></a>
+        <a id="settings-link" href="/settings" data-icon="settings" aria-label="Настройки"><span class="studio-nav-label">Настройки</span></a>
+        <a id="wiki-link" href="/wiki/Home-ru.html" target="_blank" rel="noopener" data-icon="book" aria-label="Документация (новая вкладка)"><span class="studio-nav-label">Документация</span></a>
+      </nav>
+    </div>
+  </aside>
+  <header class="shell header studio-topbar" data-ag-width="fill">
+    <div class="studio-topbar-page" data-ag-width="content" data-ag-width-min-em="1">
+      <button id="nav-open" type="button" class="studio-icon" data-icon="menu" data-hint
+              aria-label="Открыть меню" aria-controls="mobile-navigation" aria-expanded="false"></button>
+      <span id="studio-current-page"></span>
+    </div>
+      <button id="mcp-open" class="mcp-open" type="button" aria-label="Инструменты MCP" title="Инструменты MCP"
+              aria-haspopup="dialog" aria-controls="mcp-dialog">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+          <path d="m4 12 7.1-7.1a2.1 2.1 0 0 1 3 3l-6 6m1-7 3.9-3.9a2.1 2.1 0 1 1 3 3m-1.9 1.9a2.1 2.1 0 0 1 3 3l-6.7 6.7a1.9 1.9 0 0 0 0 2.7l.6.6" />
+        </svg>
+        <span>MCP</span>
+      </button>
+  </header>
+  <dialog id="mobile-navigation" class="studio-drawer" aria-label="Страницы студии">
+    <button id="nav-close" type="button" class="studio-icon" data-icon="close" data-hint aria-label="Закрыть меню"></button>
+    <div id="mobile-navigation-slot"></div>
+  </dialog>
+  <dialog id="mcp-dialog" class="mcp-dialog" aria-labelledby="mcp-title">
+    <header class="mcp-heading">
+      <h2 id="mcp-title">Инструменты MCP</h2>
+      <form method="dialog">
+        <button type="submit" aria-label="Закрыть" title="Закрыть" autofocus>×</button>
+      </form>
+    </header>
+    <p id="mcp-status" role="status"></p>
+    <label><input id="mcp-bridge-enabled" type="checkbox" checked> MCP Bridge · управление этим окном</label>
+    <p id="mcp-bridge-status" role="status" aria-live="polite"></p>
+    <p class="muted">Агент может пройти по интерфейсу, прочитать транскрипцию и запросить граф.</p>
+    <div class="mcp-check-row">
+      <button id="mcp-check" type="button">Проверить подключение</button>
+      <span id="mcp-check-result" role="status"></span>
+    </div>
+    <ul id="mcp-tool-list" class="mcp-tool-list" aria-label="Доступные команды"></ul>
+  </dialog>
+  <main id="studio-page" class="shell" data-ag-select-indicators data-ag-width="fill">
+    <section class="intro" aria-labelledby="title">
+      <h1 id="title" tabindex="-1">Студия голоса</h1>
+      <p>Запиши фразу, сгенерируй дубли и сравни их со своим голосом.</p>
+      <nav class="journey-nav" aria-label="Рабочие разделы">
+        <a href="#record-title">Запись</a>
+        <a href="#next-title">Следующая итерация</a>
+        <a id="stress-jump" href="#stress-title" hidden>Ударение «у лапши́»</a>
+        <a href="#compare-title">Синтез</a>
+        <a href="#auto-title">Автосинтез</a>
+        <a href="#jobs-title">Результаты и A/B</a>
+      </nav>
+    </section>
+    <p id="demo" class="notice" hidden>Демонстрация. Вместо речи модели возвращают тестовые тоны.</p>
+    <div class="work" id="studio-work" data-ag-width="content" data-ag-width-min-em="8">
+      <section class="panel recorder" aria-labelledby="record-title" data-ag-width="content" data-ag-width-min-em="7">
+        <h2 id="record-title" tabindex="-1">Запись образца</h2>
+        <div class="record-workspace" data-ag-width="fill">
+          <div class="record-source" data-ag-width="content" data-ag-width-min-em="7">
+            <div class="tape" id="tape" data-design-component="recorder" data-mode="idle">
+              <div class="reel" aria-hidden="true"></div>
+              <div class="tape-display">
+                <div class="tape-status"><span id="tape-mode">ГОТОВ</span><span id="tape-time">00:00</span></div>
+                <canvas id="meter" height="48" aria-hidden="true"></canvas>
+              </div>
+              <div class="reel" aria-hidden="true"></div>
+            </div>
+            <div class="reading" id="corpus-reading">
+              <label id="reading-mode-field" class="select-field" for="reading-mode" hidden>Текст для записи
+                <select id="reading-mode">
+                  <option value="corpus">Фразы корпуса</option>
+                  <option value="story-parts">Поезд на рассвете · по частям</option>
+                  <option value="story-full">Поезд на рассвете · целиком</option>
+                </select>
+              </label>
+              <label id="story-part-field" class="select-field" for="story-part" hidden>Отрывок
+                <select id="story-part"></select>
+              </label>
+              <p id="story-hint" class="muted" hidden></p>
+              <p id="prompt-progress" class="mono"></p>
+              <blockquote id="next-prompt"></blockquote>
+              <button id="use-prompt" type="button">Скопировать фразу в расшифровку</button>
+            </div>
+            <label id="record-denoise-field" class="inline-check" hidden><input id="record-denoise" type="checkbox" checked> Подавлять фоновый шум</label>
+            <div class="actions">
+              <button id="record" class="primary" disabled><span class="dot" aria-hidden="true"></span> Записать</button>
+              <label class="file">Загрузить аудио<input id="upload" type="file" disabled accept="audio/*,.webm,.m4a" aria-label="Загрузить аудио"></label>
+            </div>
+            <audio id="preview" controls preload="metadata" hidden></audio>
+          </div>
+          <div class="record-editor" data-ag-width="content" data-ag-width-min-em="7">
+            <label for="transcript">Что прозвучало в записи</label>
+            <textarea id="transcript" rows="2" maxlength="500" placeholder="Расшифровка появится после остановки записи"></textarea>
+            <p id="transcript-length" class="muted" role="status" hidden>Сократи расшифровку до 500 знаков перед сохранением.</p>
+            <p id="recognition-status" role="status" class="muted"></p>
+            <div class="actions record-check-actions" data-ag-width="fill">
+              <button id="recognize" type="button" disabled>Распознать заново</button>
+              <button id="check-transcript" type="button" disabled>Проверить слова</button>
+              <span id="transcript-suggestions" class="muted" role="status"></span>
+            </div>
+            <section id="pause-review" class="pause-review" aria-label="Паузы в записи" hidden>
+              <p id="pause-summary" class="muted"></p>
+              <div id="pause-list" class="actions"></div>
+              <p id="punctuation-draft" class="muted" hidden></p>
+              <button id="apply-punctuation" type="button" hidden>Применить знаки по паузам</button>
+            </section>
+            <label id="prompt-check"><input id="mark-prompt" type="checkbox"> В записи прочитана фраза из корпуса</label>
+            <label id="evaluation-only-field"><input id="evaluation-only" type="checkbox"> Только для проверки</label>
+            <label class="consent"><input id="consent" type="checkbox"> Я записываю свой голос или имею разрешение владельца.</label>
+            <div class="record-actions">
+              <button id="save-recording" class="primary" disabled>Сохранить запись</button>
+              <button id="use-saved-take" type="button" hidden>Синтез по этой записи</button>
+            </div>
+            <p id="record-feedback" class="muted" role="status"></p>
+          </div>
+        </div>
+      </section>
+      <div class="profile-workflow" data-ag-width="content" data-ag-width-min-em="7">
+        <section class="panel" aria-labelledby="samples-title" data-ag-width="fill">
+          <h2 id="samples-title">Профили голоса</h2>
+          <p class="muted" id="sample-count">Загрузка записей…</p>
+          <a class="history-jump" href="/history">Управлять записями</a>
+          <div class="actions">
+            <button id="save-profile" disabled>Сохранить версию</button>
+            <button id="export" disabled>Скачать корпус ZIP</button>
+          </div>
+          <div class="profile-choice">
+            <label class="select-field" for="profiles">Профиль
+              <select id="profiles"><option value="">Текущий набор</option></select>
+            </label>
+            <button id="delete-profile" type="button" disabled>Удалить версию</button>
+          </div>
+        </section>
+        <section class="panel next" aria-labelledby="next-title" data-ag-width="fill">
+          <h2 id="next-title" tabindex="-1">Следующая итерация</h2>
+          <p class="muted">Если дубль пока не похож на твой голос, добавь свои записи, сохрани новую версию профиля и дообучи F5. Затем выбери новые веса на карточке модели и повтори сравнение.</p>
+          <div class="training">
+            <h3>Дообучение весов</h3>
+            <p id="train-help" class="muted"></p>
+            <div id="train-actions" class="actions"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div id="media-home" hidden></div>
+    <section class="panel media-transcript" id="media-panel" aria-labelledby="media-title" data-ag-width="fill" hidden>
+      <header class="media-workspace-heading" data-ag-width="fill">
+        <h2 id="media-title" tabindex="-1">Анализ видео, аудио и изображений</h2>
+      </header>
+      <section id="media-preparation" class="media-preparation" aria-label="Подготовка материала" data-ag-width="fill">
+        <div class="media-import-row" data-ag-width="fill">
+          <label class="file primary media-import" data-ag-width="content" data-ag-width-min-em="6">Открыть файл<input id="media-upload" type="file" accept="video/*,audio/*,image/png,image/jpeg,.png,.jpg,.jpeg" aria-label="Открыть видео, аудио или картинку"></label>
+          <p class="muted">Видео и аудио — до 2 ГиБ и 2 часов. Картинки PNG/JPEG — до 24 МиБ и 24 Мп.</p>
+        </div>
+        <div class="media-preparation-options" data-ag-width="fill">
+          <details id="media-history-source" class="capture-options" data-ag-width="content" data-ag-width-min-em="7">
+            <summary>Из истории записей</summary>
+            <div class="capture-fields">
+              <label class="select-field" for="media-recording">Из истории записей
+                <select id="media-recording"><option value="">Выбери запись</option></select>
+              </label>
+              <button id="media-recording-submit" type="button" disabled>Транскрибировать запись</button>
+            </div>
+          </details>
+          <details id="transcript-materials" class="capture-options" data-ag-width="content" data-ag-width-min-em="7">
+            <summary>Редактируемые транскрипции</summary>
+            <div class="capture-fields">
+              <label class="select-field">Материал <select id="transcript-material-list"></select></label>
+              <div class="actions" data-ag-width="fill">
+                <button id="transcript-material-open" type="button" disabled>Открыть материал</button>
+                <button id="transcript-material-refresh" class="studio-icon studio-quiet-action" type="button" data-icon="refresh" data-hint aria-label="Обновить список"></button>
+              </div>
+            </div>
+            <p id="transcript-material-status" class="muted" role="status"></p>
+          </details>
+          <details class="capture-options" data-ag-width="content" data-ag-width-min-em="7">
+            <summary>Поток и виртуальный аудиовход</summary>
+            <form id="capture-form" class="capture-form">
+              <label class="select-field">Источник
+                <select id="capture-kind">
+                  <option value="screen">Экран или вкладка со звуком</option>
+                  <option value="input">Микрофон или виртуальный вход</option>
+                  <option value="stream">Ссылка HLS / RTSP</option>
+                </select>
+              </label>
+              <div id="capture-device-fields" class="capture-fields" hidden>
+                <label class="select-field">Аудиовход <select id="capture-device">
+                  <option value="">Системный по умолчанию</option>
+                </select></label>
+                <button id="capture-refresh" type="button">Показать аудиовходы</button>
+                <label class="inline-check"><input id="capture-denoise" type="checkbox" checked> Подавлять фоновый шум</label>
+              </div>
+              <div id="capture-url-fields" class="capture-fields" hidden>
+                <label class="select-field">Ссылка <input id="capture-url" type="text" inputmode="url" maxlength="4096" placeholder="https://… или rtsp://…"></label>
+                <label class="select-field">Секунды <input id="capture-seconds" type="number" min="1" max="120" value="30"></label>
+              </div>
+              <label class="inline-check"><input id="capture-transcribe" type="checkbox" checked> Транскрибировать поток</label>
+              <div class="actions">
+                <button id="capture-start" type="submit" class="primary">Начать захват</button>
+                <button id="capture-stop" type="button" hidden>Остановить</button>
+                <button id="capture-monitor" type="button">Выбрать аудиовыход</button>
+              </div>
+              <select id="capture-output" aria-label="Аудиовыход" hidden><option value="">Без вывода</option></select>
+              <span id="capture-monitor-status" class="muted" role="status"></span>
+              <p id="capture-monitor-help" class="muted">Для передачи звука в другое приложение выбери установленный виртуальный аудиовыход. Для прослушивания микрофона используй наушники.</p>
+            </form>
+          </details>
+          <details id="media-analysis-options" class="capture-options" data-ag-width="content" data-ag-width-min-em="7">
+            <summary><span>Настройки анализа</span> <small id="media-layer-count" class="muted"></small></summary>
+            <div class="media-analysis-grid" data-ag-width="fill">
+              <fieldset class="media-analysis-group" data-ag-width="content" data-ag-width-min-em="7">
+                <legend>Речь</legend>
+                <label class="select-field" for="media-speech-language">Язык транскрипции
+                  <select id="media-speech-language">
+                    <option value="auto">Автоопределение</option>
+                    <option value="ru" lang="ru" data-endonym>Русский</option>
+                    <option value="en" lang="en" data-endonym>English</option>
+                    <optgroup label="Языки роликов · тест">
+                      <option value="ar">Арабский</option>
+                      <option value="ur">Урду</option>
+                      <option value="bn">Бенгальский</option>
+                      <option value="hi">Хинди</option>
+                      <option value="ps">Пушту</option>
+                    </optgroup>
+                  </select>
+                </label>
+                <label class="inline-check"><input id="media-quality" type="checkbox" checked> Whisper Small</label>
+                <label class="inline-check"><input id="media-speakers" type="checkbox" checked> Различать говорящих</label>
+                <label class="select-field">Число говорящих
+                  <input id="media-speaker-count" type="number" min="1" max="12" placeholder="Авто">
+                </label>
+                <label class="inline-check"><input id="media-speaker-merge" type="checkbox">
+                  Объединять похожие голоса в файле</label>
+                <label class="select-field" for="media-audio-classifier">Музыка и фоновые звуки
+                  <select id="media-audio-classifier">
+                    <option value="auto">Авто</option>
+                    <option value="apple">Apple SoundAnalysis</option>
+                    <option value="zipformer">Zipformer Small INT8</option>
+                  </select>
+                </label>
+              </fieldset>
+              <fieldset class="media-analysis-group" data-ag-width="content" data-ag-width-min-em="7">
+                <legend>Слои видео</legend>
+                <label class="inline-check"><input id="media-visual" type="checkbox" checked> Найти лица и проверить, кто говорит в кадре</label>
+                <label class="inline-check"><input id="media-people-count" type="checkbox" checked
+                  aria-describedby="media-people-count-note"> Подсчитать людей в кадре</label>
+                <small id="media-people-count-note" class="muted">Оценка по фигурам. Отражения и люди на экране могут увеличить число.</small>
+                <label class="inline-check"><input id="media-body" type="checkbox" checked> Рамки фигур</label>
+                <label class="inline-check"><input id="media-gaze" type="checkbox" checked> Оценить взгляд и поворот головы</label>
+                <label class="inline-check"><input id="media-scene" type="checkbox" checked aria-controls="media-object-options"> Сцена: надписи, предметы и камера</label>
+                <div id="media-object-options" class="select-field" data-ag-width="fill">
+                  <label class="select-field">Поиск предметов
+                    <select id="media-object-sampling" aria-describedby="media-object-window">
+                      <option value="small-detail" selected>Авто · мелкие предметы</option>
+                      <option value="basic">Базовая</option>
+                      <option value="shot-tiles">Мелкие предметы · по планам</option>
+                      <option value="every-third">Шаг 3 кадра</option>
+                    </select>
+                  </label>
+                  <small class="muted" id="media-object-window">Поиск по всей длине видео. Не менее 10 кадров на план, если в нём столько кадров.</small>
+                  <label class="inline-check"><input id="media-object-reconciliation" type="checkbox"
+                    aria-describedby="media-object-reconciliation-note"> Сверять повторные появления предметов</label>
+                  <small id="media-object-reconciliation-note" class="muted">Дополнительный проход по исходным ракурсам. При недостаточных данных предметы остаются раздельными.</small>
+                </div>
+              </fieldset>
+            </div>
+          </details>
+        </div>
+      </section>
+      <details id="media-stage-options" class="capture-options media-stage-options" data-ag-width="fill">
+        <summary>Этапы и повтор анализа</summary>
+        <div class="media-stage-panel" data-ag-width="fill">
+          <label class="inline-check"><input id="media-stage-manual" type="checkbox"> При загрузке выполнять только выбранные этапы</label>
+          <p class="muted" data-ag-width="content" data-ag-width-min-em="7">Необходимые зависимости выполняются автоматически. Готовые незатронутые слои сохраняются; устаревшие помечаются для пересчёта.</p>
+          <div id="media-stage-choices" class="media-stage-choices" data-ag-width="fill"></div>
+          <div class="actions" data-ag-width="fill">
+            <button id="media-stage-run" type="button" disabled>Выполнить выбранные</button>
+            <button id="media-stage-force" type="button" disabled>Пересчитать выбранные</button>
+          </div>
+          <small id="media-stage-source-note" class="muted">Для запуска этапов выбери исходный видео- или аудиофайл. Импорт JSON не содержит исходник.</small>
+        </div>
+      </details>
+      <p id="media-status" role="status"></p>
+      <section id="image-analysis" class="image-analysis" aria-labelledby="image-title" data-ag-width="fill" hidden>
+        <header class="image-analysis-header" data-ag-width="fill">
+          <div data-ag-width="content" data-ag-width-min-em="4"><h3 id="image-title">Изображение</h3><p id="image-source" class="muted"></p></div>
+          <div class="actions image-analysis-actions">
+            <button id="image-json" type="button" class="studio-icon" data-icon="json" data-hint aria-label="Скачать JSON" disabled><span class="visually-hidden">Скачать JSON</span></button>
+            <button id="image-close" type="button" class="studio-icon" data-icon="close" data-hint aria-label="Закрыть картинку"><span class="visually-hidden">Закрыть картинку</span></button>
+          </div>
+        </header>
+        <div class="image-analysis-settings" data-ag-width="fill">
+          <div class="image-analysis-choices" data-ag-width="fill">
+            <label class="inline-check"><input id="image-objects" type="checkbox" checked> Искать предметы</label>
+            <label class="inline-check"><input id="image-ui" type="checkbox" checked> Текст и интерфейс</label>
+          </div>
+          <div class="image-analysis-controls" data-ag-width="fill">
+            <label class="select-field" data-ag-width="content" data-ag-width-min-em="4">Детализация<select id="image-detail"><option value="full">Детально</option><option value="overview">Быстро</option></select></label>
+            <button id="image-run" type="button">Повторить анализ</button><button id="image-cancel" type="button" hidden>Отменить запрос</button>
+          </div>
+        </div>
+        <p id="image-status" role="status" aria-live="polite"></p><p id="image-summary" class="muted"></p>
+        <div class="image-analysis-layout" data-ag-width="fill">
+          <div class="image-analysis-visual" data-ag-width="content" data-ag-width-min-em="4">
+            <div class="image-analysis-layers" role="group" aria-label="Слои изображения" data-ag-width="fill">
+              <label class="inline-check"><input id="image-layer-objects" type="checkbox" checked> Предметы</label>
+              <label class="inline-check"><input id="image-layer-ui" type="checkbox" checked> UI</label>
+              <label class="inline-check"><input id="image-layer-text" type="checkbox" checked> Текст</label>
+            </div>
+            <figure class="image-analysis-frame"><img id="image-preview" alt="Загруженная картинка"><svg id="image-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"></svg></figure>
+          </div>
+          <div class="image-analysis-results" data-ag-width="content" data-ag-width-min-em="4">
+            <p class="image-analysis-note">Нажми на результат, чтобы выделить рамку. Элементы UI — кандидаты по изображению, а не проверенные действия.</p>
+            <div id="image-detections" class="image-analysis-list" aria-label="Найденные предметы и элементы"></div>
+            <p id="image-empty" class="muted" hidden>В выбранных слоях ничего не найдено.</p>
+          </div>
+        </div>
+      </section>
+      <details id="media-analysis" class="media-analysis capture-options" hidden>
+        <summary id="media-analysis-title">Ход анализа</summary>
+        <p id="media-analysis-status" role="status"></p>
+        <progress id="media-analysis-meter" max="100" aria-label="Приблизительный прогресс анализа"></progress>
+        <ol id="media-analysis-stages"></ol>
+      </details>
+      <details id="media-dialogue-audit" class="capture-options" data-ag-width="fill" hidden></details>
+      <div class="editor-workbench" data-ag-width="fill">
+        <section class="editor-preview" data-ag-width="content" data-ag-width-min-em="9" aria-labelledby="editor-monitor-title">
+          <header class="editor-panel-heading" data-ag-width="fill">
+            <h3 id="editor-monitor-title">Монитор</h3>
+            <span id="editor-source-name"></span>
+            <button id="editor-inspector-toggle" class="studio-icon editor-inspector-toggle" type="button"
+                    aria-label="Свернуть расшифровку" aria-controls="media-result" aria-expanded="true"
+                    data-icon="inspector" data-hint></button>
+          </header>
+          <div class="media-monitor">
+            <div class="media-video">
+              <video id="media-preview" aria-label="Предпросмотр видео" controls playsinline preload="metadata" hidden></video>
+              <canvas id="media-overlay" aria-hidden="true" hidden></canvas>
+            </div>
+            <aside id="media-frame-details" class="media-frame-details" aria-labelledby="media-frame-title" hidden>
+              <header>
+                <h4 id="media-frame-title">Данные кадра</h4>
+                <span data-frame-time></span>
+              </header>
+              <dl></dl>
+              <p data-frame-empty>На этом кадре нет разметки</p>
+            </aside>
+          </div>
+          <p id="media-preview-status" class="muted" role="status" hidden></p>
+          <div id="media-overlay-options" class="media-overlay-options" hidden>
+            <label class="editor-overlay-switch studio-icon" aria-label="Технический режим" title="Технический режим" data-icon="technical" data-hint>
+              <input id="media-overlay-toggle" type="checkbox" aria-label="Технический режим" checked>
+              <span class="visually-hidden">Технический режим</span>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="media-video-export" class="editor-transport-button studio-icon" data-icon="download" data-hint
+                    type="button" aria-label="Скачать MP4 с разметкой" title="Скачать MP4 с разметкой" hidden><span class="visually-hidden">Скачать MP4 с разметкой</span></button>
+            <button id="editor-clothing-toggle" class="editor-transport-button studio-icon" data-icon="sparkles" data-hint
+                    type="button" aria-label="Маски одежды для монтажа" title="Маски одежды для монтажа"
+                    aria-expanded="false" aria-controls="media-clothing-export" hidden></button>
+            <span id="media-video-export-status" class="muted" role="status"></span>
+          </div>
+          <details id="media-clothing-export" class="capture-options" hidden>
+            <summary>Маски одежды для монтажа</summary>
+            <div class="capture-fields">
+              <label class="select-field">Спикер или лицо <select id="media-clothing-face"></select></label>
+              <label class="select-field">Начало, с <input id="media-clothing-start" type="number" min="0" max="59.99" step="0.01" required></label>
+              <label class="select-field">Длительность, с <input id="media-clothing-duration" type="number" min="0.1" max="6" step="0.1" value="2" required></label>
+            </div>
+            <div class="actions">
+              <button id="media-clothing-position" type="button">Подставить позицию видео</button>
+              <button id="media-clothing-submit" type="button">Скачать маски ZIP</button>
+            </div>
+            <p id="media-clothing-status" class="muted" role="status"></p>
+          </details>
+        </section>
+        <section id="media-result" class="editor-inspector" data-ag-width="content" data-ag-width-min-em="9" aria-labelledby="editor-inspector-title" hidden>
+          <header class="editor-panel-heading"><h3 id="editor-inspector-title">Расшифровка</h3>
+            <button id="media-statistics" class="studio-icon" type="button" data-icon="chart" data-hint
+                    aria-label="Статистика ролика" title="Статистика ролика" aria-haspopup="dialog" aria-controls="media-statistics-dialog" disabled></button>
+          </header>
+          <div class="editor-inspector-body" data-ag-width="fill">
+            <button id="transcript-material-save" type="button" hidden>Сохранить для правки</button>
+            <div class="editor-inspector-meta" data-ag-width="fill">
+              <p id="transcript-current" class="muted" data-ag-width="content" data-ag-width-min-em="1" hidden></p>
+              <div class="editor-inspector-actions" data-ag-width="content" data-ag-width-min-em="2">
+              <a id="media-srt" class="download studio-icon transcript-tip" data-icon="subtitles" data-hint aria-label="Скачать SRT" download="subtitles.srt"><span class="visually-hidden">Скачать SRT</span></a>
+              <button id="media-json" class="download studio-icon transcript-tip" data-icon="json" data-hint type="button" aria-label="Скачать JSON"><span class="visually-hidden">Скачать JSON</span></button>
+              </div>
+            </div>
+            <ol id="media-segments" aria-label="Фразы с таймкодами"></ol>
+            <p id="media-evidence-status" class="muted" hidden></p>
+            <details id="media-speaker-profiles" hidden>
+              <summary>Профили спикеров</summary>
+              <ul id="media-speaker-profile-list"></ul>
+            </details>
+            <details id="media-scene-result" class="video-scene-result" hidden>
+              <summary>Надписи и предметы в кадре</summary>
+              <p id="media-scene-status" class="muted" role="status"></p>
+              <div id="media-scene-controls" class="actions" hidden>
+                <label class="select-field">Кадр <select id="media-scene-time"></select></label>
+                <button id="media-scene-seek" type="button">Показать кадр</button>
+              </div>
+              <ul id="media-scene-items"></ul>
+            </details>
+            <details id="media-moodbook" hidden>
+              <summary>Moodbook планов</summary>
+              <p class="muted">Видимость считается по трекам, площадь — по рамкам фигур. Цвета взяты из областей кадра.</p>
+              <div id="media-moodbook-shots" class="moodbook-shots"></div>
+            </details>
+          </div>
+        </section>
+        <section id="media-editor-timeline" class="editor-timeline" data-ag-width="content" data-ag-width-min-em="8" data-design-component="timeline" aria-labelledby="media-editor-title" hidden>
+          <header class="editor-toolbar" data-ag-width="fill">
+            <div class="editor-heading" data-ag-width="content" data-ag-width-min-em="4">
+              <h3 id="media-editor-title" class="visually-hidden">Монтажная шкала</h3>
+              <output id="media-editor-clock" aria-label="Позиция на шкале">00:00.00</output>
+            </div>
+              <label id="media-editor-objects-control" class="inline-check editor-layer-control" hidden>
+                <input id="media-editor-objects" type="checkbox" checked> Предметы
+              </label>
+              <label id="media-editor-music-control" class="inline-check editor-layer-control" hidden>
+                <input id="media-editor-music" type="checkbox" checked> Музыка
+              </label>
+              <label id="media-editor-intonation-control" class="inline-check editor-layer-control" hidden>
+                <input id="media-editor-intonation" type="checkbox" checked> Интонация
+              </label>
+              <label id="media-editor-background-control" class="inline-check editor-layer-control" hidden>
+                <input id="media-editor-background" type="checkbox" checked> Фоновые звуки
+              </label>
+              <button id="media-editor-expressions" class="editor-gaze-toggle" type="button" aria-label="Дорожки выражений лица" aria-pressed="true" hidden>Дорожки выражений лица</button>
+              <button id="media-editor-gaze" class="editor-gaze-toggle" type="button" aria-label="Дорожки взгляда" aria-pressed="true" hidden>Дорожки взгляда</button>
+              <button id="media-editor-motion" class="editor-gaze-toggle" type="button" aria-label="Движение персонажа" aria-pressed="true" hidden>Движение персонажа</button>
+              <div class="editor-actions" role="group" aria-label="Масштаб шкалы" data-ag-width="content" data-ag-width-min-em="4">
+                <button id="media-editor-zoom-out" type="button" aria-label="Уменьшить масштаб">−</button>
+                <button id="media-editor-zoom-in" type="button" aria-label="Увеличить масштаб">+</button>
+              </div>
+          </header>
+          <div id="media-editor-scroll" class="editor-scroll" tabindex="0" aria-label="Шкала реплик и склеек" aria-keyshortcuts="Space ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight Home End">
+            <div id="media-editor-sheet" class="editor-sheet"></div>
+          </div>
+          <p id="media-editor-selection" class="editor-selection" hidden></p>
+          <section id="media-object-preview" class="editor-object-preview" aria-labelledby="media-object-name" hidden>
+            <div class="editor-object-image">
+              <button id="media-object-open" class="editor-object-photo" type="button"
+                      aria-label="Открыть фото предмета" aria-haspopup="dialog" aria-controls="media-object-dialog" hidden>
+                <canvas id="media-object-image" aria-hidden="true"></canvas>
+              </button>
+              <span id="media-object-image-status" class="muted" role="status"></span>
+            </div>
+            <div class="editor-object-details">
+              <h4 id="media-object-name"></h4>
+              <p id="media-object-interface" class="editor-object-kind" hidden></p>
+              <p id="media-object-time" class="muted"></p>
+              <p id="media-object-frame-label" class="muted" hidden></p>
+              <dl>
+                <dt>Уверенность исходной метки</dt>
+                <dd id="media-object-score"></dd>
+              </dl>
+              <div id="media-object-text" class="editor-object-text" hidden>
+                <h5>Текст на предмете</h5>
+                <ul id="media-object-text-lines"></ul>
+              </div>
+              <details id="media-object-scroll" class="editor-object-scroll" hidden>
+                <summary>Склейка прокрутки</summary>
+                <div id="media-object-scroll-pages"></div>
+              </details>
+              <details id="media-object-profile" class="editor-object-profile" hidden>
+                <summary>Профиль предмета</summary>
+                <ul id="media-object-profile-labels"></ul>
+                <div id="media-object-appearance" class="editor-object-appearance"></div>
+                <div id="media-object-views" class="editor-object-views" hidden>
+                  <h5 id="media-object-views-title">Появления предмета</h5>
+                  <div id="media-object-visit-track" class="editor-object-visit-track" role="group" aria-labelledby="media-object-views-title">
+                    <button id="media-object-previous-visit" class="editor-object-visit-step" type="button"
+                            aria-label="Предыдущее появление" title="Предыдущее появление"><span aria-hidden="true">‹</span></button>
+                    <div id="media-object-view-buttons" class="editor-object-visit-rail"></div>
+                    <button id="media-object-next-visit" class="editor-object-visit-step" type="button"
+                            aria-label="Следующее появление" title="Следующее появление"><span aria-hidden="true">›</span></button>
+                    <div id="media-object-visit-tooltip" class="editor-object-visit-tooltip" aria-hidden="true" hidden></div>
+                    <span id="media-object-visit-status" class="editor-object-visit-status" role="status"></span>
+                  </div>
+                  <details id="media-object-extra-views" hidden>
+                    <summary id="media-object-extra-views-title">Кадры предмета</summary>
+                    <ul id="media-object-extra-view-buttons" aria-labelledby="media-object-extra-views-title"></ul>
+                  </details>
+                </div>
+              </details>
+            </div>
+          </section>
+          <p class="editor-shortcuts muted">Пробел · воспроизведение и пауза. ← / → · шаг по сетке анализа. Shift + ← / → · одна секунда.</p>
+        </section>
+      </div>
+      <details id="media-dub" class="capture-options media-dub" data-ag-width="fill" hidden>
+        <summary>Английский дубляж</summary>
+        <p>Введи английские реплики. Студия разместит их по таймкодам и использует образцы голосов участников из видео.</p>
+        <p class="muted">Используй голоса с разрешения участников и проверь права на запись и синтез перед публикацией.</p>
+        <ol id="media-dub-cues" class="media-dub-cues"></ol>
+        <div class="actions">
+          <button id="media-dub-translate" type="button">Заполнить перевод</button>
+          <button id="media-dub-submit" type="button">Собрать WAV и MP4</button>
+        </div>
+        <p id="media-dub-status" class="muted" role="status"></p>
+      </details>
+      <details id="media-music" class="media-music" hidden>
+        <summary>Фоновая музыка</summary>
+        <p class="muted">Выбери момент в видео. Студия подготовит до 15 секунд исходника и звук, который убрал шумодав.</p>
+        <button id="media-music-prepare" type="button">Подготовить фрагмент</button>
+        <p id="media-music-status" role="status"></p>
+        <div id="media-music-result" hidden>
+          <label class="inline-check"><input id="media-music-loop" type="checkbox"> Повторять фрагмент</label>
+          <div class="media-music-tracks">
+            <div><h4>Исходник</h4><audio id="media-music-original" preload="metadata"></audio>
+              <a id="media-music-original-download" class="download" download="music-original.wav">Скачать исходник WAV</a>
+            </div>
+            <div><h4>Сигнал, убранный шумодавом</h4><audio id="media-music-removed" preload="metadata"></audio>
+              <a id="media-music-removed-download" class="download" download="music-removed.wav">Скачать убранный сигнал WAV</a>
+            </div>
+          </div>
+          <p class="muted">Запусти одну дорожку и выбери «Распознать музыку» в Пункте управления Mac. В убранном сигнале могут остаться речь и шум.</p>
+          <a href="https://support.apple.com/en-us/118570" target="_blank" rel="noopener noreferrer">Как распознать музыку через Shazam</a>
+        </div>
+      </details>
+    </section>
+    <section class="panel" id="prosody-pilot" aria-labelledby="prosody-pilot-title" hidden>
+      <h2 id="prosody-pilot-title" tabindex="-1">Пилот ударения · A/B</h2>
+      <p class="muted">Прослушай обе дорожки и отметь, где слышно «у лапши́». Оценка сохраняется в MLflow.</p>
+      <div id="prosody-pilot-pairs" class="stress-rounds"></div>
+    </section>
+    <section class="panel" id="stress-panel" aria-labelledby="stress-title" hidden>
+      <h2 id="stress-title" tabindex="-1">Проверка «у лапши́» на слух</h2>
+      <p class="muted">Для каждого seed послушай исходник и три дубля. Отметь дорожку, в которой ударение звучит правильно.</p>
+      <button id="stress-run" type="button" hidden>Сгенерировать три серии</button>
+      <p id="stress-status" role="status"></p>
+      <div id="stress-rounds" class="stress-rounds"></div>
+    </section>
+    <section class="panel compare" data-ag-width="fill" aria-labelledby="compare-title">
+      <h2 id="compare-title" tabindex="-1">Синтез дублей</h2>
+      <div id="engines" class="engines" role="group" aria-label="Модели для синтеза"></div>
+      <label for="test-text">Текст для синтеза</label>
+      <textarea id="test-text" rows="2" maxlength="500"></textarea>
+      <div class="comparison-choices" data-ag-width="fill">
+        <div class="comparison-source" data-ag-width="content" data-ag-width-min-em="6">
+          <span id="comparison-source">Свободный текст</span>
+          <a class="history-jump" href="/history">Выбрать исходник</a>
+          <button id="clear-source" class="studio-icon studio-quiet-action" type="button" data-icon="close" data-hint aria-label="Сбросить исходник" hidden></button>
+        </div>
+        <label class="select-field" for="repeats">Дублей на модель
+          <select id="repeats" disabled><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+        </label>
+        <button id="held-out" type="button">Следующая тестовая фраза</button>
+      </div>
+      <p id="comparison-help" class="muted" hidden>Whisper считает ошибки слов. Энкодер сравнивает голос по косинусной близости от −1 до +1, без калибровки. Оцени сходство также на слух и проверь новую фразу.</p>
+      <details class="prosody-panel">
+        <summary>Проверка произношения</summary>
+        <div class="actions">
+          <button id="review-prosody" type="button">Проверить текст</button>
+          <label class="inline-check"><input id="try-stress" type="checkbox"> Дубль с ударениями · F5</label>
+          <label class="inline-check"><input id="try-pauses" type="checkbox"> Дубль с паузами между фразами</label>
+        </div>
+        <label class="select-field" for="try-tone">Подача в отдельном дубле
+          <select id="try-tone"><option value="">Как в тексте</option><option value="question">Вопрос</option>
+            <option value="exclamation">Восклицание</option></select>
+        </label>
+        <p class="muted">Экспериментальные дубли добавляются к базовым. Подача проверяется через знаки в конце фразы.</p>
+        <p id="prosody-marks"></p>
+        <p id="prosody-shadow" class="muted" hidden></p>
+        <p id="prosody-notes" class="muted" role="status"></p>
+      </details>
+      <div class="synthesis-actions" data-ag-width="fill">
+        <p id="synthesis-hint" class="muted"></p>
+        <button id="synthesize" class="primary" aria-describedby="synthesis-hint" disabled>Сгенерировать дубли</button>
+      </div>
+    </section>
+    <section class="panel auto-synthesis" data-ag-width="fill" aria-labelledby="auto-title">
+      <h2 id="auto-title" tabindex="-1">Автосинтез</h2>
+      <p>Выбери исходник из истории и не меньше двух других образцов. Студия сохранит лучший дубль.</p>
+      <form id="auto-form" class="auto-form">
+        <label class="select-field">Целевой балл <input id="auto-target" type="number" min="50" max="100" value="85" required></label>
+        <label class="select-field">Максимум дублей <input id="auto-limit" type="number" min="1" max="12" value="6" required></label>
+        <label class="select-field">Лимит, мин <input id="auto-minutes" type="number" min="1" max="30" value="10" required></label>
+        <button id="auto-start" class="primary" type="submit" disabled>Запустить автосинтез</button>
+      </form>
+      <p id="auto-hint" class="muted"></p>
+      <details>
+        <summary>Как считается балл</summary>
+        <p>До 60 баллов за сходство голоса и до 40 за распознанные слова Whisper. Балл от 0 до 100. Если любая метрика ухудшается, предыдущий результат остаётся выбранным. Ударение и естественность проверяются на слух.</p>
+      </details>
+      <section id="auto-map" aria-labelledby="auto-map-title" hidden>
+        <header class="auto-map-header">
+          <h3 id="auto-map-title" tabindex="-1">Карта попыток</h3>
+          <label class="select-field">Прогон <select id="auto-run-select"></select></label>
+        </header>
+        <p id="auto-run-text" class="muted"></p>
+        <p id="auto-run-summary" role="status"></p>
+        <p id="auto-timing" class="muted"></p>
+        <button id="auto-stop" type="button" hidden>Остановить после дубля</button>
+        <ol id="auto-graph" aria-label="Попытки в порядке запуска"></ol>
+      </section>
+    </section>
+    <section class="panel outcomes" data-ag-width="fill" aria-labelledby="jobs-title">
+        <div class="results-heading">
+          <h2 id="jobs-title" tabindex="-1">Результаты и A/B</h2>
+          <p id="jobs-summary" class="muted" role="status" aria-label="Статусы всех операций"></p>
+        </div>
+      <section class="multitrack" data-ag-width="fill" data-design-component="deck" aria-labelledby="track-title">
+        <div class="deck-module" data-ag-width="content" data-ag-width-min-em="9">
+          <header class="deck-faceplate">
+            <h3 id="track-title" tabindex="-1">Сравнение дорожек</h3>
+            <span class="deck-format" aria-hidden="true">A/B</span>
+          </header>
+          <div class="deck-player">
+            <div id="transport" class="transport" hidden>
+              <label for="track-seek">Позиция <output id="track-time">0,0 / 0,0 с</output></label>
+              <input id="track-seek" type="range" min="0" max="1" step="0.01" value="0">
+              <p id="track-status" role="status"></p>
+            </div>
+            <p id="track-empty" class="deck-empty">В карточке дубля нажми A/B. Исходную запись можно добавить из списка записей.</p>
+          </div>
+          <section class="deck-playlist" data-ag-width="fill" aria-labelledby="playlist-title" hidden>
+            <h4 id="playlist-title" class="deck-faceplate">Дорожки A/B</h4>
+            <div class="deck-timeline-axis" aria-hidden="true"><div id="track-ruler"></div></div>
+            <ul id="track-list" class="studio-list" role="list" aria-labelledby="playlist-title"></ul>
+            <label class="inline-check deck-spectrum-switch"><input id="track-spectrum" type="checkbox" checked> Частотный спектр</label>
+            <p class="deck-scale">Уровень в дБFS · начало полосы в Гц</p>
+          </section>
+        </div>
+        <section id="processing" class="processing" data-ag-width="content" data-ag-width-min-em="9" aria-labelledby="eq-title" hidden>
+          <header class="deck-faceplate"><h3 id="eq-title">Эквалайзер</h3></header>
+          <div class="eq-body" data-ag-width="fill">
+            <div class="eq-sources">
+              <label class="select-field" for="eq-source">Обработать <select id="eq-source"></select></label>
+              <label class="select-field" for="eq-reference">Эталон для авто EQ <select id="eq-reference"></select></label>
+            </div>
+            <figure class="eq-curve">
+              <figcaption>Расчётный отклик EQ · дБ / Гц · 24 кГц</figcaption>
+              <canvas id="eq-response" aria-hidden="true"></canvas>
+            </figure>
+            <div class="eq-bands">
+              <label for="eq-low">
+                <span>Низкие<small>220 Гц</small></span>
+                <input id="eq-low" type="range" min="-6" max="6" step="0.1" value="0" aria-orientation="vertical">
+                <output></output>
+              </label>
+              <label for="eq-mid">
+                <span>Средние<small>1 кГц</small></span>
+                <input id="eq-mid" type="range" min="-6" max="6" step="0.1" value="0" aria-orientation="vertical">
+                <output></output>
+              </label>
+              <label for="eq-high">
+                <span>Высокие<small>3,8 кГц</small></span>
+                <input id="eq-high" type="range" min="-6" max="6" step="0.1" value="0" aria-orientation="vertical">
+                <output></output>
+              </label>
+              <label for="eq-level">
+                <span>Уровень</span>
+                <input id="eq-level" type="range" min="-9" max="9" step="0.1" value="0" aria-orientation="vertical">
+                <output></output>
+              </label>
+            </div>
+            <label class="inline-check"><input id="eq-denoise" type="checkbox"> Убрать фоновый шум</label>
+            <div class="actions">
+              <button id="eq-apply" type="button">Применить настройки</button>
+              <button id="eq-auto" type="button">Подогнать автоматически</button>
+              <span id="eq-status" class="muted" role="status"></span>
+            </div>
+            <div id="eq-result" class="actions" hidden>
+              <a id="eq-download" class="download" download="voice-processed.wav">Скачать WAV</a>
+              <button id="eq-remove" type="button">Убрать копию</button>
+            </div>
+          </div>
+        </section>
+      </section>
+      <div class="results-list" data-ag-width="fill">
+        <p id="jobs-empty" class="list-empty" hidden>Здесь появятся сгенерированные дубли.</p>
+        <ul id="jobs" class="jobs studio-list" role="list" aria-labelledby="jobs-title"></ul>
+      </div>
+      <div class="actions">
+        <button id="assemble" disabled>Собрать дорожку</button>
+        <span id="assembly-order" class="muted"></span>
+      </div>
+      <section class="block-bin" aria-labelledby="block-title" hidden>
+        <h3 id="block-title">Отобранные фрагменты</h3>
+        <ol id="blocks"></ol>
+        <button id="assemble-blocks" type="button" disabled>Собрать WAV из фрагментов</button>
+      </section>
+    </section>
+  </main>
+  <main id="tools-page" class="shell" data-ag-select-indicators hidden data-ag-width="fill">
+    <section class="intro">
+      <h1 id="tools-title" tabindex="-1">Запись и транскрипция</h1>
+      <nav class="journey-nav" aria-label="Аудиоинструменты">
+        <a href="#record-title">Запись с шумоподавлением</a>
+        <a href="#media-title">Файл, запись или поток</a>
+      </nav>
+    </section>
+    <div id="tools-recorder"></div>
+  </main>
+  <main id="history-page" class="shell history-page" data-ag-select-indicators hidden data-ag-width="fill">
+    <section class="intro">
+      <h1 id="history-title" tabindex="-1">История записей</h1>
+    </section>
+    <section class="panel" aria-label="Сохранённые записи" data-ag-width="fill">
+      <div class="history-filters" data-ag-width="fill">
+        <label for="history-search">Поиск по расшифровке<input id="history-search" type="search"></label>
+        <label for="history-kind">Тип записи<select id="history-kind">
+          <option value="all">Все записи</option><option value="corpus">Для профиля</option><option value="evaluation">Для проверки</option>
+        </select></label>
+      </div>
+      <p id="recordings-empty" class="list-empty" hidden></p>
+      <ul id="recordings" class="stack studio-list" role="list" aria-label="Записи"></ul>
+    </section>
+  </main>
+  <main id="storage-page" class="shell storage-page" hidden data-ag-width="fill">
+    <section class="intro"><h1 id="storage-title" tabindex="-1">Хранилище</h1></section>
+    <section class="panel" aria-labelledby="storage-usage-title" data-ag-width="fill">
+      <div class="storage-toolbar" data-ag-width="fill">
+        <h2 id="storage-usage-title">Место на диске</h2>
+        <button type="button" id="storage-refresh" class="studio-icon studio-quiet-action" data-icon="refresh" data-hint aria-label="Обновить список"></button>
+      </div>
+      <p id="storage-free" class="muted"></p>
+      <dl id="storage-groups" class="storage-groups"></dl>
+    </section>
+    <section class="panel" aria-labelledby="storage-items-title" data-ag-width="fill">
+      <div class="storage-toolbar">
+        <h2 id="storage-items-title">Кэши и экспорты</h2>
+        <label class="inline-check"><input id="storage-candidates" type="checkbox"> Только кандидаты</label>
+      </div>
+      <p id="storage-policy" class="muted"></p>
+      <p id="storage-status" role="status"></p>
+      <p id="storage-empty" hidden>В этом списке пока нет файлов.</p>
+      <ul id="storage-list" class="storage-list" role="list"></ul>
+      <p id="storage-limit" class="muted" hidden>Показаны первые 300 элементов по возрасту.</p>
+    </section>
+    <dialog id="storage-dialog" aria-labelledby="storage-confirm-title">
+      <h2 id="storage-confirm-title">Удалить файл или папку?</h2>
+      <p id="storage-confirm-detail"></p>
+      <p class="muted">Удаление освободит место. Восстановить данные из студии будет нельзя.</p>
+      <form method="dialog" class="actions">
+        <button id="storage-cancel" autofocus>Отмена</button>
+        <button id="storage-confirm" type="button">Удалить</button>
+      </form>
+    </dialog>
+  </main>
+
+  <main id="settings-page" class="shell settings-page" data-ag-select-indicators hidden>
+    <section class="intro"><h1 id="settings-title" tabindex="-1">Настройки</h1></section>
+    <div class="settings-grid" data-ag-width="fill">
+      <section class="panel settings-appearance" aria-labelledby="appearance-title" data-ag-width="content" data-ag-width-min-em="8">
+        <h2 id="appearance-title">Внешний вид</h2>
+        <fieldset class="profile-options" data-ag-width="fill">
+          <legend class="visually-hidden">Дизайн-профиль</legend>
+          <label><input type="radio" name="studio-design" value="retro" checked>
+            <span><strong>Ретро</strong><small>Кассетная панель и янтарные индикаторы.</small></span>
+            <span class="profile-sample" data-sample="retro" aria-hidden="true"></span>
+          </label>
+          <label><input type="radio" name="studio-design" value="modern">
+            <span><strong>Современный</strong><small>Компактный плеер и частотная кривая эквалайзера.</small></span>
+            <span class="profile-sample" data-sample="modern" aria-hidden="true"></span>
+          </label>
+          <label><input type="radio" name="studio-design" value="editor">
+            <span><strong>Видеоредактор</strong><small>Монтажная шкала, таймкод и дорожки спикеров.</small></span>
+            <span class="profile-sample" data-sample="editor" aria-hidden="true"></span>
+          </label>
+        </fieldset>
+        <label class="language">Режим оформления
+          <select id="studio-color-mode">
+            <option value="dark">Тёмный</option>
+            <option value="light">Светлый</option>
+            <option value="system">Как в системе</option>
+          </select>
+        </label>
+      </section>
+      <section class="panel settings-languages" aria-labelledby="settings-language-title" data-ag-width="content" data-ag-width-min-em="7">
+        <h2 id="settings-language-title">Языки</h2>
+        <label class="language">Язык записей и синтеза <select id="language"><option value="ru">Русский</option><option value="en">English</option></select></label>
+        <label class="language">Язык интерфейса <select id="interface-language">
+          <option value="ru" lang="ru" data-endonym>Русский</option><option value="en" lang="en" data-endonym>English</option>
+        </select></label>
+      </section>
+      <section id="settings-mods" class="panel settings-mods" aria-labelledby="mods-title" data-ag-width="fill">
+        <div class="settings-mods-heading" data-ag-width="fill">
+          <h2 id="mods-title">Моды и модели</h2>
+          <button id="mods-rescan" data-mods-focus="catalog:rescan" class="studio-icon studio-quiet-action" type="button" data-icon="refresh" data-hint aria-label="Обновить каталог"></button>
+        </div>
+        <p class="muted" data-ag-width="content" data-ag-width-min-em="7">Встроенные и пользовательские обработчики. Выбор моделей и параметры фиксируются при запуске анализа; текущая обработка продолжится с прежними настройками.</p>
+        <p class="muted">Моды запускаются по потребности выбранных этапов. «Включён» разрешает использование; статус ресурсов показывается в карточке.</p>
+        <p id="mods-status" role="status" aria-live="polite"></p>
+        <details class="studio-mod-provider-disclosure" data-ag-width="fill">
+          <summary>Выбор обработчиков</summary>
+          <div id="mods-providers" class="studio-mod-providers" data-ag-form-row="auto" data-ag-width="fill"></div>
+        </details>
+        <div class="studio-mod-filters" data-ag-form-row="auto" data-ag-width="fill">
+          <div data-ag-form-field data-ag-width="content" data-ag-width-min-em="7">
+            <label for="mods-search" id="mods-search-label">Найти мод</label>
+            <input id="mods-search" type="search" aria-labelledby="mods-search-label" maxlength="200">
+          </div>
+          <div data-ag-form-field data-ag-width="content" data-ag-width-min-em="7">
+            <label for="mods-origin" id="mods-origin-label">Источник</label>
+            <select id="mods-origin" aria-labelledby="mods-origin-label">
+              <option value="all">Все моды</option><option value="builtin">Встроенные</option><option value="user">Пользовательские</option>
+            </select>
+          </div>
+        </div>
+        <p id="mods-empty" class="muted" hidden>Подходящих модов нет.</p>
+        <ul id="mods-list" class="studio-mod-list" role="list" data-ag-width="fill"></ul>
+        <details class="studio-mod-authoring" data-ag-width="fill">
+          <summary>Создать мод с агентом</summary>
+          <p class="muted" data-ag-width="content" data-ag-width-min-em="7">Шаблон создаётся выключенным. Доработай манифест и Python-обработчик с агентом, обнови каталог и включи проверенную версию.</p>
+          <form id="mods-template-form" data-ag-form-row="stack" data-ag-width="fill">
+            <div data-ag-form-field data-ag-width="fill">
+              <label for="mods-template-kind">Тип шаблона</label>
+              <select id="mods-template-kind" data-mods-focus="template:kind">
+                <option value="word-count">Дополнительный этап: статистика слов</option>
+                <option value="asr-seconds">ASR: секунды модели → миллисекунды студии</option>
+              </select>
+            </div>
+            <div data-ag-form-field data-ag-width="fill">
+              <label for="mods-template-id" id="mods-template-label">ID нового мода</label>
+              <input id="mods-template-id" data-mods-focus="template:id" required maxlength="96" autocomplete="off" spellcheck="false"
+                aria-labelledby="mods-template-label" aria-describedby="mods-template-help" placeholder="my.processor">
+              <small id="mods-template-help" class="muted">Строчные латинские буквы, цифры, точки и дефисы; первый символ — буква.</small>
+            </div>
+            <button type="submit" data-mods-focus="template:create">Создать шаблон</button>
+          </form>
+          <p class="muted">Папка модов: <code id="mods-directory"></code></p>
+        </details>
+      </section>
+      <section id="settings-pipeline" class="panel settings-pipeline" aria-labelledby="pipeline-title" data-ag-width="fill">
+        <div class="settings-mods-heading" data-ag-width="fill">
+          <h2 id="pipeline-title">Граф обработки</h2>
+          <button id="pipeline-refresh" class="studio-icon studio-quiet-action" type="button" data-icon="refresh" data-hint aria-label="Обновить план"></button>
+        </div>
+        <p class="muted">Карточки показывают зависимости. Выбери дополнительный мод и укажи, какие результаты он должен получить. Встроенные связи защищены; запускаются выбранные этапы и используются готовые результаты.</p>
+        <div class="pipeline-toolbar" data-ag-width="fill" role="group" aria-label="Правка плана">
+          <button id="pipeline-undo" class="studio-icon studio-quiet-action" type="button" data-icon="undo" data-hint aria-label="Отменить правку" disabled></button>
+          <button id="pipeline-redo" class="studio-icon studio-quiet-action" type="button" data-icon="redo" data-hint aria-label="Вернуть правку" disabled></button>
+          <button id="pipeline-save" type="button" disabled>Сохранить план</button>
+        </div>
+        <p id="pipeline-status" role="status" aria-live="polite"></p>
+        <div class="pipeline-editor" data-ag-width="fill">
+          <div class="pipeline-viewport" tabindex="0" role="region" aria-label="Граф зависимостей этапов" data-ag-width="fill">
+            <div id="pipeline-canvas" class="pipeline-canvas"></div>
+          </div>
+          <aside id="pipeline-inspector" class="pipeline-inspector" aria-label="Параметры выбранного этапа" data-ag-width="fill"></aside>
+        </div>
+        <details class="pipeline-edge-disclosure" data-ag-width="fill">
+          <summary>Список связей</summary>
+          <div id="pipeline-edges"></div>
+        </details>
+      </section>
+      <section class="panel settings-materials" aria-labelledby="materials-title" data-ag-width="content" data-ag-width-min-em="8">
+        <div class="settings-material-header" data-ag-width="fill">
+          <h2 id="materials-title" tabindex="-1">Сохранённые материалы</h2>
+          <label>Язык материала
+            <select id="settings-material-language">
+              <option value="ru">Русский</option><option value="en">Английский</option>
+              <optgroup label="Языки роликов · тест">
+                <option value="ar">Арабский</option>
+                <option value="ur">Урду</option>
+                <option value="bn">Бенгальский</option>
+                <option value="hi">Хинди</option>
+                <option value="ps">Пушту</option>
+              </optgroup>
+            </select>
+          </label>
+        </div>
+        <p id="settings-material-status" role="status"></p>
+        <ul id="settings-material-list" class="settings-material-list" role="list"></ul>
+        <div class="settings-pagination">
+          <button id="materials-newer" type="button" hidden>Новее</button>
+          <button id="materials-older" type="button" hidden>Старее</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <dialog id="material-delete" class="material-delete" aria-labelledby="material-delete-title" aria-describedby="material-delete-note">
+    <h2 id="material-delete-title">Удалить материал?</h2>
+    <p id="material-delete-name"></p>
+    <p id="material-delete-note" class="muted">Сохранённая расшифровка и её правки будут удалены.</p>
+    <form method="dialog">
+      <button value="cancel" autofocus>Отмена</button>
+      <button class="danger" value="delete">Удалить</button>
+    </form>
+  </dialog>
+  <p id="status" class="shell" role="status" aria-live="polite"></p>
+  <dialog id="morpheme-graph" aria-labelledby="graph-title" data-ag-select-indicators>
+    <header class="graph-header">
+      <h2 id="graph-title">Граф морфем</h2>
+      <button class="graph-close studio-icon" data-icon="close" data-hint type="button" aria-label="Закрыть граф морфем" autofocus></button>
+    </header>
+    <p class="muted">Whisper сверяет слова. Ударение проверяй на слух. Разбор есть у слов из словаря.</p>
+    <p class="graph-status mono" role="status"></p>
+    <button class="graph-show-retries" type="button" hidden>Перейти к повторам</button>
+    <div class="graph-layout">
+      <section class="graph-alignment" aria-label="Сверка слов">
+        <div class="graph-legend" aria-hidden="true"><span>Текст дубля</span><span>Whisper</span></div>
+        <ul class="graph-rows" aria-label="Связи между словами"></ul>
+      </section>
+      <section class="graph-detail" aria-label="Выбранное слово">
+        <div class="graph-player"></div>
+        <button class="graph-manual" type="button" aria-pressed="false">Выбрать участок вручную</button>
+        <div class="graph-controls" hidden>
+          <h3 class="graph-selected"></h3>
+          <ul class="graph-parts" aria-label="Морфемы"></ul>
+          <p class="graph-score muted" role="status"></p>
+          <p class="graph-time-hint muted"></p>
+          <div class="graph-range">
+            <div>
+              <label for="graph-start">Начало, с</label>
+              <input id="graph-start" class="graph-start" type="number" min="0" step="0.001" required>
+              <button class="graph-mark-start" type="button">Начало по плееру</button>
+            </div>
+            <div>
+              <label for="graph-end">Конец, с</label>
+              <input id="graph-end" class="graph-end" type="number" min="0" step="0.001" required>
+              <button class="graph-mark-end" type="button">Конец по плееру</button>
+            </div>
+          </div>
+          <div class="graph-actions">
+            <button class="graph-play" type="button">Слушать фрагмент</button>
+            <button class="graph-add primary" type="button">Добавить в сборку</button>
+          </div>
+          <div class="graph-actions graph-repeat">
+            <label>Повторы <select class="graph-count"><option>1</option><option>2</option><option>3</option></select></label>
+            <label>Контекст <select class="graph-context">
+              <option value="short">До 5 слов</option><option value="wide">До 9 слов</option>
+            </select></label>
+            <button class="graph-retry" type="button">Пересинтезировать с контекстом</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </dialog>
+  <dialog id="media-object-dialog" class="speaker-profile-dialog editor-object-dialog" aria-labelledby="media-object-dialog-title">
+    <header class="speaker-profile-header">
+      <div>
+        <h3 id="media-object-dialog-title"></h3>
+        <p id="media-object-dialog-time" class="muted"></p>
+      </div>
+      <form method="dialog">
+        <button type="submit" class="studio-icon" aria-label="Закрыть" data-icon="close" data-hint autofocus></button>
+      </form>
+    </header>
+    <label class="inline-check"><input type="checkbox" id="media-object-technical" checked> Разметка видео</label>
+    <canvas id="media-object-detail-frame" role="img"></canvas>
+  </dialog>
+  <dialog id="speaker-profile-dialog" class="speaker-profile-dialog" aria-labelledby="speaker-profile-title">
+    <header class="speaker-profile-header">
+      <h3 id="speaker-profile-title">Цифровой профиль</h3>
+      <button id="speaker-profile-close" class="studio-icon" data-icon="close" data-hint type="button" aria-label="Закрыть профиль"></button>
+    </header>
+    <div class="speaker-profile-switch" role="group" aria-label="Формат профиля">
+      <button id="speaker-profile-view" type="button" aria-pressed="true">Профиль</button>
+      <button id="speaker-profile-json" type="button" aria-pressed="false">JSON</button>
+    </div>
+    <div id="speaker-profile-info" class="speaker-profile-info"></div>
+    <textarea id="speaker-profile-technical" aria-label="Технический JSON профиля" readonly hidden spellcheck="false"></textarea>
+  </dialog>
+  <template id="audio-player-template">
+    <div class="studio-player" data-design-component="player" data-ag-width="fill" role="group">
+      <div class="player-controls">
+        <button type="button" class="player-key player-play" aria-label="Воспроизвести">
+          <span class="player-play-mark" aria-hidden="true"></span>
+        </button>
+        <div class="player-display" data-ag-width="content" data-ag-width-min-em="4.5">
+          <div class="player-clock" aria-hidden="true">
+            <span class="player-elapsed">00:00</span>
+            <span class="player-length">—:—</span>
+          </div>
+          <div class="player-position">
+            <progress class="player-progress" max="1" value="0" aria-hidden="true"></progress>
+            <input class="player-seek" type="range" min="0" max="1" step="0.05" value="0" aria-label="Позиция воспроизведения">
+          </div>
+        </div>
+        <div class="player-sound">
+          <button type="button" class="player-key player-mute" aria-label="Отключить звук" aria-pressed="false">
+            <span class="player-speaker" aria-hidden="true"></span>
+          </button>
+          <input class="player-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость">
+        </div>
+      </div>
+      <p class="player-status" role="status"></p>
+    </div>
+  </template>
+  <dialog id="media-statistics-dialog" class="video-statistics-dialog" aria-labelledby="media-statistics-title" data-ag-width="content" data-ag-width-min-em="8">
+    <div class="video-statistics-layout" data-ag-width="fill">
+    <header class="video-statistics-heading" data-ag-width="fill">
+      <h2 id="media-statistics-title">Статистика ролика</h2>
+      <button id="media-statistics-close" class="studio-icon" data-icon="close" type="button" aria-label="Закрыть статистику" title="Закрыть статистику" autofocus></button>
+    </header>
+    <div class="video-statistics-clock" data-ag-width="fill">
+      <label for="media-statistics-time">Интервал на шкале</label>
+      <input id="media-statistics-time" type="range" min="0" max="0" value="0" step="1">
+      <output id="media-statistics-position" for="media-statistics-time">—</output>
+      <button id="media-statistics-seek" type="button">Показать в видео</button>
+    </div>
+    <div id="media-statistics-body" class="video-statistics-body" data-ag-width="fill" tabindex="0" role="region" aria-label="Статистика анализа"></div>
+    </div>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "apiVersion": 1,
+  "id": "word-count",
+  "name": "Transcript word count",
+  "version": "1.0.0",
+  "description": "Adds a local transcript summary without changing raw analysis results.",
+  "capabilities": [{"id": "analysis.word-count", "kind": "stage", "entrypoint": "worker.py:run"}],
+  "settingsSchema": {"type": "object", "properties": {"minimumLength": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Minimum word length in characters"}}, "additionalProperties": false},
+  "settings": {"minimumLength": 1},
+  "requirements": {"python": ">=3.10"},
+  "requires": [],
+  "license": "MIT",
+  "provenance": {"author": "Voice Studio example", "source": "Bundled editable example; no external model"}
+}

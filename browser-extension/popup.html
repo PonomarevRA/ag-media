@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ag-media-studio Live</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>ag-media-studio Live</h1>
+    <p>Анализ звука и кадров из этой вкладки в локальной студии.</p>
+    <form id="capture-form">
+      <label for="token">Токен студии</label>
+      <input id="token" type="password" autocomplete="off" spellcheck="false" required>
+      <label for="language">Язык речи</label>
+      <select id="language">
+        <option value="ru">Русский</option>
+        <option value="en">English</option>
+      </select>
+      <button id="start" type="submit">Начать анализ вкладки</button>
+    </form>
+    <button id="stop" type="button" hidden>Остановить анализ</button>
+    <p id="status" role="status"></p>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

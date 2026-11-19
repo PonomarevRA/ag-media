@@ -1,0 +1,13 @@
+{
+  "name": "ag-media-studio",
+  "previousName": "Voice Studio",
+  "documentation": "docs/wiki/Home.md",
+  "documentationRu": "docs/wiki/Home-ru.md",
+  "httpDocumentation": "/wiki",
+  "compatibility": {
+    "pythonPackage": "voice_studio",
+    "environmentPrefix": "VOICE_",
+    "browserStoragePrefix": "voice-studio",
+    "assetDirectory": "Voice Studio"
+  }
+}

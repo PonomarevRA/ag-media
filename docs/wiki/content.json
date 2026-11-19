@@ -1,0 +1,1702 @@
+{
+  "schemaVersion": "ag-media-studio-wiki/1",
+  "pages": [
+    {
+      "id": "Home-ru",
+      "locale": "ru",
+      "title": "Медиа как данные и монтаж",
+      "nav": "Начало",
+      "translation": "Home",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "ag-media-studio — локальная студия анализа видео и звука, расшифровки, работы со спикерами и синтеза. Прежнее имя — Voice Studio. Можно просматривать результат в редакторе или передавать агентам компактный граф с исходником и таймкодами."
+        },
+        {
+          "type": "p",
+          "text": "Эта wiki объясняет, что делает каждый слой, где находится его реализация и как проверить результат. Схемы ниже — условные макеты интерфейса, а не кадры пользовательских роликов."
+        },
+        {
+          "type": "image",
+          "asset": "workspace.svg",
+          "alt": "Схема: навигация слева, монитор в центре, расшифровка справа, дорожки снизу.",
+          "caption": "Нажми на схему, чтобы открыть SVG и увеличить детали. 01 — навигация; 02 — монитор; 03 — расшифровка; 04 — транспорт и разметка; 05 — монтажная шкала."
+        },
+        {
+          "type": "h2",
+          "text": "С чего начать"
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Запуск и совместимость",
+              "target": "Quickstart-ru"
+            },
+            {
+              "label": "Карта модулей и полный индекс исходников",
+              "target": "Modules-ru"
+            },
+            {
+              "label": "Как читать интерфейс и технические слои",
+              "target": "Interface-ru"
+            },
+            {
+              "label": "Инструменты для агентов",
+              "target": "Agents-ru"
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Как обновлять документацию"
+        },
+        {
+          "type": "p",
+          "text": "Контент хранится в `docs/wiki/content.json`, схемы — в `docs/wiki/assets/`. Сборка создаёт Markdown-страницы и HTML с одной и той же информацией. Варианты RU/EN связаны переключателем. По аналогии с ag-design wiki версионируется рядом с кодом; публикация на GitHub не выполнялась."
+        },
+        {
+          "type": "code",
+          "text": "python3 scripts/build_wiki.py\npython3 scripts/build_wiki.py --check"
+        },
+        {
+          "type": "p",
+          "text": "HTML доступен по `/wiki`. Страница не запускает модели и не читает записи; документация открывается в новой вкладке и сохраняет рабочую страницу студии."
+        }
+      ]
+    },
+    {
+      "id": "Home",
+      "locale": "en",
+      "title": "Media as data and an editing workspace",
+      "nav": "Start here",
+      "translation": "Home-ru",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "ag-media-studio is a local workspace for video and audio analysis, transcription, speakers and speech synthesis. Its previous name is Voice Studio. People use the editor; agents navigate a compact graph with source provenance and timestamps."
+        },
+        {
+          "type": "p",
+          "text": "This wiki explains layer responsibilities, source locations and result checks. Illustrations are schematic UI examples, never frames from customer videos."
+        },
+        {
+          "type": "image",
+          "asset": "workspace.svg",
+          "alt": "Schematic editor: navigation, monitor, transcript, transport and tracks.",
+          "caption": "Open the SVG to zoom. 01 navigation; 02 monitor; 03 transcript; 04 transport and overlays; 05 timeline."
+        },
+        {
+          "type": "h2",
+          "text": "Start with a task"
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Run and compatibility",
+              "target": "Quickstart"
+            },
+            {
+              "label": "Module map and complete source index",
+              "target": "Modules"
+            },
+            {
+              "label": "Interface and technical layers",
+              "target": "Interface"
+            },
+            {
+              "label": "Agent tools",
+              "target": "Agents"
+            }
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Documentation maintenance"
+        },
+        {
+          "type": "p",
+          "text": "Edit `docs/wiki/content.json` and vector assets under `docs/wiki/assets/`. One build generates the Markdown mirror and the offline HTML edition. RU/EN pages link to each other. As in ag-design, wiki files live alongside code; no GitHub publication has been performed."
+        },
+        {
+          "type": "code",
+          "text": "python3 scripts/build_wiki.py\npython3 scripts/build_wiki.py --check"
+        },
+        {
+          "type": "p",
+          "text": "Open `/wiki?ui=en`. The wiki does not execute models or read recordings. Its navigation link opens a separate tab, keeping the active studio workspace mounted."
+        }
+      ]
+    },
+    {
+      "id": "Quickstart-ru",
+      "locale": "ru",
+      "title": "Запуск и переименование",
+      "nav": "Запуск",
+      "translation": "Quickstart",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Локальная установка"
+        },
+        {
+          "type": "p",
+          "text": "Требуется Python 3.12+. Для реального анализа нужны FFmpeg и выбранные модели. Выполни команды из корня исходников и открой `http://127.0.0.1:8767/`. Демо использует тестовые тоны."
+        },
+        {
+          "type": "code",
+          "text": "python3 -m venv .venv\n.venv/bin/python -m pip install -r requirements-core.txt\n.venv/bin/python ag_media_studio.py --demo --port 8767"
+        },
+        {
+          "type": "h2",
+          "text": "Windows PowerShell"
+        },
+        {
+          "type": "code",
+          "text": "py -3 -m venv .venv\n.\\.venv\\Scripts\\python.exe -m pip install -r requirements-core.txt\n.\\.venv\\Scripts\\python.exe ag_media_studio.py --demo --port 8767"
+        },
+        {
+          "type": "h2",
+          "text": "Что изменилось в имени"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Поверхность",
+            "Текущее поведение"
+          ],
+          "rows": [
+            [
+              "Продукт и сервер MCP",
+              "`ag-media-studio`"
+            ],
+            [
+              "Новые launcher-файлы",
+              "`ag_media_studio.py`, `ag_media_studio_mcp.py`"
+            ],
+            [
+              "Каталог проекта",
+              "Имя каталога можно выбрать при клонировании или распаковке"
+            ],
+            [
+              "Старые launcher-файлы",
+              "`server.py` и `voice_mcp.py` продолжают работать"
+            ],
+            [
+              "Внутренний Python-пакет",
+              "`voice_studio` сохранён, чтобы не сломать импорты и worker-команды"
+            ],
+            [
+              "Веса, зависимости и настройки",
+              "Исторические папки `Voice Studio`, переменные `VOICE_*` и ключи браузера сохранены"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Для рабочей студии убери `--demo` и выбери внешний каталог через `--data`. Навыки агентов и настройка MCP описаны в `docs/AGENT-SETUP.md` и `skills/README.md` в репозитории."
+        },
+        {
+          "type": "h2",
+          "text": "Первый сценарий"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Открой «Запись и транскрипция», выбери видео или аудио.",
+            "Выбери нужные слои анализа. Следи за статусами этапов, а не только общим временем.",
+            "Проверь реплики, спикеров и рамки на одном и том же таймкоде.",
+            "Открой профиль или элемент дорожки для деталей. Скачивай результат через существующие действия экспорта."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Данные и модели",
+              "target": "Models-and-storage-ru"
+            },
+            {
+              "label": "Интерфейс",
+              "target": "Interface-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Quickstart",
+      "locale": "en",
+      "title": "Run and product identity",
+      "nav": "Run",
+      "translation": "Quickstart-ru",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Local installation"
+        },
+        {
+          "type": "p",
+          "text": "Use Python 3.12 or later. FFmpeg and the selected engines are needed for media processing. Run the commands from the source root and open `http://127.0.0.1:8767/`. Demo mode uses test tones."
+        },
+        {
+          "type": "code",
+          "text": "python3 -m venv .venv\n.venv/bin/python -m pip install -r requirements-core.txt\n.venv/bin/python ag_media_studio.py --demo --port 8767"
+        },
+        {
+          "type": "h2",
+          "text": "Windows PowerShell"
+        },
+        {
+          "type": "code",
+          "text": "py -3 -m venv .venv\n.\\.venv\\Scripts\\python.exe -m pip install -r requirements-core.txt\n.\\.venv\\Scripts\\python.exe ag_media_studio.py --demo --port 8767"
+        },
+        {
+          "type": "h2",
+          "text": "Identity and compatibility"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Surface",
+            "Behaviour"
+          ],
+          "rows": [
+            [
+              "Product / MCP server",
+              "`ag-media-studio`"
+            ],
+            [
+              "New entry points",
+              "`ag_media_studio.py`, `ag_media_studio_mcp.py`"
+            ],
+            [
+              "Project directory",
+              "Choose the directory name when cloning or extracting the source"
+            ],
+            [
+              "Existing entry points",
+              "`server.py`, `voice_mcp.py` remain valid"
+            ],
+            [
+              "Python imports",
+              "The `voice_studio` namespace remains compatible"
+            ],
+            [
+              "Assets and settings",
+              "Existing `Voice Studio` folders, `VOICE_*` variables and browser keys remain valid"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "For production work, omit `--demo` and select a separate workspace with `--data`. Read `docs/AGENT-SETUP.md` and `skills/README.md` in the repository to connect agents."
+        },
+        {
+          "type": "h2",
+          "text": "First journey"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Open Recording and transcription and select a local source.",
+            "Select analysis layers and inspect individual stage status.",
+            "Check text, speaker and overlay at the same source timestamp.",
+            "Open a profile or timeline item for details and use the existing export actions."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Models and storage",
+              "target": "Models-and-storage"
+            },
+            {
+              "label": "Interface guide",
+              "target": "Interface"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Architecture-ru",
+      "locale": "ru",
+      "title": "Архитектура и границы ответственности",
+      "nav": "Архитектура",
+      "translation": "Architecture",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "Браузер отвечает за рабочие поверхности и отображение результатов. HTTP/MCP принимают запросы. Оркестраторы выбирают необходимые стадии и запускают workers. Граф хранит компактные связи, таймкоды и происхождение; он не заменяет исходный файл."
+        },
+        {
+          "type": "code",
+          "text": "web/ → HTTP app/server.py → speech/ + vision/ + audio/\n                         → graph/ → timeline / MCP\nsynthesis/ ← speaker samples + prosody/ → WAV / dubbing\ncore/ → budgets, locks, stages, cache lifetime\nworkers/ → isolated model processes"
+        },
+        {
+          "type": "h2",
+          "text": "Правила связи модулей"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Точка входа в корне совместима со старым клиентом, реализация живёт в `voice_studio/`.",
+            "UI и экспорт должны переиспользовать общую модель технического слоя; иначе появляются отличающиеся рамки и подписи.",
+            "Связь спикер–лицо хранит основание. Видимое лицо, активное говорение и номер спикера — разные виды свидетельств.",
+            "Один предмет может иметь много наблюдений и несколько исходных меток. Профиль не должен удалять исходные уверенности и рамки.",
+            "Таймкоды относятся к исходнику. При обработке чанков локальные времена должны переводиться в общую шкалу.",
+            "Модельные окружения, весовые файлы, пользовательские данные и временные кэши не становятся частью wiki."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Функциональные модули",
+              "target": "Modules-ru"
+            },
+            {
+              "label": "Граф и MCP",
+              "target": "Agents-ru"
+            },
+            {
+              "label": "Стадии анализа",
+              "target": "Pipeline-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Architecture",
+      "locale": "en",
+      "title": "Architecture and ownership",
+      "nav": "Architecture",
+      "translation": "Architecture-ru",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "The browser owns workspace presentation. HTTP and MCP accept requests. Orchestrators select stages and launch workers. The graph stores compact references, timestamps and provenance; it does not replace the source file."
+        },
+        {
+          "type": "code",
+          "text": "web/ → HTTP app/server.py → speech/ + vision/ + audio/\n                         → graph/ → timeline / MCP\nsynthesis/ ← speaker samples + prosody/ → WAV / dubbing\ncore/ → budgets, locks, stages, cache lifetime\nworkers/ → isolated model processes"
+        },
+        {
+          "type": "h2",
+          "text": "Cross-module invariants"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Root compatibility launchers forward to canonical `voice_studio/` modules.",
+            "Preview and export should reuse the same technical-layer model.",
+            "Face visibility, active speaking and speaker identity are different evidence types.",
+            "An object profile retains observations, original labels, confidence and geometry.",
+            "Chunk-local times must be shifted onto the source clock.",
+            "Model environments, weights, user media and temporary caches are outside the documentation build."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Functional modules",
+              "target": "Modules"
+            },
+            {
+              "label": "Graph and MCP",
+              "target": "Agents"
+            },
+            {
+              "label": "Analysis stages",
+              "target": "Pipeline"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Modules-ru",
+      "locale": "ru",
+      "title": "Карта модулей и исходников",
+      "nav": "Модули",
+      "translation": "Modules",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "Ниже названа ответственность пакета и перечислены все его исполняемые Python-модули и браузерные JS-модули. Python-описания взяты из module docstring; браузерные обязанности явно описаны и проверены по исходникам. Это карта назначения, а не доказательство полного runtime-контракта. `__init__.py` и сгенерированные зависимости не включены."
+        },
+        {
+          "type": "p",
+          "text": "Для поиска реализации начинай с функционального пакета и проверяй указанные файлы через Code Atlas и исходник. Машиночитаемые пути и SHA-256 доступны в `docs/wiki/module-index.json` и по `/wiki/module-index.json`. Изменение исходников требует пересборки wiki; `--check` обнаруживает устаревший индекс."
+        }
+      ],
+      "moduleIndex": true
+    },
+    {
+      "id": "Modules",
+      "locale": "en",
+      "title": "Module and source map",
+      "nav": "Modules",
+      "translation": "Modules-ru",
+      "blocks": [
+        {
+          "type": "p",
+          "text": "Each package responsibility is followed by all executable Python and browser JavaScript modules. Python summaries come from module docstrings. Browser responsibilities are explicitly documented and checked against source, rather than extracted from an arbitrary function comment. This map is not proof of a complete runtime contract. Package initializers and generated dependencies are excluded."
+        },
+        {
+          "type": "p",
+          "text": "Start code navigation from the functional package, then inspect Atlas and the source. Machine-readable paths and SHA-256 values are in `docs/wiki/module-index.json` and `/wiki/module-index.json`. Rebuild after source changes; `--check` detects a stale index."
+        }
+      ],
+      "moduleIndex": true
+    },
+    {
+      "id": "Interface-ru",
+      "locale": "ru",
+      "title": "Области экрана и технические слои",
+      "nav": "Интерфейс",
+      "translation": "Interface",
+      "blocks": [
+        {
+          "type": "image",
+          "asset": "workspace.svg",
+          "alt": "Области редактора с условными кадрами и дорожками.",
+          "caption": "Схема интерфейса. Цветные элементы обозначают тип данных и не являются результатом распознавания."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Область",
+            "Действие и реализация"
+          ],
+          "rows": [
+            [
+              "Навигация",
+              "Студия, запись/транскрипция, история, хранилище, настройки. `studio-navigation.js`, `studio-shell.js`"
+            ],
+            [
+              "Монитор",
+              "Исходный video и разметка на одном времени. `editor-workspace.js`, `video-overlay.js`"
+            ],
+            [
+              "Транспорт",
+              "Воспроизведение, шаг по сетке анализа, иконки технического режима, скачивания и масок под видео. `video-shortcuts.js`"
+            ],
+            [
+              "Расшифровка",
+              "Сворачиваемая правая панель, реплики, редактор и ссылки на профили. `transcript-inspector.js`, `transcript-editor.js`"
+            ],
+            [
+              "Монтажная шкала",
+              "Слои, перемещение времени, fit, масштаб и плотность. `video-timeline.js`"
+            ],
+            [
+              "Профили",
+              "Спикер и предмет: основания связи, наблюдения, мини-шкалы. `speaker-profile-dialog.js`, `video-object-profile.js`"
+            ]
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Как читать рамки"
+        },
+        {
+          "type": "image",
+          "asset": "frame-layers.svg",
+          "alt": "Условные люди, голова, фигура, взгляд, предмет и интерфейс с разными рамками.",
+          "caption": "Оранжевый — голова/лицо; бирюзовый — фигура; зелёный — предмет; фиолетовый — интерфейс. Сопоставляй ID и время, а не только цвет."
+        },
+        {
+          "type": "list",
+          "items": [
+            "Голова и фигура — разные рамки. Слой взгляда оценивает направление, а не точку внимания.",
+            "Подпись спикера должна соответствовать реплике, профилю и рамке на текущем времени.",
+            "Метки выражений — оценки видимого выражения классификатором. Они не доказывают переживание, намерение или правдивость.",
+            "Для спорного предмета проверь исходную метку, уверенность, другие появления и вложенные объекты.",
+            "При клике на выражение или предмет проверяй исходный кадр с техническим слоем. Пространственный bbox не является маской сегментации."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Управление"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Пробел — запуск/пауза, если фокус не в текстовом поле.",
+            "Стрелки транспорта — шаг по подписанной сетке; Shift + стрелка — одна секунда.",
+            "Escape закрывает активный диалог; рабочая область сохраняет состояние.",
+            "Настройки позволяют выбрать retro/modern/editor и светлую/тёмную тему. Wiki следует системной светлой/тёмной теме."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Звук и конвейер",
+              "target": "Pipeline-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Interface",
+      "locale": "en",
+      "title": "Screen regions and technical layers",
+      "nav": "Interface",
+      "translation": "Interface-ru",
+      "blocks": [
+        {
+          "type": "image",
+          "asset": "workspace.svg",
+          "alt": "Schematic editor screen regions and tracks.",
+          "caption": "Colours indicate data types; this is not a recognition result."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Region",
+            "Responsibility and source"
+          ],
+          "rows": [
+            [
+              "Navigation",
+              "Studio, recording/transcription, history, storage, settings: `studio-navigation.js`, `studio-shell.js`"
+            ],
+            [
+              "Monitor",
+              "Native video and source-clock overlays: `editor-workspace.js`, `video-overlay.js`"
+            ],
+            [
+              "Transport",
+              "Playback, labelled analysis-grid step and technical-overlay, download and clothing-mask icons below the video: `video-shortcuts.js`"
+            ],
+            [
+              "Transcript",
+              "Collapsible inspector and cue editing: `transcript-inspector.js`, `transcript-editor.js`"
+            ],
+            [
+              "Timeline",
+              "Layers, seeking, fit, zoom and density: `video-timeline.js`"
+            ],
+            [
+              "Profiles",
+              "Speaker/object evidence and appearance timelines: `speaker-profile-dialog.js`, `video-object-profile.js`"
+            ]
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Read the technical layer"
+        },
+        {
+          "type": "image",
+          "asset": "frame-layers.svg",
+          "alt": "Schematic head, body, gaze, object and UI boxes.",
+          "caption": "Orange: head/face. Teal: body. Green: object. Purple: interface. Use IDs and source time as well as colour."
+        },
+        {
+          "type": "list",
+          "items": [
+            "Head and body boxes are different. Gaze is a direction estimate, not an attention point.",
+            "The cue, profile and active overlay should agree on speaker identity.",
+            "Classifier-estimated facial expressions do not establish internal feelings, intent or truthfulness.",
+            "For uncertain objects inspect the original label, confidence, other appearances and contained objects.",
+            "Open the original frame when inspecting an expression or object. A bounding box is not a segmentation mask."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Controls"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Space plays/pauses when focus is outside text editing.",
+            "Transport arrows use the labelled analysis grid; Shift + arrow seeks one second.",
+            "Escape closes an active dialog while preserving the workspace.",
+            "App settings offer retro/modern/editor with light/dark modes. The wiki follows the system light/dark theme."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Audio and processing",
+              "target": "Pipeline"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Pipeline-ru",
+      "locale": "ru",
+      "title": "Анализ, звук и синтез",
+      "nav": "Конвейер",
+      "translation": "Pipeline",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "От файла к слоям"
+        },
+        {
+          "type": "list",
+          "items": [
+            "HTTP проверяет запрос и передаёт источник в `speech/media_transcript.py`.",
+            "FFmpeg подготавливает звук. Sherpa выделяет голосовые группы, Whisper получает текст и времена; проблемные места могут уточняться отдельным проходом.",
+            "`vision/video_revolver.py` собирает визуальные стадии. YuNet ищет лица; Light-ASD оценивает активное говорение; дальнейшие слои зависят от доступных движков и настроек.",
+            "`vision/video_scene.py` координирует планы, OCR и предметы, выборку и дополнительный поиск мелких объектов.",
+            "`graph/media_graph_ingest.py` и связанные модули публикуют компактные узлы, связи и временные окна. Ранние результаты могут уточняться."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Проверка и обработка звука"
+        },
+        {
+          "type": "image",
+          "asset": "audio.svg",
+          "alt": "Две условные звуковые дорожки, фон и паузы с общей шкалой.",
+          "caption": "Референс и дубль сравниваются в одной позиции. Паузы — кандидаты для монтажа; прослушивание остаётся необходимым."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Модуль",
+            "Назначение"
+          ],
+          "rows": [
+            [
+              "`audio/audio_processing.py`",
+              "Шумоподавление, EQ и обработанная копия WAV"
+            ],
+            [
+              "`audio/dialogue_pauses.py`, `audio/pauses.py`",
+              "Измеренные паузы и кандидаты для склейки"
+            ],
+            [
+              "`audio/audio_scene.py`, `audio/zipformer_audio.py`",
+              "Классификация музыки и фоновых событий с платформенными backend"
+            ],
+            [
+              "`synthesis/auto_synthesis.py`",
+              "Последовательные попытки, оценки, выбор результата и контроль регрессии"
+            ],
+            [
+              "`synthesis/speaker_metric.py`, `speech_metrics.py`",
+              "Метрики сходства и речи; число не равно вероятности идентичности человека"
+            ],
+            [
+              "`synthesis/video_dub.py`, `dub_timing.py`, `dub_background.py`",
+              "Сборка дубляжа, согласование длительности и фоновая дорожка"
+            ],
+            [
+              "`prosody/`",
+              "Подготовка ударений, контекста, слогов/морфем и точечных повторов"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Синтез берёт выбранные образцы и текст. Сходство на русском не гарантирует сходства английского дубляжа. Используй одинаковые seed, тексты и исходники для A/B; сохраняй оценки и ограничения эксперимента. Метрики качества, скорость и память нужно измерять отдельно."
+        },
+        {
+          "type": "h2",
+          "text": "Что означает прогресс"
+        },
+        {
+          "type": "p",
+          "text": "Готово/пропущено/ошибка — статус конкретного этапа. Пропуск может означать отсутствие движка, настройки или применимых данных. Итоговый граф должен сохранять покрытие и источники. Эти страницы не обещают, что все слои работают в realtime на любом устройстве."
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Модели и зависимости",
+              "target": "Models-and-storage-ru"
+            },
+            {
+              "label": "Контракт агентов",
+              "target": "Agents-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Pipeline",
+      "locale": "en",
+      "title": "Analysis, audio and synthesis",
+      "nav": "Pipeline",
+      "translation": "Pipeline-ru",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Source to evidence"
+        },
+        {
+          "type": "list",
+          "items": [
+            "HTTP validates the request and forwards the source to `speech/media_transcript.py`.",
+            "FFmpeg prepares audio. Sherpa groups voices; Whisper produces text and timestamps; selected problematic regions may receive a separate review pass.",
+            "`vision/video_revolver.py` composes visual stages. YuNet detects faces, Light-ASD estimates active speaking, and optional layers depend on configured engines.",
+            "`vision/video_scene.py` coordinates shots, OCR, objects, sampling and selective small-object passes.",
+            "Graph ingest publishes compact nodes, edges and time windows. Preliminary results may be refined."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Audio processing and comparison"
+        },
+        {
+          "type": "image",
+          "asset": "audio.svg",
+          "alt": "Reference, generated take, background and pause tracks on one clock.",
+          "caption": "Compare at the same position. Pause markers are edit candidates that still need auditioning."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Module",
+            "Responsibility"
+          ],
+          "rows": [
+            [
+              "`audio/audio_processing.py`",
+              "Denoising, EQ and a processed WAV copy"
+            ],
+            [
+              "`audio/dialogue_pauses.py`, `audio/pauses.py`",
+              "Measured quiet intervals and cut candidates"
+            ],
+            [
+              "`audio/audio_scene.py`, `audio/zipformer_audio.py`",
+              "Music and background events with platform-specific backends"
+            ],
+            [
+              "`synthesis/auto_synthesis.py`",
+              "Attempts, evaluation, best-result selection and regression control"
+            ],
+            [
+              "`synthesis/speaker_metric.py`, `speech_metrics.py`",
+              "Voice and speech metrics; a similarity value is not an identity probability"
+            ],
+            [
+              "`synthesis/video_dub.py`, `dub_timing.py`, `dub_background.py`",
+              "Dubbing, duration fitting and background audio"
+            ],
+            [
+              "`prosody/`",
+              "Stress/context preparation, syllable/morpheme graphs and targeted retries"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Cross-language cloning needs a separate listening check. Use the same seeds, sources and texts for A/B and retain experimental limits. Quality, latency and memory require separate measurements."
+        },
+        {
+          "type": "h2",
+          "text": "Progress and limits"
+        },
+        {
+          "type": "p",
+          "text": "Done, skipped and failed are stage-specific states. A skip may reflect settings, unavailable engines or missing applicable data. Preserve coverage and provenance in the graph. This guide does not claim every layer operates in realtime on every device."
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Models and dependencies",
+              "target": "Models-and-storage"
+            },
+            {
+              "label": "Agent contract",
+              "target": "Agents"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Agents-ru",
+      "locale": "ru",
+      "title": "Агенты, MCP и граф медиа",
+      "nav": "Агенты и граф",
+      "translation": "Agents",
+      "blocks": [
+        {
+          "type": "image",
+          "asset": "graph.svg",
+          "alt": "Исходник связан с планом, репликой, спикером, предметом, UI и звуком.",
+          "caption": "Условный граф с ID и таймкодами. Исходник и происхождение наблюдений остаются доступными через ссылки."
+        },
+        {
+          "type": "h2",
+          "text": "Сначала найти инструмент"
+        },
+        {
+          "type": "p",
+          "text": "Конфигурация локального MCP и установка навыков описаны в `docs/AGENT-SETUP.md` и `skills/README.md` в репозитории. Для нативной студии используй команду своей платформы из инструкции."
+        },
+        {
+          "type": "p",
+          "text": "Каталог `media_catalog` ищет актуальные инструменты. Ресурс `ag-media-studio://catalog` показывает те же регистрации. После обновления студии переподключи MCP."
+        },
+        {
+          "type": "code",
+          "text": "media_catalog(category=\"ui\", query=\"scroll\", include_schema=true)\nmedia_catalog(category=\"graph\", include_schema=true)"
+        },
+        {
+          "type": "h2",
+          "text": "Работа по временным окнам"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Получи список/overview доступных графов и проверь источник, SHA, длительность и покрытие.",
+            "Найди слова или тип узла через `media_graph_search`; затем запроси ограниченное окно `media_graph_timeline`.",
+            "Через `media_graph_node` уточни входящие/исходящие ссылки. Не считай отсутствие узла доказательством отсутствия объекта в исходнике.",
+            "Используй `media_graph_frame` для исходного кадра с техническим слоем и `media_graph_audio` для нужного звукового фрагмента.",
+            "Для зарегистрированных интерфейсов фильтруй `kind=ui`; локальные скриншоты анализируют `screen_analyze` и `screen_scroll`. Черновой детектор не доказывает роль элемента."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Браузер и внешний агент"
+        },
+        {
+          "type": "p",
+          "text": "WebMCP использует текущую страницу и её состояния. Внешний stdio MCP работает с локальными файлами и сервером по существующим контрактам. Наличие URI в wiki не предоставляет доступ или разрешение на удаление, публикацию и отправку данных."
+        },
+        {
+          "type": "h2",
+          "text": "Что передавать следующему агенту"
+        },
+        {
+          "type": "list",
+          "items": [
+            "ID графа/снимка и источник материала, для дорожки — её связь с исходником.",
+            "Интервал времени, интересующий тип узла и нужные поля.",
+            "Наблюдения, уверенность и основания связи отдельно от выводов агента.",
+            "Какие слои ещё догружаются, пропущены или требуют проверки."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Схемы интерфейса",
+              "target": "Interface-ru"
+            },
+            {
+              "label": "Полный индекс модулей",
+              "target": "Modules-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Agents",
+      "locale": "en",
+      "title": "Agents, MCP and the media graph",
+      "nav": "Agents and graph",
+      "translation": "Agents-ru",
+      "blocks": [
+        {
+          "type": "image",
+          "asset": "graph.svg",
+          "alt": "A source links to a shot, cue, speaker, object, interface and audio observation.",
+          "caption": "Schematic IDs and source timestamps; links retain provenance."
+        },
+        {
+          "type": "h2",
+          "text": "Discover before calling"
+        },
+        {
+          "type": "p",
+          "text": "See `docs/AGENT-SETUP.md` and `skills/README.md` in the repository for local MCP setup and scenario skills. Use the corresponding platform command for an open desktop app."
+        },
+        {
+          "type": "p",
+          "text": "Use `media_catalog` to discover current tools. The `ag-media-studio://catalog` resource publishes the same inventory. Reconnect MCP after updating Studio."
+        },
+        {
+          "type": "code",
+          "text": "media_catalog(category=\"ui\", query=\"scroll\", include_schema=true)\nmedia_catalog(category=\"graph\", include_schema=true)"
+        },
+        {
+          "type": "h2",
+          "text": "Navigate bounded time windows"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Read overview/list and verify source digest, duration and coverage.",
+            "Search with `media_graph_search`, then read a bounded `media_graph_timeline` window.",
+            "Use `media_graph_node` for references. Missing graph nodes do not prove a source object is absent.",
+            "Use `media_graph_frame` for an original frame with technical layers and `media_graph_audio` for audio.",
+            "Use `kind=ui` for recorded interfaces. Local screenshot tools are `screen_analyze` and `screen_scroll`; draft labels are not verified control roles."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Browser versus external agents"
+        },
+        {
+          "type": "p",
+          "text": "WebMCP operates on the current page. The external stdio server uses local files and the existing loopback contracts. Documentation links do not grant permission to delete, publish or transmit data."
+        },
+        {
+          "type": "h2",
+          "text": "Handoff fields"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Snapshot/graph ID and source material; source association for each track.",
+            "Source-time interval, node kind and needed fields.",
+            "Observed confidence and association basis separate from agent interpretation.",
+            "Incomplete, skipped and pending layers."
+          ]
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Interface diagrams",
+              "target": "Interface"
+            },
+            {
+              "label": "Complete module index",
+              "target": "Modules"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Models-and-storage-ru",
+      "locale": "ru",
+      "title": "Модели, зависимости и хранение",
+      "nav": "Модели и данные",
+      "translation": "Models-and-storage",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Роли моделей"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Слой",
+            "Исполнитель / ограничение"
+          ],
+          "rows": [
+            [
+              "Текст",
+              "Whisper через локальный backend; язык речи и UI независимы"
+            ],
+            [
+              "Голосовые группы",
+              "Sherpa; связи и короткие реплики уточняются отдельными модулями"
+            ],
+            [
+              "Лица и identity",
+              "YuNet + SFace и консервативные связи профилей"
+            ],
+            [
+              "Видимое говорение",
+              "Light-ASD; человек в кадре может молчать, а говорить другой"
+            ],
+            [
+              "Предметы / текст",
+              "NanoDet и OCR backend; метка может меняться между наблюдениями"
+            ],
+            [
+              "Фигура / взгляд / одежда",
+              "Локальные vision/MediaPipe workers по запрошенным слоям"
+            ],
+            [
+              "Выражения лица",
+              "Классификатор видимого выражения, не психологическая оценка"
+            ],
+            [
+              "Звук и интонация",
+              "Платформенные audio backend, включая Apple SoundAnalysis и Zipformer"
+            ],
+            [
+              "Синтез",
+              "Qwen3-TTS и Chatterbox в основном режиме; прежние движки — исследовательские опции"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Это карта ответственности, а не перечень гарантированно установленных моделей. Готовность, пути, backend и разрешённые лицензией сценарии проверяй в текущей конфигурации и `THIRD-PARTY.md`. Fish может работать отдельным локальным сервисом. Первый setup может скачивать веса; документирование не устанавливает модели."
+        },
+        {
+          "type": "h2",
+          "text": "Данные разных сроков жизни"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Что",
+            "Где и зачем"
+          ],
+          "rows": [
+            [
+              "Постоянные записи и графы",
+              "`data/studio` или явно выбранный `--data`; пользовательская история"
+            ],
+            [
+              "Экспорт и эксперименты",
+              "`data/exports`, `data/prosody` и MLflow-хранилище конкретного эксперимента"
+            ],
+            [
+              "Модели / внешние зависимости",
+              "Пути из `voice_paths.py`; совместимые папки Voice Studio на macOS/Windows/Linux"
+            ],
+            [
+              "Временные кэши",
+              "Системный temp, `VOICE_TEMP_DIR`, изоляция по рабочей папке"
+            ],
+            [
+              "Окружения",
+              "`.venv` и `.engines/` с отдельными зависимостями моделей"
+            ],
+            [
+              "Wiki",
+              "Только текст, исходные пути/хэши и условные SVG; без WAV/MP4/фото"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Для очистки используй страницу «Хранилище» и проверяй предложенные пути. Источник, единственный экспорт или установленные веса не становятся временными из-за своего возраста. Переключение имени продукта не переносит и не удаляет эти папки."
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Запуск и совместимость",
+              "target": "Quickstart-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Models-and-storage",
+      "locale": "en",
+      "title": "Models, dependencies and storage",
+      "nav": "Models and data",
+      "translation": "Models-and-storage-ru",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Model responsibilities"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Layer",
+            "Executor / limitation"
+          ],
+          "rows": [
+            [
+              "Text",
+              "Whisper through a local backend; speech and UI locale are independent"
+            ],
+            [
+              "Voice groups",
+              "Sherpa, with separate identity and short-turn review modules"
+            ],
+            [
+              "Faces / identity",
+              "YuNet + SFace and conservative profile association"
+            ],
+            [
+              "Visible speaking",
+              "Light-ASD; the visible person may be silent while someone else speaks"
+            ],
+            [
+              "Objects / text",
+              "NanoDet and OCR backends; observed labels may vary"
+            ],
+            [
+              "Body / gaze / clothing",
+              "Requested local vision/MediaPipe workers"
+            ],
+            [
+              "Facial expressions",
+              "Visible-expression classifier, not psychological inference"
+            ],
+            [
+              "Audio / intonation",
+              "Platform backends including Apple SoundAnalysis and Zipformer"
+            ],
+            [
+              "Synthesis",
+              "Qwen3-TTS and Chatterbox in the primary mode; previous engines are research options"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "This describes responsibilities, not guaranteed installation. Inspect current readiness, paths, backend and model terms in configuration and `THIRD-PARTY.md`. Fish may run as a separate local service. Initial setup can download weights; building the wiki installs no models."
+        },
+        {
+          "type": "h2",
+          "text": "Data lifetimes"
+        },
+        {
+          "type": "table",
+          "headers": [
+            "Data",
+            "Location / purpose"
+          ],
+          "rows": [
+            [
+              "Recordings and graphs",
+              "`data/studio` or explicit `--data`; durable user history"
+            ],
+            [
+              "Exports and experiments",
+              "`data/exports`, `data/prosody` and experiment-specific MLflow storage"
+            ],
+            [
+              "Models / dependencies",
+              "`voice_paths.py` paths; existing Voice Studio asset directories remain compatible"
+            ],
+            [
+              "Temporary cache",
+              "System temp / `VOICE_TEMP_DIR`, isolated by workspace"
+            ],
+            [
+              "Python environments",
+              "`.venv` and isolated `.engines/` environments"
+            ],
+            [
+              "Wiki",
+              "Text, source paths/hashes and schematic SVG only; no WAV, MP4 or face photos"
+            ]
+          ]
+        },
+        {
+          "type": "p",
+          "text": "Use Storage to review exact cleanup candidates. Age alone does not make a source, unique export or installed weight disposable. The product rename does not move or delete these directories."
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Run and compatibility",
+              "target": "Quickstart"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Development-ru",
+      "locale": "ru",
+      "title": "Изменения, проверки и обновление wiki",
+      "nav": "Разработка",
+      "translation": "Development",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Порядок изменения"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Через Code Atlas найди владельца функциональности, затем проверь текущий исходник. Карта — статическое свидетельство, не runtime-тест.",
+            "Меняй канонический модуль в `voice_studio/`, сохраняй совместимые launcher-обёртки и tool/schema IDs.",
+            "Проверь тесты затронутого контракта. Для моделей сравнивай одинаковые исходники, seed и режимы, отдельно качество/время/RSS.",
+            "Обнови wiki, если меняются обязанности, входные точки или пользовательский путь.",
+            "Собери и проверь wiki; отдельный reviewer проверяет источники, утверждения и реальные результаты."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Сборка документации"
+        },
+        {
+          "type": "code",
+          "text": "python3 scripts/build_wiki.py\npython3 scripts/build_wiki.py --check\n.venv/bin/python -m unittest tests.test_wiki -v"
+        },
+        {
+          "type": "p",
+          "text": "Рендерер принимает типизированные блоки: абзац, заголовок, список, таблица, код, ссылка, схема. Raw HTML не выполняется. Ссылки ограничены известными страницами и HTTPS; SVG проверяются на активное содержимое. HTTP отдаёт только файлы из сгенерированного allowlist."
+        },
+        {
+          "type": "h2",
+          "text": "Границы подтверждения"
+        },
+        {
+          "type": "p",
+          "text": "Генерация и тесты ссылок подтверждают согласованность документации, но не точность моделей и не полную доступность приложения. Статусы старых экспериментов и открытые AG-проверки не превращаются в PASS при переименовании. Текущие ограничения измерений смотри в отчётах рядом с кодом."
+        },
+        {
+          "type": "h2",
+          "text": "Происхождение оформления"
+        },
+        {
+          "type": "p",
+          "text": "Структура версионируемой wiki следует ag-design `docs/wiki/`: введение → запуск → архитектура → работа агента → проверки. Навигация здесь — нативные ссылки HTML; рисунки — собственные схематичные SVG. Реальные кадры и чужие UI-скриншоты не копируются."
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Начало",
+              "target": "Home-ru"
+            },
+            {
+              "label": "Индекс модулей",
+              "target": "Modules-ru"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Development",
+      "locale": "en",
+      "title": "Changes, checks and wiki maintenance",
+      "nav": "Development",
+      "translation": "Development-ru",
+      "blocks": [
+        {
+          "type": "h2",
+          "text": "Change workflow"
+        },
+        {
+          "type": "list",
+          "items": [
+            "Find the functional owner through Atlas, then verify current source. A static map is not a runtime test.",
+            "Edit canonical `voice_studio/` modules and preserve compatibility launchers and tool/schema IDs.",
+            "Run affected contract checks. Model experiments need fixed sources, seeds and modes with separate quality/time/RSS results.",
+            "Update responsibilities and journeys when behaviour changes.",
+            "Build/check the wiki and obtain source-based independent review."
+          ]
+        },
+        {
+          "type": "h2",
+          "text": "Documentation build"
+        },
+        {
+          "type": "code",
+          "text": "python3 scripts/build_wiki.py\npython3 scripts/build_wiki.py --check\n.venv/bin/python -m unittest tests.test_wiki -v"
+        },
+        {
+          "type": "p",
+          "text": "The renderer accepts typed paragraphs, headings, lists, tables, code, links and images. Raw HTML is escaped. Links are limited to known pages and HTTPS; SVG assets reject active content. HTTP serves only generated allowlisted files."
+        },
+        {
+          "type": "h2",
+          "text": "Evidence limits"
+        },
+        {
+          "type": "p",
+          "text": "Build and link checks establish documentation consistency, not model accuracy or full application accessibility. Historical experiments and open AG gates do not become PASS through a rename. Refer to source-local reports for measurement limits."
+        },
+        {
+          "type": "h2",
+          "text": "Design provenance"
+        },
+        {
+          "type": "p",
+          "text": "The versioned wiki structure follows ag-design `docs/wiki/`: start, run, architecture, agent usage and checks. This edition uses native HTML navigation and original schematic SVGs. No real frames or third-party UI screenshots are copied."
+        },
+        {
+          "type": "links",
+          "items": [
+            {
+              "label": "Start",
+              "target": "Home"
+            },
+            {
+              "label": "Module index",
+              "target": "Modules"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "id": "app",
+      "ru": "Приложение и HTTP",
+      "en": "Application and HTTP",
+      "description": {
+        "ru": "Входные маршруты, сохранение материала, история и локальная выдача файлов. Не содержит модели распознавания.",
+        "en": "Request routing, stored materials, history and bounded local file serving; not model inference."
+      }
+    },
+    {
+      "id": "core",
+      "ru": "Оркестрация и ресурсы",
+      "en": "Orchestration and resources",
+      "description": {
+        "ru": "Общие стадии, бюджеты потоков, блокировки и время жизни кэша. Эти правила переиспользуют обработчики.",
+        "en": "Shared stages, thread budgets, locks and cache lifetime reused by processing handlers."
+      }
+    },
+    {
+      "id": "speech",
+      "ru": "Речь и спикеры",
+      "en": "Speech and speakers",
+      "description": {
+        "ru": "Распознавание, языки ролика, голосовые группы, короткие ответы, сопоставление и редакторские исправления.",
+        "en": "Recognition, clip language, voice groups, short turns, identity association and editorial corrections."
+      }
+    },
+    {
+      "id": "audio",
+      "ru": "Анализ и обработка звука",
+      "en": "Audio analysis and processing",
+      "description": {
+        "ru": "Шумоподавление, EQ, паузы, фоновые события, музыка и измерение интонации.",
+        "en": "Denoising, EQ, pauses, background events, music and measured intonation."
+      }
+    },
+    {
+      "id": "vision",
+      "ru": "Кадры и визуальные наблюдения",
+      "en": "Frames and visual evidence",
+      "description": {
+        "ru": "Планы, лица, активное говорение, фигуры, взгляд, одежда, предметы, OCR, интерфейсы и технический экспорт.",
+        "en": "Shots, faces, visible speaking, bodies, gaze, clothing, objects, OCR, UI analysis and technical export."
+      }
+    },
+    {
+      "id": "graph",
+      "ru": "Граф и цифровые профили",
+      "en": "Graph and digital profiles",
+      "description": {
+        "ru": "Нормализация наблюдений, временные окна, идентичность предметов, вложенность, происхождение и компактное хранение.",
+        "en": "Normalized observations, time windows, object identity/containment, provenance and compact persistence."
+      }
+    },
+    {
+      "id": "synthesis",
+      "ru": "Синтез и дубляж",
+      "en": "Synthesis and dubbing",
+      "description": {
+        "ru": "Адаптеры TTS, корпус, попытки, метрики, сборка блоков, тайминг дубляжа и сохранение фона.",
+        "en": "TTS adapters, corpora, attempts, metrics, block assembly, dubbing timing and background preservation."
+      }
+    },
+    {
+      "id": "prosody",
+      "ru": "Просодия и контекст",
+      "en": "Prosody and context",
+      "description": {
+        "ru": "Ударения, контекст предыдущих слов, мини-модели, граф морфем/слогов и подготовка корпуса записи.",
+        "en": "Stress, preceding-word context, compact models, morpheme/syllable graphs and recording prompts."
+      }
+    },
+    {
+      "id": "mcp",
+      "ru": "Контракты агентов",
+      "en": "Agent contracts",
+      "description": {
+        "ru": "Каталог инструментов, stdio, граф, скриншоты и запросы обработки звука; это API поверх функциональных модулей.",
+        "en": "Tool catalogue, stdio, graph, screenshot and audio APIs over functional modules."
+      }
+    },
+    {
+      "id": "workers",
+      "ru": "Изолированные обработчики",
+      "en": "Isolated workers",
+      "description": {
+        "ru": "Запуск моделей в отдельных окружениях и процессах с ограниченным контрактом ввода/вывода.",
+        "en": "Model processes in isolated environments with bounded input/output contracts."
+      }
+    },
+    {
+      "id": "web",
+      "ru": "Браузерные модули",
+      "en": "Browser modules",
+      "description": {
+        "ru": "Формы, навигация, запись, плееры, шкала, инспекторы, разметка и WebMCP. Выводы модели не создаются интерфейсным цветом.",
+        "en": "Forms, navigation, capture, players, timelines, inspectors, overlays and WebMCP. UI colour does not create model evidence."
+      }
+    }
+  ],
+  "webModules": {
+    "analysis-stage-selection.js": {
+      "en": "Checkboxes and statuses for partial media analyses and reruns.",
+      "ru": "Переключатели и статусы выборочного анализа и повторного запуска."
+    },
+    "app.js": {
+      "ru": "Состояние приложения, формы записи/профилей/синтеза, загрузка результатов и маршрутизация рабочих страниц.",
+      "en": "Application state, recording/profile/synthesis forms, result loading and workspace routing."
+    },
+    "auto-synthesis.js": {
+      "ru": "Граф карточек попыток автосинтеза, время, оценки, прослушивание и отображение выбранного результата.",
+      "en": "Automatic-synthesis attempt cards with timing, scores, auditioning and selected-result presentation."
+    },
+    "browser-ml-kernel.js": {
+      "ru": "Проверяемое ядро нормализации векторов и косинусного сходства с WebNN и эталонным JS-путём.",
+      "en": "Vector normalization and cosine kernel with WebNN and a reference JavaScript path."
+    },
+    "browser-ml-worker.js": {
+      "ru": "Изолированный worker для ограниченных проверок backend и вычислений косинусного сходства.",
+      "en": "Isolated worker for bounded backend probes and cosine-similarity execution."
+    },
+    "browser-ml.js": {
+      "ru": "Клиент браузерного ML worker: один активный запрос, обработка ошибок и управление жизненным циклом.",
+      "en": "Browser-ML worker client with one active request, error handling and lifecycle."
+    },
+    "capture-audio.js": {
+      "ru": "Захват аудио из MediaStream и сборка PCM/WAV фрагментов в браузере.",
+      "en": "MediaStream audio capture and browser PCM/WAV chunk assembly."
+    },
+    "capture-worklet.js": {
+      "ru": "AudioWorklet для передачи аудиосэмплов из realtime audio graph в поток захвата.",
+      "en": "AudioWorklet sample transfer from the realtime audio graph to capture."
+    },
+    "deck.js": {
+      "ru": "Многодорожечный TrackDeck: общая позиция прослушивания, управление дорожками и индикация деки.",
+      "en": "Multitrack TrackDeck with shared audition position, track control and deck indicators."
+    },
+    "dialogue-audit.js": {
+      "en": "Independent dialogue boundary review, source-clock candidate navigation and non-destructive ASR drafts.",
+      "ru": "Независимая проверка границ диалога, переход к кандидатам по времени исходника и черновики ASR без замены исходного текста."
+    },
+    "editor-monitor-actions.js": {
+      "ru": "Компактные действия монитора: перенос существующих контролов экспорта/разметки, раскрытие масок и восстановление при dispose.",
+      "en": "Compact monitor actions: reuse export/overlay controls, mirror clothing disclosure state and restore owned nodes on dispose."
+    },
+    "editor-panel-resizer.js": {
+      "ru": "Переиспользуемый AG-adapter изменения размеров панели мышью и клавиатурой.",
+      "en": "Reusable AG panel resize adapter for pointer and keyboard interaction."
+    },
+    "editor-workspace.js": {
+      "ru": "Компоновка монитора/инспектора/шкалы, ограничения размеров и сохранение предпочтений рабочей области.",
+      "en": "Monitor/inspector/timeline layout, size constraints and persisted workspace preferences."
+    },
+    "expression-frame-preview.js": {
+      "ru": "Открытие исходного кадра выражения лица и отрисовка рамки головы с синхронизацией времени video.",
+      "en": "Expression source-frame preview with head box drawing and video-time synchronization."
+    },
+    "facial-expression-view.js": {
+      "ru": "Краткое представление измеренной статистики выражений в профиле лица/спикера.",
+      "en": "Compact presentation of measured expression statistics in face/speaker profiles."
+    },
+    "facial-expressions.js": {
+      "ru": "Нормализация интервалов/меток выражений, группы дорожек и ограниченные выборки статистики для UI/MCP.",
+      "en": "Expression interval/label normalization, lane groups and bounded UI/MCP statistics."
+    },
+    "i18n.js": {
+      "ru": "Выбор RU/EN интерфейса, переводы сообщений и сохранение языковой настройки браузера.",
+      "en": "RU/EN interface selection, message translation and persisted browser locale."
+    },
+    "image-analysis-model.js": {
+      "en": "Image import validation and normalized visual result groups.",
+      "ru": "Проверка импорта изображений и нормализация групп результатов."
+    },
+    "image-analysis.js": {
+      "en": "Image import, background analysis, preview overlays and result inspection.",
+      "ru": "Импорт изображения, фоновый анализ, разметка предпросмотра и просмотр результата."
+    },
+    "mcp-bridge.js": {
+      "en": "Context revisions and the live page channel for local MCP clients.",
+      "ru": "Ревизии контекста и канал страницы для локальных MCP-клиентов."
+    },
+    "media-transcript.js": {
+      "ru": "UI-контроллер загрузки/анализа медиа, сохранённых транскриптов и общей установки слоёв отчёта.",
+      "en": "Media upload/analysis and saved-transcript UI controller with shared report-layer installation."
+    },
+    "messages-en.js": {
+      "ru": "Английский каталог строк интерфейса по исходным русским ключам.",
+      "en": "English UI message catalogue keyed by the original Russian strings."
+    },
+    "morpheme-graph.js": {
+      "ru": "Просмотр графа морфем и слогов, блоков синтеза и связанных фрагментов.",
+      "en": "Morpheme/syllable graph, synthesis block and fragment presentation."
+    },
+    "music-sample.js": {
+      "ru": "UI выделения и прослушивания фрагмента фоновой музыки для дальнейшей проверки.",
+      "en": "Background-music sample extraction and auditioning UI."
+    },
+    "person-layer.js": {
+      "ru": "Запрос масок одежды и упаковка исходника/настроек в существующий экспортный контракт.",
+      "en": "Clothing-mask export requests and packing source/settings for the existing contract."
+    },
+    "player.js": {
+      "ru": "Доступный плеер WAV: транспорт, позиция, громкость и жизненный цикл обработчиков.",
+      "en": "Accessible WAV player transport, position, volume and handler lifecycle."
+    },
+    "processing.js": {
+      "ru": "Управление дорожками обработки, шумоподавлением/EQ, запросом обработанного WAV и скачиванием результата.",
+      "en": "Processing-track selection, denoise/EQ controls, processed-WAV requests and result download."
+    },
+    "profile-moment-timeline.js": {
+      "ru": "Общая компактная шкала моментов профиля с маркерами, таймкодами и выборкой по времени.",
+      "en": "Shared compact profile-moment timeline with markers, timestamps and time paging."
+    },
+    "speaker-gaze.js": {
+      "ru": "Интервалы направления взгляда, их метки/иконки и статистика по спикеру.",
+      "en": "Speaker gaze intervals, labels/icons and direction statistics."
+    },
+    "speaker-label.js": {
+      "ru": "Единая эффективная метка спикера с учётом редакторских исправлений и смешанных реплик.",
+      "en": "Shared effective speaker labels including editorial overrides and mixed turns."
+    },
+    "speaker-profile-dialog.js": {
+      "ru": "Диалог цифрового профиля спикера: свойства, JSON, взгляд, выражения и переходы ко времени.",
+      "en": "Speaker profile dialog: attributes, JSON, gaze, expressions and timestamp navigation."
+    },
+    "speaker-profiles.js": {
+      "ru": "Сборка браузерных профилей и привязок face/speaker для списка, диалога и редакторских действий.",
+      "en": "Browser speaker profiles and face bindings for lists, dialogs and editorial actions."
+    },
+    "spectrum.js": {
+      "ru": "Расчёт/отрисовка спектральных полос и частотной характеристики эквалайзера.",
+      "en": "Spectrum-band and equalizer-response calculation and drawing."
+    },
+    "stress-comparison.js": {
+      "ru": "A/B UI проверок ударения и пилота просодии, подписи и группировка дублей.",
+      "en": "Stress and prosody-pilot A/B UI with take labels and grouping."
+    },
+    "studio-design.js": {
+      "ru": "Установка дизайн-профиля и темы, палитра сигналов и фабрики поверхностей плееров.",
+      "en": "Design-profile/theme installation, signal palette and player surface factories."
+    },
+    "studio-icons.js": {
+      "ru": "SVG-иконки существующего семейства и подсказки для мыши/клавиатуры.",
+      "en": "Existing-family SVG icons and pointer/keyboard hints."
+    },
+    "studio-mod-fields.js": {
+      "en": "Schema-driven model settings fields and typed value validation.",
+      "ru": "Поля настроек модели по схеме и проверка типов значений."
+    },
+    "studio-mods.js": {
+      "en": "Model-provider list, settings, availability and management.",
+      "ru": "Список провайдеров, параметры, доступность и управление."
+    },
+    "studio-navigation.js": {
+      "ru": "Одна навигация для desktop-sidebar и native мобильного диалога без дублирования ID.",
+      "en": "One navigation moved between desktop sidebar and native mobile drawer without duplicate IDs."
+    },
+    "studio-pipeline-model.js": {
+      "en": "Dependency validation and layout for the processing graph.",
+      "ru": "Проверка зависимостей и раскладка графа обработки."
+    },
+    "studio-pipeline.js": {
+      "en": "Editable processing graph, dependency controls and provider states.",
+      "ru": "Редактируемый граф обработки, управление зависимостями и статусы провайдеров."
+    },
+    "studio-settings.js": {
+      "ru": "Страница настроек и действия над сохранёнными материалами через текущие API.",
+      "en": "Settings page and stored-material actions through current APIs."
+    },
+    "studio-shell.js": {
+      "ru": "Сворачивание sidebar в icon rail, хранение предпочтения и подсказки скрытых подписей.",
+      "en": "Sidebar-to-icon-rail collapse, preference persistence and hidden-label hints."
+    },
+    "studio-storage.js": {
+      "ru": "Представление инвентаря хранения, кандидатов очистки и явных операций пользователя.",
+      "en": "Storage inventory, cleanup candidates and explicit user operations."
+    },
+    "tool-names.js": {
+      "en": "Canonical registrations shared by WebMCP and the live page bridge.",
+      "ru": "Общие актуальные имена инструментов WebMCP и моста открытой страницы."
+    },
+    "transcript-chat.js": {
+      "ru": "Компактные сообщения расшифровки, сохраняющие исходные действия и подробности анализа.",
+      "en": "Compact transcript messages retaining original editing actions and analysis evidence."
+    },
+    "transcript-editor.js": {
+      "ru": "Редактирование сохранённого транскрипта и отдельных реплик с контролем текущей ревизии.",
+      "en": "Saved-transcript and cue editing with current-revision control."
+    },
+    "transcript-inspector.js": {
+      "ru": "Сворачивание и восстановление правой панели расшифровки без удаления исходного video.",
+      "en": "Right transcript-inspector collapse/restore without removing the source video."
+    },
+    "ui-measurement-geometry.js": {
+      "en": "Viewport rectangles, text insets and pairwise alignment in CSS pixels.",
+      "ru": "Рамки экрана, отступы текста и попарное выравнивание в CSS-пикселях."
+    },
+    "ui-measurements.js": {
+      "en": "Bounded DOM measurements and rendered control discovery for Studio agents.",
+      "ru": "Измерение DOM и поиск отображаемых элементов для агентов студии."
+    },
+    "video-analysis.js": {
+      "ru": "Чтение потока прогресса, слияние частичных результатов и восстановление состояния анализа.",
+      "en": "Analysis progress stream parsing, partial-result merging and recovery presentation."
+    },
+    "video-color-palette.js": {
+      "ru": "Палитра измеренных цветов кадра/предмета и доступные текстовые значения.",
+      "en": "Measured frame/object palette with readable colour values."
+    },
+    "video-dub.js": {
+      "ru": "UI перевода и сборки английского дубляжа, состояния задания и выдачи результата.",
+      "en": "English translation/dubbing UI, job state and result delivery."
+    },
+    "video-evidence.js": {
+      "ru": "Кандидаты фото лица для реплики, основания Light-ASD и действия прикрепления/удаления подтверждённого фото спикера.",
+      "en": "Per-cue face-photo candidates, Light-ASD basis and attachment/removal of a confirmed speaker photo."
+    },
+    "video-frame-details.js": {
+      "ru": "Компактные сведения текущего кадра: планы, речь, лица, фигуры и предметы.",
+      "en": "Compact current-frame details for shots, speech, faces, bodies and objects."
+    },
+    "video-object-appearance-timeline.js": {
+      "ru": "Мини-шкала повторных появлений предмета с позициями, интервалами и подсказками времени.",
+      "en": "Compact object-reappearance timeline with positions, intervals and time hints."
+    },
+    "video-object-profile.js": {
+      "ru": "Представление цифрового профиля предмета, исходных меток/уверенности, кадров и склейки прокрутки.",
+      "en": "Object profile presentation, original labels/confidence, frame previews and scroll mosaics."
+    },
+    "video-overlay.js": {
+      "ru": "Единый план и canvas-отрисовка технического слоя: спикеры, рамки, предметы, реплики и экспорт.",
+      "en": "Shared technical-layer plan and canvas rendering for speakers, boxes, objects, captions and export."
+    },
+    "video-scene.js": {
+      "ru": "Просмотр визуального отчёта сцены, OCR/предметов, профилей и переходов к соответствующим кадрам.",
+      "en": "Scene evidence, OCR/object/profile presentation and source-frame navigation."
+    },
+    "video-shortcuts.js": {
+      "ru": "Транспорт video и горячие клавиши с границами времени, исключением полей ввода и модальных окон.",
+      "en": "Video transport and shortcuts with time bounds and text-field/modal exclusions."
+    },
+    "video-statistics-chart.js": {
+      "ru": "Адаптивный SVG-график статистики: дискретные интервалы, точные подсказки и выбор с мыши, клавиатуры или касания; освобождение наблюдателей.",
+      "en": "Responsive SVG statistics chart with discrete intervals, exact pointer/keyboard/touch inspection and observer cleanup."
+    },
+    "video-statistics-view.js": {
+      "ru": "Нативный диалог статистики с SVG-графиками, точными таблицами и переходом в исходное видео.",
+      "en": "Native statistics dialog with bounded SVG charts, exact tables and navigation to source video."
+    },
+    "video-statistics.js": {
+      "ru": "Агрегация готового отчёта: уникальные профили, слова и измеренные временные ряды без запуска моделей.",
+      "en": "Pure report aggregation: unique profiles, literal word counts and bounded source-time series without running models."
+    },
+    "video-timeline.js": {
+      "ru": "Построение и управление многослойной монтажной шкалой: дорожки, seek, масштаб, fit и плотность.",
+      "en": "Layered timeline construction and control: tracks, seek, zoom, fit and density."
+    },
+    "web-mcp.js": {
+      "ru": "Регистрация браузерных MCP-инструментов для текущей страницы и UI управления подключением.",
+      "en": "Browser MCP tool registration for the current page and connection-status UI."
+    }
+  }
+}

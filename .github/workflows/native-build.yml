@@ -1,0 +1,75 @@
+name: Native packages
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.12
+      - run: uv venv --python 3.12 .venv
+      - run: uv pip install --python .venv/bin/python -r requirements-core.txt
+      - run: .venv/bin/python -m unittest tests.test_desktop_runtime -v
+      - run: .venv/bin/python packaging/build_native.py --python .venv/bin/python --site-packages .venv/lib/python3.12/site-packages --output dist/macos --work /tmp/ag-media-native-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-native
+          path: dist/macos
+  linux:
+    runs-on: ubuntu-latest
+    container: debian:trixie-slim
+    steps:
+      - run: apt-get update && apt-get install -y git python3 python3-pip python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xdg-utils dpkg-dev xvfb xauth dbus-x11 ca-certificates
+      - uses: actions/checkout@v4
+      - run: PIP_BREAK_SYSTEM_PACKAGES=1 python3 packaging/build_linux.py --output dist/linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-native
+          path: dist/linux
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build Windows native package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:NUGET_PACKAGES = Join-Path $env:RUNNER_TEMP 'media-nuget'
+          $wheels = Join-Path $env:RUNNER_TEMP 'media-wheels'
+          $pythonZip = Join-Path $env:RUNNER_TEMP 'python-3.13.11-embed-amd64.zip'
+          $publish = Join-Path $env:RUNNER_TEMP 'media-publish'
+          python -m pip install packaging
+          python -m pip download --dest $wheels --platform win_amd64 --implementation cp --python-version 3.13 --only-binary=:all: -r requirements-core.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Core wheel download failed' }
+          python -m pip download --dest $wheels --platform win_amd64 --implementation cp --python-version 3.13 --only-binary=:all: pywin32==312
+          if ($LASTEXITCODE -ne 0) { throw 'Windows dependency download failed' }
+          Invoke-WebRequest 'https://www.python.org/ftp/python/3.13.11/python-3.13.11-embed-amd64.zip' -OutFile $pythonZip
+          dotnet publish packaging/windows/AGMediaStudio.csproj -c Release -r win-x64 --self-contained true -o $publish
+          if ($LASTEXITCODE -ne 0) { throw 'Windows native publish failed' }
+          python packaging/build_windows.py --publish $publish --python-zip $pythonZip --wheels $wheels --nuget $env:NUGET_PACKAGES --output dist/windows
+          if ($LASTEXITCODE -ne 0) { throw 'Windows package assembly failed' }
+      - name: Exercise actual Windows backend lifecycle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $smoke = Join-Path $env:RUNNER_TEMP 'media-backend-smoke'
+          $binary = Resolve-Path 'dist/windows/ag-media-studio-0.1.0-windows-x86_64/AgMediaStudio.exe'
+          $child = Start-Process -FilePath $binary -ArgumentList @('--backend-smoke', $smoke) -PassThru -Wait
+          if ($child.ExitCode -ne 0) { throw "Native backend smoke failed: $($child.ExitCode)" }
+          if (!(Test-Path (Join-Path $smoke 'windows-smoke.json'))) { throw 'Native smoke evidence missing' }
+          Copy-Item (Join-Path $smoke 'windows-smoke.json') 'dist/windows/windows-smoke.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-native
+          path: dist/windows
