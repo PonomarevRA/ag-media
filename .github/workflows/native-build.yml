@@ -73,7 +73,11 @@ jobs:
           $packageDir = [IO.Path]::GetFileNameWithoutExtension($package.asset)
           $binary = Resolve-Path (Join-Path (Join-Path 'dist/windows' $packageDir) 'AgMediaStudio.exe')
           $child = Start-Process -FilePath $binary -ArgumentList @('--backend-smoke', $smoke) -PassThru -Wait
-          if ($child.ExitCode -ne 0) { throw "Native backend smoke failed: $($child.ExitCode)" }
+          if ($child.ExitCode -ne 0) {
+            $diagnostic = Join-Path $smoke 'windows-smoke-error.txt'
+            if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic }
+            throw "Native backend smoke failed: $($child.ExitCode)"
+          }
           if (!(Test-Path (Join-Path $smoke 'windows-smoke.json'))) { throw 'Native smoke evidence missing' }
           Copy-Item (Join-Path $smoke 'windows-smoke.json') 'dist/windows/windows-smoke.json'
       - uses: actions/upload-artifact@v4

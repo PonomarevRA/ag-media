@@ -1,7 +1,7 @@
 {
   "files": {
     ".gitattributes": "c4f9637905fcbf13d4c0771897b97cb5d8351c8ad9b43312b5987ceea3c6a554",
-    ".github/workflows/native-build.yml": "8a3eee854189fd64fda7fb26fb995c46133ec624ca9365b7bf2397d8ac771c3c",
+    ".github/workflows/native-build.yml": "c9ddd271ed13a48362745927a22edf9844d024481144bba3b140ca78373ba2af",
     ".gitignore": "1171116c908cc498928b7f0f06f60918cadfdc63f073fde97c48ea35d33908df",
     "CONTRIBUTING.md": "caf8c0322d46f3b87327b1f81701d21032608ae545cab7079cc6bee8002b3c8b",
     "LICENSE": "330bdaa33055547c3d53d30e4f9e457c79d64fd2282035f44ed6914cbbf84a62",
@@ -104,7 +104,7 @@
     "packaging/resource-license-inventory.json": "e196c3e1ae83823871fb54af9afe2d24e0d0a9fe4cca777ed85b058bc1894685",
     "packaging/windows/AGMediaStudio.csproj": "1d8062a35b74d4409df2ee174979e8fa66ddbb832a9ddd78b52bdb06d85c52ab",
     "packaging/windows/OriginPolicy.cs": "2846b2a6839554eb8666cfd4dcab6dc3d9228c9ee2292e22312c16461c61dac7",
-    "packaging/windows/OwnedBackend.cs": "ff385ec3cb58e4429a782be6820cd28363f9e1b987eb5cb538498b57b77f3998",
+    "packaging/windows/OwnedBackend.cs": "c4dee8905d70afc20ed9ca43f7276bbd2ec5e340afc98ea5f1671d333c00af37",
     "packaging/windows/Program.cs": "97c89e1bc6124d5435545e443fd095df5e38b4b5d601735f218fa829b53b41fa",
     "packaging/windows/StudioWindow.cs": "3122946a40dcd139054fbdea8c2672af705664870666529a165b0bad60fa6892",
     "packaging/windows/WindowsJob.cs": "6820147ef016fa3b75fb11a92193698bb5ddc3b179aaeb590a066c3dae3fb0ee",

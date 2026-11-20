@@ -55,7 +55,12 @@ internal sealed class OwnedBackend : IAsyncDisposable
             while (true)
             {
                 string? line = await process.StandardOutput.ReadLineAsync(deadline.Token);
-                if (line is null) throw new InvalidOperationException("The backend exited before readiness. " + ErrorSummary());
+                if (line is null)
+                {
+                    // Stdout EOF may arrive just before the diagnostic reader drains stderr.
+                    await stderrReader.WaitAsync(deadline.Token);
+                    throw new InvalidOperationException("The backend exited before readiness. " + ErrorSummary());
+                }
                 JsonDocument record;
                 try { record = JsonDocument.Parse(line); }
                 catch (JsonException) { continue; }
