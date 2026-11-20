@@ -6,7 +6,6 @@ from pathlib import Path
 from shutil import which
 import subprocess
 import sys
-import venv
 
 from voice_paths import PROJECT_ROOT, application_data
 from voice_studio.speech.whisper_assets import install_base, whisper_cli
@@ -47,6 +46,9 @@ def prepare_python():
     relative = "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
     python = environment / relative
     if not python.is_file():
+        # The embedded Windows runtime lacks venv and only uses tool/model setup.
+        import venv
+
         venv.EnvBuilder(with_pip=True, symlinks=os.name != "nt").create(environment)
     pip = [str(python), "-m", "pip", "--disable-pip-version-check"]
     if subprocess.run([*pip, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:

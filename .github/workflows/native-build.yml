@@ -8,6 +8,8 @@ on:
       - '.github/workflows/native-build.yml'
       - 'packaging/**'
       - 'requirements-core.txt'
+      - 'voice_studio/app/first_run.py'
+      - 'voice_studio/provision/**'
 permissions:
   contents: read
 jobs:

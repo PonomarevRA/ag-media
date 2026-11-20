@@ -1,7 +1,7 @@
 {
   "files": {
     ".gitattributes": "c4f9637905fcbf13d4c0771897b97cb5d8351c8ad9b43312b5987ceea3c6a554",
-    ".github/workflows/native-build.yml": "c9ddd271ed13a48362745927a22edf9844d024481144bba3b140ca78373ba2af",
+    ".github/workflows/native-build.yml": "daefdddf08b0eaf4352495545e7dee4ff07c1a6adbd20717e3ee326fc8c12ef1",
     ".gitignore": "1171116c908cc498928b7f0f06f60918cadfdc63f073fde97c48ea35d33908df",
     "CONTRIBUTING.md": "caf8c0322d46f3b87327b1f81701d21032608ae545cab7079cc6bee8002b3c8b",
     "LICENSE": "330bdaa33055547c3d53d30e4f9e457c79d64fd2282035f44ed6914cbbf84a62",
@@ -311,7 +311,7 @@
     "voice_studio/app/desktop_runtime.py": "63e0f2b55f38f43e29914e29b79537cf30cb1d69a11079a6dfcd137c148887b5",
     "voice_studio/app/desktop_updates.py": "bcb1dd6b200cbb3599a9ab4556882f800aa0a8079cd60ff676de6774acab3efc",
     "voice_studio/app/dialogue_audit_service.py": "2bffc072a312bbe6a3ac3eb4abb48d1ca5778256ee23e2cd71c667fba860394a",
-    "voice_studio/app/first_run.py": "5befd023f032daae3bfc25298700c13a145a5686d35bdfb7dd6df39a1f56bce1",
+    "voice_studio/app/first_run.py": "9935555ec6dd144874e52332da1c958bca5cf727c0ebad9740a585381a613004",
     "voice_studio/app/http_transport.py": "b239ae53debc2456b06495c17ed0a3c62b571304165bb66f02a823d87e411259",
     "voice_studio/app/image_analysis.py": "e8f18ef5f85674d0120cddaaafdf036f124f53a584dbc2dce11a68f070ce738e",
     "voice_studio/app/live_capture.py": "d1bc9ef433b6d5c78ecae6e2aa60cac3beacfecd7143b7b2ba3c1746e14e70ce",
