@@ -3,11 +3,16 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: [main]
+    paths:
+      - '.github/workflows/native-build.yml'
+      - 'packaging/**'
+      - 'requirements-core.txt'
 permissions:
   contents: read
 jobs:
   macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -64,7 +69,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $smoke = Join-Path $env:RUNNER_TEMP 'media-backend-smoke'
-          $binary = Resolve-Path 'dist/windows/ag-media-studio-0.1.0-windows-x86_64/AgMediaStudio.exe'
+          $package = Get-Content 'dist/windows/windows-release.json' -Raw | ConvertFrom-Json
+          $packageDir = [IO.Path]::GetFileNameWithoutExtension($package.asset)
+          $binary = Resolve-Path (Join-Path (Join-Path 'dist/windows' $packageDir) 'AgMediaStudio.exe')
           $child = Start-Process -FilePath $binary -ArgumentList @('--backend-smoke', $smoke) -PassThru -Wait
           if ($child.ExitCode -ne 0) { throw "Native backend smoke failed: $($child.ExitCode)" }
           if (!(Test-Path (Join-Path $smoke 'windows-smoke.json'))) { throw 'Native smoke evidence missing' }

@@ -6,7 +6,7 @@ Connect the local MCP server using [Agent setup](../docs/AGENT-SETUP.md). The sk
 | --- | --- |
 | [ag-media-setup](ag-media-setup/SKILL.md) | Install Studio, connect a fresh MCP client and verify the selected workspace. |
 | [ag-media-interval-review](ag-media-interval-review/SKILL.md) | Read a timed media interval with transcript, visual evidence and uncertain findings. |
-| [ag-media-ui-review](ag-media-ui-review/SKILL.md) | Measure a live UI or describe a supplied screenshot and scroll region. |
+| [ag-media-ui-review](ag-media-ui-review/SKILL.md) | Start with offline OCR and UI layout for screenshots, then inspect uncertain regions; also measure live UI. |
 | [ag-media-dialogue-audit](ag-media-dialogue-audit/SKILL.md) | Review speaker boundaries, overlapping voices and missing dialogue. |
 
 Run the following installation from the **repository root**. The command copies only missing skill folders. To update a skill, compare it with the corresponding source folder before replacing it.
@@ -34,6 +34,9 @@ Get-ChildItem -Path skills -Directory -Filter 'ag-media-*' | ForEach-Object {
   }
 }
 ```
+
+For screenshots, start with the [local image recognition workflow](ag-media-ui-review/SKILL.md#local-image-recognition-first).
+It gives an agent text and layout evidence before it decides whether to use a paid vision model.
 
 Example prompts after reconnecting the client:
 

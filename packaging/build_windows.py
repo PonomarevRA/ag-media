@@ -5,6 +5,7 @@ import getpass
 from email.parser import BytesParser
 from hashlib import file_digest
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 import struct
@@ -136,10 +137,19 @@ def private_build_markers():
     """Identify this build user's home paths and sufficiently specific account name without persisting them."""
     home = str(Path.home())
     account = getpass.getuser()
-    values = {home, home.replace("\\", "/"), home.replace("/", "\\")}
-    # Short generic accounts such as 'root' and 'runner' occur in legitimate code;
-    # their complete home paths remain checked without blanket substring rejection.
-    if len(account) >= 8:
+    github_runner = (os.environ.get("GITHUB_ACTIONS") == "true"
+                     and account.casefold() == "runneradmin")
+    paths = [home]
+    # The hosted Windows account is shared by public upstream builds. Only its
+    # standard home is generic; a local user's home or a custom home is still private.
+    if github_runner and home.replace("/", "\\").casefold() == r"c:\users\runneradmin":
+        paths.clear()
+    if github_runner and (workspace := os.environ.get("GITHUB_WORKSPACE")):
+        paths.append(workspace)
+    values = set()
+    for path in paths:
+        values.update({path, path.replace("\\", "/"), path.replace("/", "\\")})
+    if len(account) >= 8 and not github_runner:
         values.add(account)
     markers = []
     for value in values:

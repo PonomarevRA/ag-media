@@ -6,6 +6,14 @@ Use [Agent setup](AGENT-SETUP.md) to connect a local stdio client. The current c
 
 Use `media_catalog(category="ui", query="measure", include_schema=true)` to get the measurement schema. Use `media_catalog(include_graph=true)` for the tool and category graph. The `scope` field distinguishes live UI, screenshot, timed media, model management and saved transcript operations. Tools without a category appear in `uncategorized`.
 
+## Local image recognition
+
+Use `screen_analyze` with a local PNG/JPEG path and `mode="overview"` for offline OCR and
+candidate UI regions. Use `full` on the specific area that needs detail. For general object
+recognition in still images, use Studio's image analysis with **Objects** enabled. See the
+[local-first skill workflow](../skills/ag-media-ui-review/SKILL.md#local-image-recognition-first)
+for scrolling captures and when to ask a vision model to interpret remaining details.
+
 ## Ordinary MCP measurements
 
 1. `ui_windows()` lists connected native/browser pages.

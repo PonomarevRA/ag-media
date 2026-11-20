@@ -10,6 +10,7 @@ import subprocess
 import os
 import zlib
 import unittest
+from unittest.mock import patch
 import zipfile
 
 PACKAGING = Path(__file__).resolve().parents[1] / "packaging"
@@ -83,6 +84,33 @@ class WindowsPackagingTests(unittest.TestCase):
             self.assertNotIn(marker.decode(), str(caught.exception))
             path.write_bytes(b"RSDS/_/normalized-build/application.pdb")
             self.assertEqual(BUILDER.check_payload_privacy(root, markers=[marker]), 1)
+
+    def test_hosted_windows_account_is_generic_but_workspace_is_private(self):
+        """Allow public wheel build metadata while still blocking app checkout paths."""
+        runner_home = r"C:" + chr(92) + r"Users\runneradmin"
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            environment = {"GITHUB_ACTIONS": "true", "GITHUB_WORKSPACE": r"D:\a\fixture\fixture"}
+            with patch.dict(os.environ, environment, clear=True), \
+                    patch.object(BUILDER.getpass, "getuser", return_value="runneradmin"), \
+                    patch.object(BUILDER.Path, "home", return_value=runner_home):
+                markers = BUILDER.private_build_markers()
+            payload = root / "wheel.pyd"
+            payload.write_bytes((runner_home + r"\.cargo\registry\src\dependency.rs").encode())
+            self.assertEqual(BUILDER.check_payload_privacy(root, markers), 1)
+            payload.write_bytes("D:/a/fixture/fixture/private.py".encode("utf-16-le"))
+            with self.assertRaisesRegex(ValueError, "wheel.pyd"):
+                BUILDER.check_payload_privacy(root, markers)
+
+    def test_local_account_and_home_remain_private(self):
+        """A matching account outside hosted Actions cannot opt out of identity checks."""
+        runner_home = r"C:" + chr(92) + r"Users\runneradmin"
+        with patch.dict(os.environ, {}, clear=True), \
+                patch.object(BUILDER.getpass, "getuser", return_value="runneradmin"), \
+                patch.object(BUILDER.Path, "home", return_value=runner_home):
+            markers = BUILDER.private_build_markers()
+        self.assertIn(b"runneradmin", markers)
+        self.assertIn(runner_home.lower().encode(), markers)
 
     def test_embedded_debug_metadata_is_privacy_checked(self):
         """Compression must not hide an identity-bearing compiler document from the package gate."""
