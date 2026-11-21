@@ -125,7 +125,10 @@ export function mountMediaAnalysis(find) {
     const pending = [...rows.values()].filter(row => ["queued", "running"].includes(row.state));
     const active = pending.filter(row => row.state === "running");
     const current = active[0];
-    if (!current) return;
+    if (!current) {
+      status.textContent = pending.length ? uiText("Подготовка следующего этапа…") : uiText("Собираем результат…");
+      return;
+    }
     if (duration === undefined || current.id === "upload") {
       meter.removeAttribute("value");
       status.textContent = `${current.label.textContent}…`;
@@ -173,6 +176,7 @@ export function mountMediaAnalysis(find) {
     const row = rows.get(event.stage);
     if (row) {
       row.state = event.state;
+      row.warning = row.id === "person-layer" && event.state === "skipped" && Boolean(event.reason);
       row.line.dataset.state = event.state;
       row.line.dataset.cache = event.cacheHit === true ? "hit" : cacheModes.get(event.stage) || "none";
       if (event.state === "running" && row.started === undefined) row.started = performance.now();
@@ -238,6 +242,8 @@ export function mountMediaAnalysis(find) {
           const state = typeof info === "string" ? info : info?.state;
           if (!state) continue;
           for (const id of CACHE_LAYERS[layer] ?? []) {
+            const observed = rows.get(id)?.state;
+            if (state === "failed" && ["failed", "partial", "skipped"].includes(observed)) continue;
             if (["pending", "invalidated", "failed"].includes(state)) update({stage: id, state});
           }
         }
@@ -254,8 +260,10 @@ export function mountMediaAnalysis(find) {
       } else {
         meter.hidden = false;
         meter.value = 100;
-        region.open = false;
-        status.textContent = uiText`Анализ завершён за ${Math.round((performance.now() - started) / 1000)} с`;
+        const hasIssues = [...rows.values()].some(row => ["failed", "partial"].includes(row.state) || row.warning);
+        region.open = hasIssues;
+        const seconds = Math.round((performance.now() - started) / 1000);
+        status.textContent = hasIssues ? uiText`Анализ завершён с замечаниями за ${seconds} с` : uiText`Анализ завершён за ${seconds} с`;
       }
     },
   };

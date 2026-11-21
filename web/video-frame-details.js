@@ -9,6 +9,7 @@ const rows = [
   ["body", "person", "Фигуры"],
   ["body-count", "person", "Люди (оценка)"],
   ["interface", "ocr", "Интерфейс"],
+  ["change", "frame-changes", "Зоны изменений"],
   ["object", "cube", "Предметы"],
   ["text", "ocr", "Текст"],
 ];
@@ -23,6 +24,7 @@ export function frameDetailValues(frame) {
     body: bodies || "",
     "body-count": frame.personCount ?? "",
     interface: frame.panels?.map(panel => uiText(panel.panelType)).join(" · ") ?? "",
+    change: frame.changes?.length || "",
     object: frame.objects?.map(item => uiText(item.label ?? "")).filter(Boolean).join(" · ") ?? "",
     text: frame.text?.map(item => item.text).filter(Boolean).join(" · ") ?? "",
   };

@@ -245,6 +245,7 @@
                 <legend>Речь</legend>
                 <label class="select-field" for="media-speech-language">Язык транскрипции
                   <select id="media-speech-language">
+                    <option value="default">Из настроек Whisper</option>
                     <option value="auto">Автоопределение</option>
                     <option value="ru" lang="ru" data-endonym>Русский</option>
                     <option value="en" lang="en" data-endonym>English</option>
@@ -319,6 +320,7 @@
           <div data-ag-width="content" data-ag-width-min-em="4"><h3 id="image-title">Изображение</h3><p id="image-source" class="muted"></p></div>
           <div class="actions image-analysis-actions">
             <button id="image-json" type="button" class="studio-icon" data-icon="json" data-hint aria-label="Скачать JSON" disabled><span class="visually-hidden">Скачать JSON</span></button>
+            <button id="image-markdown" type="button" class="studio-icon" data-icon="markdown" data-hint aria-label="Скачать Markdown" disabled><span class="visually-hidden">Скачать Markdown</span></button>
             <button id="image-close" type="button" class="studio-icon" data-icon="close" data-hint aria-label="Закрыть картинку"><span class="visually-hidden">Закрыть картинку</span></button>
           </div>
         </header>
@@ -384,6 +386,10 @@
             <label class="editor-overlay-switch studio-icon" aria-label="Технический режим" title="Технический режим" data-icon="technical" data-hint>
               <input id="media-overlay-toggle" type="checkbox" aria-label="Технический режим" checked>
               <span class="visually-hidden">Технический режим</span>
+            </label>
+            <label id="media-change-control" class="editor-overlay-switch studio-icon" aria-label="Зоны изменений" title="Зоны изменений" data-icon="frame-changes" data-hint hidden>
+              <input id="media-change-toggle" type="checkbox" aria-label="Зоны изменений">
+              <span class="visually-hidden">Зоны изменений</span>
             </label>
           </div>
           <div class="actions">
@@ -526,9 +532,22 @@
         </section>
       </div>
       <details id="media-dub" class="capture-options media-dub" data-ag-width="fill" hidden>
-        <summary>Английский дубляж</summary>
-        <p>Введи английские реплики. Студия разместит их по таймкодам и использует образцы голосов участников из видео.</p>
+        <summary>Дубляж видео</summary>
+        <p>Введи реплики дубляжа. Студия разместит их по таймкодам и использует образцы голосов участников из видео.</p>
         <p class="muted">Используй голоса с разрешения участников и проверь права на запись и синтез перед публикацией.</p>
+        <div class="actions media-dub-options">
+          <label class="select-field">Язык дубляжа
+            <select id="media-dub-language">
+              <option value="en">Английский</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <label class="inline-check">
+            <input id="media-dub-pronunciation" type="checkbox" aria-describedby="media-dub-pronunciation-help">
+            Уменьшить акцент
+          </label>
+        </div>
+        <p id="media-dub-pronunciation-help" class="muted">Экспериментальный режим. Использует тембр образца и старается приблизить произношение к языку дубляжа.</p>
         <ol id="media-dub-cues" class="media-dub-cues"></ol>
         <div class="actions">
           <button id="media-dub-translate" type="button">Заполнить перевод</button>

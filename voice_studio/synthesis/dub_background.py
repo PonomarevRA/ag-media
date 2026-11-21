@@ -5,7 +5,9 @@ from voice_studio.mod_runtime import model_provider
 import logging
 import os
 import subprocess
+import sys
 
+from voice_studio.core.optional_runtime import runtime_environment, runtime_ready
 from voice_studio.core.worker_process import worker_command
 from voice_studio.synthesis.engines import ROOT, ffmpeg
 from voice_studio.speech.media_transcript import FORMATS, audio_offset
@@ -19,6 +21,16 @@ MODEL = model_path("separation", "hdemucs_high_trained.pt")
 PYTHON = ROOT / ".engines" / "coqui" / "bin" / "python"
 
 
+def managed_separator_ready():
+    """Check the verified TorchAudio runtime and the shared CPU Torch dependency."""
+    return runtime_ready("dub-background") and runtime_ready("light-asd")
+
+
+def separator_ready():
+    """Recognize both the native installation and the existing source environment."""
+    return MODEL.is_file() and (managed_separator_ready() or PYTHON.is_file())
+
+
 def timeline_end(duration_ms):
     """Return an audio filter that yields exactly the requested length at RATE."""
     return f"apad,atrim=end_sample={duration_ms * RATE // 1000}"
@@ -27,8 +39,13 @@ def timeline_end(duration_ms):
 @model_provider('audio.background', 'builtin.hdemucs')
 def prepare_background(source, duration_ms, folder):
     """Extract stereo ambience at source timestamps using an offline model worker."""
-    if not MODEL.is_file() or not PYTHON.is_file():
-        raise ValueError("Для сохранения музыки и фона нужны локальные веса HDemucs и среда TorchAudio.")
+    if not separator_ready():
+        raise ValueError("Установи «Фон для дубляжа (HDemucs)» в настройках моделей.")
+    managed = managed_separator_ready()
+    interpreter = sys.executable if managed else PYTHON
+    env = {**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"}
+    if managed:
+        env = runtime_environment("dub-background", env, extra_groups=("light-asd",))
     original = folder / "background-input.wav"
     output = folder / BACKGROUND_WAV
     offset = audio_offset(source)
@@ -37,9 +54,8 @@ def prepare_background(source, duration_ms, folder):
             "-ac", "2", "-af", f"{timing},{timeline_end(duration_ms)}", "-c:a", "pcm_f32le", str(original)])
     timeout = max(90, min(1200, 60 + duration_ms // 1000))
     try:
-        subprocess.run(worker_command(PYTHON, "voice_studio.workers.dub_background_worker", original, MODEL, output),
-                       check=True, capture_output=True, timeout=timeout,
-                       env={**os.environ, "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"})
+        command = worker_command(interpreter, "voice_studio.workers.dub_background_worker", original, MODEL, output)
+        subprocess.run(command, check=True, capture_output=True, timeout=timeout, env=env)
     except (OSError, subprocess.SubprocessError) as error:
         details = getattr(error, "stderr", None) or str(error)
         logging.getLogger(__name__).warning("HDemucs separation failed: %s", details[-1200:])

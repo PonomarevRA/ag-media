@@ -9,13 +9,14 @@ from pathlib import Path
 import subprocess
 from time import perf_counter
 
+from voice_studio.core.optional_runtime import runtime_environment
 from voice_studio.core.worker_process import worker_command
 from voice_studio.vision.clothing_match import borderline_pairs, choose_sample_tracks, corroborate
 from voice_studio.vision.face_appearance import describe_appearance
+from voice_studio.vision.person_layers import mediapipe_interpreter
 
-from voice_paths import PROJECT_ROOT as ROOT, dependency_path, model_path, temporary_directory
+from voice_paths import dependency_path, model_path, temporary_directory
 
-MP_PYTHON = ROOT / ".engines/mediapipe/bin/python"
 BODY_MODEL = model_path("vision", "nanodet.onnx")
 MASK_MODEL = model_path("mediapipe", "selfie_multiclass_256x256.tflite")
 APPEARANCE_MODEL = model_path("vision", "openvino-age-gender", "model.xml")
@@ -81,10 +82,16 @@ def collect_samples(source, tracks, selected, width, height, appearance_faces=()
         request.write_text(json.dumps({"frames": frames, "models": {
             "body": str(BODY_MODEL), "masks": str(MASK_MODEL), "appearance": str(APPEARANCE_MODEL),
         }}), encoding="utf-8")
+        interpreter, runtime = mediapipe_interpreter()
+        if interpreter is None:
+            raise ValueError("MediaPipe runtime is unavailable")
         env = {**os.environ, "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
                "PYTHONPATH": str(APPEARANCE_RUNTIME)}
-        response = subprocess.check_output(worker_command(MP_PYTHON, "voice_studio.workers.clothing_sample_worker", request),
-                                           env=worker_environment(env), stderr=subprocess.DEVNULL, timeout=22)
+        env = worker_environment(env)
+        if runtime:
+            env = runtime_environment(runtime, env)
+        response = subprocess.check_output(worker_command(interpreter, "voice_studio.workers.clothing_sample_worker", request),
+                                           env=env, stderr=subprocess.DEVNULL, timeout=22)
         return json.loads(response)
 
 
@@ -93,7 +100,7 @@ def review_clothing(source, tracks, signatures, aliases, width, height, active_f
     report = {"status": "unavailable", "proposals": 0, "samples": 0, "matches": []}
     if os.environ.get("VOICE_CLOTHING_PROFILE", "1") == "0":
         return aliases, {}, {**report, "status": "disabled"}
-    if not MP_PYTHON.is_file():
+    if not mediapipe_interpreter()[0]:
         return aliases, {}, report
     body_model = model_resource('vision.objects', 'builtin.nanodet', BODY_MODEL)
     mask_model = model_resource('vision.segmentation', 'builtin.mediapipe-selfie', MASK_MODEL)

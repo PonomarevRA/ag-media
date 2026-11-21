@@ -6,6 +6,7 @@ from array import array
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
 import json
+import logging
 from math import isfinite
 import os
 from pathlib import Path
@@ -28,7 +29,7 @@ from voice_studio.speech.person_mentions import annotate_person_mentions
 from voice_studio.vision.face_speakers import bind_faces
 from voice_studio.core.media_resources import batch_media_job, pilot_resources, run_batch_stage
 from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_LANGUAGES
-from voice_studio.speech.recognition import SMALL_MODEL, ready, recognize_file, recognize_result
+from voice_studio.speech.recognition import SMALL_MODEL, ready, recognize_file, recognize_result, resolve_whisper_language
 from voice_studio.vision.scene_transcript import reconcile_names
 from voice_studio.speech.speaker_diarization import detect_turns, label_phrases, label_words
 from voice_studio.speech.speaker_review import review_speakers
@@ -150,7 +151,7 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
                     "-c:a", "pcm_s16le", str(wav)], timeout=150)
             return wav
 
-        empty = {"segments": [], "text": "", "srt": "", "language": language, "durationMs": 0}
+        empty = {"segments": [], "text": "", "srt": "", "language": language or "auto", "durationMs": 0}
         if selection.selective:
             from voice_studio.graph.media_graph_ingest import probe_source
             empty["durationMs"] = probe_source(source)["durationMs"]
@@ -187,6 +188,8 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
                         try:
                             if run_batch_stage(review_speakers, visual_result, prepared_audio(), audio_start_ms, alternate=not merge_similar) is None:
                                 progress["state"] = "skipped"
+                                if reason := (visual_result.get("speakerReview") or {}).get("reason"):
+                                    progress["reason"] = reason
                         except (OSError, ValueError, subprocess.SubprocessError):
                             progress["state"] = "failed"
                             visual_result["speakerReview"] = {"status": "failed"}
@@ -288,10 +291,19 @@ def attach_person_evidence(source, work, evidence, *, body, gaze, emit=ignore_pr
             return
         plan = layer_plan(body=body, gaze=gaze)
         try:
-            evidence["personLayer"] = preview_people(source, timeline, work, FORMATS, plan)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            evidence["personLayer"] = {"status": "unavailable", "plan": plan}
-            progress["state"] = "failed"
+            layer = preview_people(source, timeline, work, FORMATS, plan)
+        except (BrokenPipeError, ConnectionResetError):
+            raise
+        except Exception:
+            logging.getLogger(__name__).exception("Optional figure and gaze analysis failed")
+            reason = "Не удалось измерить фигуру и взгляд. Остальные этапы продолжатся."
+            evidence["personLayer"] = {"status": "failed", "plan": plan, "reason": reason}
+            progress.update(state="failed", reason=reason)
+        else:
+            evidence["personLayer"] = layer
+            if layer.get("gazeUnavailable"):
+                reason = layer.get("reason") or "MediaPipe не смог измерить взгляд. Остальные этапы продолжатся."
+                progress.update(state="partial" if layer.get("frames") else "skipped", reason=reason)
 
 
 def collect_scene(source, work, evidence, object_sampling, emit, publish_mosaic):
@@ -301,6 +313,8 @@ def collect_scene(source, work, evidence, object_sampling, emit, publish_mosaic)
                               publish_mosaic=publish_mosaic)
         if result["status"] != "ok":
             progress["state"] = "failed" if result["status"] == "failed" else "skipped"
+            if reason := result.get("reason"):
+                progress["reason"] = reason
         return result
 
 
@@ -484,15 +498,16 @@ def transcribe_wav(wav, work, language, audio_start_ms=0, allow_empty=False, *,
             if sys.byteorder != "little":
                 samples.byteswap()
             if not any(abs(sample) >= 32 for sample in samples):
-                return transcript_result([], duration_ms, language)
+                return transcript_result([], duration_ms, language or "auto")
     if not 350 <= duration_ms <= MAX_MEDIA_SECONDS * 1000:
         if allow_empty and duration_ms < 350:
-            return transcript_result([], duration_ms, language)
+            return transcript_result([], duration_ms, language or "auto")
         raise ValueError("Длительность звука должна быть от 0,35 секунды до 15 минут.")
     if speaker_count is not None and (type(speaker_count) is not int or not 1 <= speaker_count <= 12):
         raise ValueError("Число говорящих должно быть от 1 до 12.")
     emit({"durationMs": duration_ms})
     small = quality and ready(SMALL_MODEL)
+    language = resolve_whisper_language(language, SMALL_MODEL if small else None, clip_languages=clip_languages)
     automatic = language == "auto"
     supported = CLIP_LANGUAGES if clip_languages else STUDIO_LANGUAGES
     raw, detected, turns, warning = run_batch_stage(

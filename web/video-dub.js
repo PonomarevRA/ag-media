@@ -2,35 +2,38 @@ import {uiText} from "./i18n.js";
 import {packMedia} from "./person-layer.js";
 import {effectiveSpeaker} from "./speaker-label.js";
 
-/** Edit English text for the existing transcript clock and request a local dub package. */
+/** Edit dubbing text for the transcript clock and request a local dub package. */
 export function mountVideoDub(find, request) {
   const root = find("media-dub");
   const list = find("media-dub-cues");
   const status = find("media-dub-status");
   const submit = find("media-dub-submit");
   const translate = find("media-dub-translate");
-  const modeLabel = document.createElement("label");
-  modeLabel.className = "select-field";
-  modeLabel.textContent = uiText("Произношение английского");
-  const mode = document.createElement("select");
-  mode.id = "media-dub-pronunciation";
-  for (const [value, caption] of [["source", "Сохранить акцент образца"], ["neutral", "Нейтральный английский · эксперимент"]]) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = uiText(caption);
-    mode.append(option);
-  }
-  modeLabel.append(mode);
-  list.before(modeLabel);
+  const dubLanguage = find("media-dub-language");
+  const reduceAccent = find("media-dub-pronunciation");
   let source;
   let language;
+  let target = dubLanguage.value;
   let rows = [];
   let active;
 
   function syncButton() {
     submit.disabled = !source || !rows.length || active === source;
     translate.disabled = submit.disabled;
+    translate.hidden = target !== "en";
+    dubLanguage.disabled = reduceAccent.disabled = Boolean(active && active === source);
   }
+
+  /** Keep each language draft when switching dubbing language. */
+  dubLanguage.onchange = () => {
+    for (const {cue, input, drafts} of rows) {
+      drafts[target] = input.value;
+      input.value = drafts[dubLanguage.value] ?? (dubLanguage.value === language ? cue.sourceText : "");
+    }
+    target = dubLanguage.value;
+    status.textContent = "";
+    syncButton();
+  };
 
   translate.onclick = async () => {
     const needed = rows.filter(row => !row.input.value.trim());
@@ -63,7 +66,7 @@ export function mountVideoDub(find, request) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "english-dub.zip";
+    link.download = target === "en" ? "english-dub.zip" : "russian-dub.zip";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
@@ -75,21 +78,25 @@ export function mountVideoDub(find, request) {
       invalid.pace.reportValidity();
       return;
     }
+    const textKey = target === "en" ? "englishText" : "targetText";
     const cues = rows.map(({cue, input, pace}) => ({
-      ...cue, englishText: input.value.trim(), tempo: pace.value ? pace.valueAsNumber : undefined,
+      ...cue, [textKey]: input.value.trim(), tempo: pace.value ? pace.valueAsNumber : undefined,
     }));
-    const missing = cues.findIndex(cue => !cue.englishText);
+    const missing = cues.findIndex(cue => !cue[textKey]);
     if (missing >= 0) {
-      status.textContent = uiText("Заполни английский текст для каждой реплики.");
+      status.textContent = uiText("Заполни текст дубляжа для каждой реплики.");
       rows[missing].input.focus();
       return;
     }
     const file = source;
     active = file;
     syncButton();
-    status.textContent = uiText("Отделяем фон и собираем английскую дорожку…");
+    status.textContent = uiText("Отделяем фон и собираем дорожку дубляжа…");
     try {
-      const blob = await request("video-dub", packMedia(file, {sourceLanguage: language, cues, pronunciationMode: mode.value}));
+      const blob = await request("video-dub", packMedia(file, {
+        sourceLanguage: language, dubLanguage: target, cues,
+        pronunciationMode: reduceAccent.checked ? "neutral" : "source",
+      }));
       if (source !== file) return;
       download(blob);
       status.textContent = uiText("Дубляж сохранён.");
@@ -104,7 +111,9 @@ export function mountVideoDub(find, request) {
   return {setData(file, data) {
     const previous = new Map();
     if (source === file) {
-      for (const {cue, input, pace} of rows) previous.set(cue.startMs, {text: input.value, tempo: pace.value});
+      for (const {cue, input, pace, drafts} of rows) {
+        previous.set(cue.startMs, {drafts: {...drafts, [target]: input.value}, tempo: pace.value});
+      }
     } else {
       root.open = false;
       status.textContent = "";
@@ -125,13 +134,14 @@ export function mountVideoDub(find, request) {
       sourceLine.textContent = `${seconds} · ${name} · ${text}`;
       const label = document.createElement("label");
       label.className = "select-field";
-      label.textContent = uiText("Английский текст");
+      label.textContent = uiText("Текст дубляжа");
       const input = document.createElement("textarea");
       input.rows = 2;
       input.maxLength = 1000;
-      input.setAttribute("aria-label", uiText`Английский текст реплики ${rows.length + 1}`);
+      input.setAttribute("aria-label", uiText`Текст дубляжа реплики ${rows.length + 1}`);
       const saved = previous.get(startMs);
-      input.value = saved?.text ?? (language === "en" ? text : "");
+      const drafts = saved?.drafts ?? {};
+      input.value = drafts[target] ?? (language === target ? text : "");
       label.append(input);
       const paceLabel = document.createElement("label");
       paceLabel.className = "select-field media-dub-pace";
@@ -147,7 +157,7 @@ export function mountVideoDub(find, request) {
       paceLabel.append(pace);
       row.append(sourceLine, label, paceLabel);
       list.append(row);
-      rows.push({cue: {startMs, endMs, speaker, sourceText: text, overlap: Boolean(segment.overlap)}, input, pace});
+      rows.push({cue: {startMs, endMs, speaker, sourceText: text, overlap: Boolean(segment.overlap)}, input, pace, drafts});
     }
     syncButton();
   }};

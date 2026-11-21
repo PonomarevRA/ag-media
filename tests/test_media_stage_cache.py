@@ -28,15 +28,15 @@ class StageCacheTests(TestCase):
             def decode(arguments, **kwargs):
                 Path(arguments[-1]).write_bytes(b'pcm')
             ffmpeg = stack.enter_context(patch(MODULE + 'ffmpeg', side_effect=decode))
-            speech = {'segments': [{'startMs': 0, 'endMs': 100, 'text': 'hello', 'speaker': 1}],
+            speech = {'segments': [{'startMs': 0, 'endMs': 1000, 'text': 'hello', 'speaker': 1}],
                       'text': 'hello', 'durationMs': 1000, 'language': 'en'}
             asr = stack.enter_context(patch(MODULE + 'transcribe_wav', side_effect=lambda *a, **k: deepcopy(speech)))
             sound = stack.enter_context(patch(MODULE + 'analyze_audio_scene', side_effect=lambda *a: {
                 'audioLayers': [], 'soundAnalysisStatus': 'done', 'soundClassifier': a[-1]}))
             def faces(source, wav, offset, result, **kwargs):
-                result['videoEvidence'] = {'stages': {'light-asd': 'ok', 'yunet': 'ok'}, 'phrases': {}}
+                result['videoEvidence'] = {'stages': {'light-asd': 'ok', 'yunet': 'ok'}, 'phrases': {},
+                                           'timeline': {'stepMs': 40, 'frames': []}}
             visual = stack.enter_context(patch(MODULE + 'analyze_visual_track', side_effect=faces))
-            stack.enter_context(patch(MODULE + 'review_speakers', return_value=None))
             stack.enter_context(patch(MODULE + 'bind_faces'))
             stack.enter_context(patch(MODULE + 'build_moodbook', return_value=None))
             stack.enter_context(patch(MODULE + 'attach_person_motion', return_value=False))
@@ -49,10 +49,17 @@ class StageCacheTests(TestCase):
                 report = transcribe_media(root, 'en', source, speakers=True, quality=True, visual=True,
                                           scene=True, revolver=checkpoint, **kwargs)
                 return report, checkpoint.counts['layers']
-            first, _ = run()
-            warm, stats = run()
+            fresh_events, cached_events = [], []
+            first, _ = run(emit=fresh_events.append)
+            warm, stats = run(emit=cached_events.append)
             self.assertEqual(first, warm)
             self.assertTrue(all(row['reused'] for row in stats.values()))
+            reason = "Одна голосовая группа, коротких реплик для проверки нет"
+            self.assertEqual(first['speakerReview'], {'status': 'skipped', 'reason': reason})
+            for events in (fresh_events, cached_events):
+                skipped, = [event for event in events
+                            if event.get('stage') == 'speaker-review' and event['state'] == 'skipped']
+                self.assertEqual(skipped['reason'], reason)
             changed, stats = run(object_sampling='basic')
             self.assertEqual(changed['segments'], first['segments'])
             self.assertEqual({key for key, row in stats.items() if not row['reused']}, {'scene'})
@@ -123,9 +130,13 @@ class StageCacheTests(TestCase):
                 image.write_bytes(b'png-fixture')
                 publish(0, image)
                 image.unlink()
-                return {'status': 'ok', 'interfaceScrolls': [{}]}
-            def publish(index, image):
+                return {'status': 'ok', 'interfaceScrolls': [{
+                    'startMs': 1000, 'endMs': 2000, 'width': 100, 'height': 200,
+                    'mosaicText': [{'text': 'Search', 'box': [.2, .2, .3, .1]}],
+                }]}
+            def publish(index, image, markdown):
                 self.assertEqual(image.read_bytes(), b'png-fixture')
+                self.assertIn('| Search | `20, 40, 30, 20` |', markdown)
                 urls.append(f'generation/{len(urls)}')
                 return urls[-1]
             first = cache.scene({}, 'basic', root, operation, publish, None)
@@ -154,6 +165,13 @@ class StageCacheTests(TestCase):
                 healthy = cache.run('scene', {}, None, lambda: {'status': 'ok'}, usable_scene)
                 self.assertEqual(healthy, {'status': 'ok'})
                 self.assertFalse(cache.revolver.counts['layers']['scene']['reused'])
+
+    def test_scene_with_all_ocr_crops_recovered_can_be_reused(self):
+        scene = {'status': 'ok', 'interfaceStatus': 'ok',
+                 'stages': {'nanodet': 'ok', 'apple-vision': 'partial', 'tesseract': 'ok'}}
+        self.assertTrue(usable_scene(scene))
+        scene['stages']['tesseract'] = 'partial'
+        self.assertFalse(usable_scene(scene))
 
     def test_recovery_completion_is_required_even_without_unresolved(self):
         for status in ('failed', 'partial', 'skipped', None):
@@ -207,6 +225,7 @@ class StageCacheTests(TestCase):
         replay_progress('visual', {}, report, events.append, 1)
         self.assertEqual({event['stage']: event['state'] for event in events},
                          {'light-asd': 'skipped', 'yunet': 'done', 'speaker-review': 'skipped'})
+        self.assertEqual(events[-1]['reason'], 'Причина пропуска отсутствует в сохранённом анализе')
 
     def test_ui_people_layer_reuses_and_invalidates_independently_of_scene(self):
         """Default UI layers must reuse in either execution order; changing gaze only reruns people."""

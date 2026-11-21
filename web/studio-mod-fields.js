@@ -43,7 +43,7 @@ export function modSettingsForm(item, save) {
     field.dataset.agFormField = "";
     field.dataset.agWidth = "fill";
     const caption = document.createElement("label");
-    caption.textContent = definition.title || key;
+    caption.textContent = uiText(definition.title || key);
     const id = `mod-setting-${item.id}-${fields.length}`;
     caption.id = `${id}-label`;
     caption.htmlFor = id;
@@ -61,10 +61,10 @@ export function modSettingsForm(item, save) {
         unset.textContent = uiText("Не задано");
         input.append(unset);
       }
-      for (const choice of definition.enum) {
+      for (const [index, choice] of definition.enum.entries()) {
         const option = document.createElement("option");
         option.value = JSON.stringify(choice);
-        option.textContent = String(choice);
+        option.textContent = uiText(definition.enumLabels?.[index] ?? String(choice));
         input.append(option);
       }
       input.value = value === undefined ? "" : JSON.stringify(value);
@@ -96,7 +96,7 @@ export function modSettingsForm(item, save) {
       const help = document.createElement("small");
       help.id = `${id}-help`;
       help.className = "muted";
-      help.textContent = definition.description;
+      help.textContent = uiText(definition.description);
       input.setAttribute("aria-describedby", help.id);
       field.append(help);
     }

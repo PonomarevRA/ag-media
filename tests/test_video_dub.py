@@ -63,7 +63,7 @@ class VideoDubTests(TestCase):
             clean_cues({**base, "cues": [{**cue(0, 900, 1), "overlap": True}]}, 3000)
         with self.assertRaisesRegex(ValueError, "пересечение"):
             clean_cues({**base, "cues": [cue(0, 1800, 1), cue(1500, 2600, 2)]}, 3000)
-        with self.assertRaisesRegex(ValueError, "перевод"):
+        with self.assertRaisesRegex(ValueError, "текст дубляжа"):
             clean_cues({**base, "cues": [{**cue(0, 900, 1), "englishText": ""}]}, 3000)
         for tempo in (True, 0.79, 1.81, float("nan")):
             with self.assertRaisesRegex(ValueError, "темп"):
@@ -119,7 +119,7 @@ class VideoDubTests(TestCase):
 
         def fake_generate(engine, job, demo):
             """Write discernible fixed PCM so assertions can inspect the timeline."""
-            selected.append((engine, job["language"], job["references"][0]["text"]))
+            selected.append((engine, job["language"], job["references"][0]["text"], job["pronunciationMode"]))
             with open_pcm(job["output"]) as audio:
                 audio.writeframes(b"\x10\x01" * (RATE // 4))
 
@@ -142,7 +142,7 @@ class VideoDubTests(TestCase):
                   patch('voice_studio.synthesis.video_dub.generate', side_effect=fake_generate),
                   patch('voice_studio.synthesis.video_dub.prepare_background', side_effect=separated_bed)):
                 report = build_video_dub(source, {"sourceLanguage": "ru", "cues": cues}, folder, archive)
-            self.assertEqual(selected, [("qwen", "en", row["sourceText"]) for row in cues])
+            self.assertEqual(selected, [("qwen", "en", row["sourceText"], "source") for row in cues])
             self.assertEqual(report["durationMs"], 3000)
             first, second = report["cues"]
             self.assertEqual((first["tempo"], second["tempo"]), (0.8, 1))
@@ -173,3 +173,21 @@ class VideoDubTests(TestCase):
                                       ["original-and-english.mp4", "english.wav", DIALOGUE_WAV,
                                        BACKGROUND_WAV, "english.srt", "dub-report.json"])
                 self.assertIn("00:00:01,500 --> 00:00:01,750", package.read("english.srt").decode())
+
+            with (patch('voice_studio.synthesis.video_dub.ready', return_value=True),
+                  patch('voice_studio.synthesis.video_dub.generate', side_effect=fake_generate),
+                  patch('voice_studio.synthesis.video_dub.prepare_background', return_value=folder / BACKGROUND_WAV)):
+                report = build_video_dub(source, {
+                    "sourceLanguage": "en", "dubLanguage": "ru", "pronunciationMode": "neutral",
+                    "cues": [{**cues[0], "targetText": "Русская реплика"}],
+                }, folder, archive)
+            self.assertEqual(selected[-1], ("qwen", "ru", cues[0]["sourceText"], "neutral"))
+            self.assertEqual(report["pronunciationMode"], "neutral")
+            with ZipFile(archive) as package:
+                self.assertCountEqual(package.namelist(),
+                                      ["original-and-russian.mp4", "russian.wav", "russian-dialogue.wav",
+                                       BACKGROUND_WAV, "russian.srt", "dub-report.json"])
+                self.assertIn("Русская реплика", package.read("russian.srt").decode())
+            stats = json.loads(check_output(["ffprobe", "-v", "error", "-select_streams", "a",
+                                              "-show_streams", "-of", "json", str(folder / "original-and-russian.mp4")]))
+            self.assertEqual([row["tags"]["language"] for row in stats["streams"]], ["eng", "rus"])

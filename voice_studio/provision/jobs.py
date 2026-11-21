@@ -12,7 +12,7 @@ from voice_studio.app.first_run import missing_tools, prepare_tools
 from voice_studio.core.optional_runtime import runtime_environment, runtime_ready, sherpa_ready
 from voice_studio.core.worker_process import worker_command
 from voice_studio.core.workspace_lock import workspace_lock
-from voice_studio.provision.assets import LIGHT_ASD, SOUNDS, SPEAKERS, VISION, install_assets
+from voice_studio.provision.assets import DUB_BACKGROUND, LIGHT_ASD, MEDIAPIPE, SOUNDS, SPEAKERS, VISION, install_assets
 from voice_studio.provision.runtime import install_runtime
 from voice_studio.speech.whisper_assets import install_base, whisper_base_model
 
@@ -31,7 +31,9 @@ GROUPS = {
     "speakers": ModelGroup(SPEAKERS, "sherpa"),
     "sounds": ModelGroup(SOUNDS, "sherpa"),
     "vision": ModelGroup(VISION, "vision"),
+    "mediapipe": ModelGroup(MEDIAPIPE, "mediapipe"),
     "light-asd": ModelGroup(LIGHT_ASD, "light-asd"),
+    "dub-background": ModelGroup(DUB_BACKGROUND, "dub-background"),
     "qwen": ModelGroup(runtime="mlx", voice=True),
     "chatterbox": ModelGroup(runtime="mlx", voice=True),
 }
@@ -47,16 +49,23 @@ def supported(group):
             return False
         return ((apple_silicon and int(major) >= 14)
                 or (sys.platform in {"linux", "win32"} and machine in {"x86_64", "amd64"}))
+    if group.runtime == "mediapipe":
+        return apple_silicon or (sys.platform in {"linux", "win32"} and machine in {"x86_64", "amd64"})
+    if group.runtime == "dub-background":
+        return sys.version_info[:2] in {(3, 12), (3, 13)} and apple_silicon and int(major) >= 26
     return not group.voice or (apple_silicon and int(major) >= 26)
 
 
 def group_ready(key, group):
     """Describe actual file and runtime prerequisites for the normal inference path."""
     if key == "transcription":
-        return whisper_base_model().is_file() and not missing_tools()
+        return whisper_base_model().is_file() and not missing_tools() and initial_background_ready()
     if group.voice:
         from voice_studio.synthesis.commercial_voice import ready
-        return ready(key)
+        return ready(key) and (key != "qwen" or initial_background_ready())
+    if key == "dub-background":
+        from voice_studio.synthesis.dub_background import separator_ready
+        return separator_ready() and all(asset.present() for asset in group.assets)
     if key == "light-asd" and not group_ready("vision", GROUPS["vision"]):
         return False
     runtime = sherpa_ready() if group.runtime == "sherpa" else runtime_ready(group.runtime)
@@ -66,12 +75,25 @@ def group_ready(key, group):
     return runtime and all(asset.present() for asset in group.assets)
 
 
+def initial_background_ready():
+    """Require the dubbing background pack only on supported platforms."""
+    group = GROUPS["dub-background"]
+    return not supported(group) or group_ready("dub-background", group)
+
+
+def install_initial_background(progress):
+    """Provision HDemucs for supported users as part of their first model install."""
+    if not initial_background_ready():
+        install_group("dub-background", GROUPS["dub-background"], progress)
+
+
 def install_group(key, group, progress):
     """Install the capability's dependencies and weight files in dependency order."""
     if key == "transcription":
         progress("runtime")
         prepare_tools()
         install_base(lambda received, total: progress("weights", received, total))
+        install_initial_background(progress)
         return
     if key == "light-asd" and not group_ready("vision", GROUPS["vision"]):
         install_group("vision", GROUPS["vision"], progress)
@@ -85,6 +107,8 @@ def install_group(key, group, progress):
         env.pop("HF_TOKEN", None)
         subprocess.run(worker_command(sys.executable, "voice_studio.synthesis.setup_commercial_voices", key),
                        env=env, check=True, timeout=1800)
+        if key == "qwen":
+            install_initial_background(progress)
     else:
         install_assets(group.assets, lambda name, received, total: progress("weights", received, total, name))
 

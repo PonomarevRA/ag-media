@@ -32,8 +32,8 @@ def choose_owner(child, candidates):
 def display_host(region, objects):
     """Associate a verified layout with its matching display observation, even for equal boxes."""
     data = region["data"]
-    if data.get("panelType") == "mobile-ui":
-        peers = [item for item in objects if item["label"] == "mobile-ui"
+    if data.get("panelType") in ("mobile-ui", "ui"):
+        peers = [item for item in objects if item["label"] == data["panelType"]
                  and item["data"].get("source") == "interface-layout"
                  and item["data"]["box"] == data["box"]]
         if len(peers) == 1:

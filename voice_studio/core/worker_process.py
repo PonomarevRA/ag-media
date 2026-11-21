@@ -27,7 +27,8 @@ def worker_command(python, module, *arguments, unbuffered=False):
     Import the matching Studio sources independently of cwd and PYTHONPATH.
     The caller can still supply optional native dependencies through PYTHONPATH.
     """
-    command = [str(python)]
+    # Bytecode written by a worker would invalidate a signed application bundle.
+    command = [str(python), "-B"]
     if unbuffered:
         command.append("-u")
     return [*command, "-c", _BOOTSTRAP, str(PROJECT_ROOT), module, *map(str, arguments)]

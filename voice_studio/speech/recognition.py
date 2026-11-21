@@ -1,6 +1,6 @@
 """Transcribe a local recording with multilingual Whisper."""
 
-from voice_studio.mod_runtime import model_provider
+from voice_studio.mod_runtime import current_snapshot, model_provider
 
 import json
 import os
@@ -12,6 +12,7 @@ from time import monotonic
 from voice_paths import model_path, temporary_directory
 from voice_studio.synthesis.engines import bounded_timeout, normalize
 from voice_studio.speech.whisper_assets import whisper_base_model, whisper_cli
+from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_LANGUAGES
 from voice_studio.audio.pauses import annotate, quiet_spans
 
 CLI = whisper_cli()
@@ -115,8 +116,8 @@ def watch_whisper_windows(command, jobs, timeout, on_window):
     return results
 
 
-def whisper_mod(jobs, language, options, model, *args, **kwargs):
-    """Keep the requested installed Whisper checkpoint as the default provider."""
+def whisper_mod_for_model(model):
+    """Resolve the default provider for the same checkpoint used by the decoder."""
     if model is not None and Path(model).name == 'ggml-base-q5_1.bin':
         return 'builtin.whisper-live'
     if model is not None and Path(model) == SMALL_MODEL:
@@ -124,6 +125,22 @@ def whisper_mod(jobs, language, options, model, *args, **kwargs):
     if model is not None and Path(model) == RECOVERY_MODEL:
         return 'builtin.whisper-recovery'
     return 'builtin.whisper-base'
+
+
+def whisper_mod(jobs, language, options, model, *args, **kwargs):
+    """Choose the native provider from Whisper's batch call."""
+    return whisper_mod_for_model(model)
+
+
+def resolve_whisper_language(requested, model, *, clip_languages=False):
+    """Honor an explicit override, including auto, before consulting captured model settings."""
+    if requested is not None:
+        return requested
+    supported = CLIP_LANGUAGES if clip_languages else STUDIO_LANGUAGES
+    settings = current_snapshot().selected_settings("speech.asr", default=whisper_mod_for_model(model))
+    language = settings.get("language")
+    # A file-only language setting does not change the RU/EN policy for live capture.
+    return language if isinstance(language, str) and language in supported else "auto"
 
 
 @model_provider('speech.asr', whisper_mod)

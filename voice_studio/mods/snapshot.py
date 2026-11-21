@@ -59,6 +59,11 @@ class ExecutionSnapshot:
         """Invoke the selected provider, using a builtin mod ID default only when none is selected."""
         return self.invoke_mod(self.selected(capability, default), capability, payload, **budgets)
 
+    def selected_settings(self, capability, *, default):
+        """Read detached settings for the same provider the captured operation will invoke."""
+        record, _ = self._record(self.selected(capability, default), capability)
+        return deepcopy(record["settings"])
+
     def invoke_mod(self, mod_id, capability, payload, **budgets):
         """Execute an enabled provider/stage once; builtins run directly, user code runs one batch."""
         record, declaration = self._record(mod_id, capability)

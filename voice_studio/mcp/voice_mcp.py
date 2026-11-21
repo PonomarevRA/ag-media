@@ -72,7 +72,7 @@ class StudioClient:
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=1020)
         try:
             with source.open("rb") as stream:
-                query = {"lang": language if language in STUDIO_LANGUAGES else "ru", "speech_lang": language,
+                query = {"lang": language if language in STUDIO_LANGUAGES else "ru", "speech_lang": language or "default",
                          "speakers": int(speakers or speaker_count is not None),
                          "quality": int(quality), "visual": int(visual or body or gaze),
                          "body": int(body), "gaze": int(gaze), "scene": int(scene or object_sampling not in (None, "basic")),
@@ -248,7 +248,7 @@ def build_server(studio, *, studio_root=None, graph_root=None):
         return job
 
     @mcp.tool()
-    async def media_transcribe(file_path: str, language: ClipLanguageMode = "auto",
+    async def media_transcribe(file_path: str, language: ClipLanguageMode | None = None,
                          speakers: bool = False, speaker_count: int | None = None,
                          quality: bool = False, visual: bool = False, editable: bool = False,
                          body: bool = False, gaze: bool = False, scene: bool = False,
@@ -257,6 +257,8 @@ def build_server(studio, *, studio_root=None, graph_root=None):
                          selected_stages: list[str] | None = None, force_stages: list[str] | None = None,
                          object_reconciliation: bool = False) -> dict[str, Any]:
         """Transcribe a local file and save SRT plus an importable analysis JSON.
+        Omit language to use the active Whisper mod's setting. Pass a language code such as bn or en
+        to override it for this file, or pass "auto" to explicitly detect the language.
         Set scene=True for the default small-detail pass.
         Choose basic for baseline only, every-third for dense checks, or shot-tiles for regional checks on selected shots.
         Set audio_classifier="zipformer" to tag music and background sounds with Zipformer.
@@ -313,14 +315,18 @@ def build_server(studio, *, studio_root=None, graph_root=None):
         return studio.request("transcript-cue", language, body)
 
     @mcp.tool()
-    async def media_transcribe_stream(url: str, capture_seconds: int = 30, language: TranscriptionLanguage = "auto",
+    async def media_transcribe_stream(url: str, capture_seconds: int = 30, language: TranscriptionLanguage | None = None,
                                 speakers: bool = False, speaker_count: int | None = None,
                                 audio_classifier: SoundClassifier = "auto") -> dict[str, Any]:
-        """Capture 1–120 seconds of an HLS or RTSP stream and return timed speech and SRT. Set speakers to label turns within the excerpt."""
-        result = await transcription_lane.run(studio.request, "transcribe-stream", "ru" if language == "auto" else language, {
+        """Capture 1–120 seconds of HLS or RTSP and return timed speech and SRT.
+
+        Omit language to use Whisper settings or pass ru, en, or auto.
+        Set speakers to label turns within the excerpt.
+        """
+        result = await transcription_lane.run(studio.request, "transcribe-stream", "en" if language == "en" else "ru", {
             "url": url, "seconds": capture_seconds, "speakers": speakers or speaker_count is not None,
             "speaker_count": speaker_count, "audio_classifier": audio_classifier,
-        }, timeout=1020, speech_lang=language)
+        }, timeout=1020, speech_lang=language or "default")
         return studio.save_subtitles(result)
 
     return mcp

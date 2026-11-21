@@ -1,10 +1,15 @@
 """Run optional local-part crop measurement in the existing vision environment."""
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+
+from voice_studio.core.optional_runtime import runtime_environment
+from voice_studio.core.worker_process import worker_command
+from voice_studio.vision.video_revolver import PYTHON, VISION
 
 TIMEOUT_SECONDS = 30
 
@@ -12,21 +17,20 @@ TIMEOUT_SECONDS = 30
 def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     """Return a copied report with measured evidence, or an explicit unavailable status.
 
-    Uses the installed mediapipe interpreter so the main application needs no
+    Uses the installed vision runtime so the main application needs no
     OpenCV dependency. The child reads at most 48 timestamps and 96 crops; its
     wall time is capped at 30 seconds. No model installation or download occurs.
     """
-    root = Path(__file__).resolve().parents[2]
-    python = root / '.engines' / 'mediapipe' / 'bin' / 'python'
-    if not python.is_file():
+    if not PYTHON.is_file():
         return unavailable(report, 'vision-runtime-unavailable')
     try:
         with TemporaryDirectory(prefix='object-reconciliation-') as folder:
             request, response = Path(folder) / 'request.json', Path(folder) / 'response.json'
             request.write_text(json.dumps(report), encoding='utf-8')
-            process = subprocess.run(
-                [str(python), '-m', 'voice_studio.vision.object_reconciliation', '--worker',
-                 str(source), str(request), str(response)], cwd=root, capture_output=True,
+            command = worker_command(PYTHON, 'voice_studio.vision.object_reconciliation',
+                                     '--worker', source, request, response)
+            env = runtime_environment('vision', {**os.environ, 'PYTHONPATH': str(VISION)})
+            process = subprocess.run(command, env=env, capture_output=True,
                 timeout=TIMEOUT_SECONDS, check=False)
             if process.returncode or not response.is_file():
                 return unavailable(report, 'measurement-failed')

@@ -6,6 +6,7 @@ from voice_studio.graph.media_graph_objects import overlap
 
 INTERFACE_KINDS = ("screen_region", "ui_element", "ui_connection")
 REGION_BASES = {"device-crop", "frame-layout"}
+PANEL_TYPES = ("mobile-ui", "ui")
 MAX_REGIONS = 2
 MAX_ELEMENTS = 48
 MAX_CONNECTIONS = 24
@@ -78,8 +79,10 @@ def clean_region(row, box_coordinates):
         data = {"role": role, "box": bounds, "basis": element_basis}
         if label := text_field(element.get("text"), 180):
             data["text"] = label
+        if mosaic := clean_mosaic(element.get("mosaic"), box_coordinates):
+            data["mosaic"] = mosaic
         elements.append(data)
-    verified = basis == "frame-layout" and row.get("panelType") == "mobile-ui"
+    verified = basis == "frame-layout" and row.get("panelType") in PANEL_TYPES
     if not elements and not verified:
         return None
 
@@ -100,10 +103,31 @@ def clean_region(row, box_coordinates):
 
     region = {"box": box, "basis": basis}
     if verified:
-        region["panelType"] = "mobile-ui"
+        region["panelType"] = row["panelType"]
+        if row.get("changeAssisted") is True:
+            region["changeAssisted"] = True
+        if type(reading := row.get("readingTimeMs")) is int and reading >= 0:
+            region["readingTimeMs"] = reading
     if device := text_field(row.get("deviceLabel"), 48):
         region["deviceLabel"] = device
     return region, elements, connections
+
+
+def clean_mosaic(value, box_coordinates):
+    """Retain a bounded address on the stitched PNG in addition to the frame box."""
+    if not isinstance(value, dict) or not (box := box_coordinates(value.get("box"))):
+        return None
+    limits = {"pageStartMs": (0, 7_200_000), "pageIndex": (0, 15), "column": (1, 12), "row": (1, 4096)}
+    fields = {}
+    for name, (low, high) in limits.items():
+        item = value.get(name)
+        if type(item) is not int or not low <= item <= high:
+            return None
+        fields[name] = item
+    pixel = value.get("pixelBox")
+    if not isinstance(pixel, list) or len(pixel) != 4 or any(type(item) is not int or not 0 <= item <= 4096 for item in pixel):
+        return None
+    return {**fields, "box": box, "pixelBox": pixel}
 
 
 def add_interface_observations(graph, stamp, rows, box_coordinates):
@@ -113,6 +137,10 @@ def add_interface_observations(graph, stamp, rows, box_coordinates):
         if normalized is None:
             continue
         region, elements, connections = normalized
+        reading = region.get("readingTimeMs")
+        if reading is not None and not 0 <= reading < stamp:
+            region.pop("readingTimeMs")
+            reading = None
         ending = stamp + 1
         suffix = f"{stamp}:{region_index}"
         region_id = f"screen_region:{suffix}"
@@ -120,6 +148,8 @@ def add_interface_observations(graph, stamp, rows, box_coordinates):
         title = "Screen region" if graph.language == "en" else "Область интерфейса"
         graph.node(region_id, "screen_region", title, (stamp, ending), region)
         graph.connect(region_id, "at_frame", frame_id)
+        if reading is not None:
+            graph.connect(region_id, "reading_from_frame", graph.frame(reading, "interface-layout"))
         graph.link_shots(region_id, stamp, ending)
         for index, element in enumerate(elements):
             element_id = f"ui_element:{suffix}:{index}"
@@ -147,24 +177,25 @@ def add_screen_child(graph, node_id, kind, label, stamp, data, region_id, frame_
 def restore_interface_observation(frame, regions, node_id, kind, data):
     """Rebuild the source report contract from a published graph's ordered scene rows."""
     if kind == "screen_region":
-        region = {field: data[field] for field in ("box", "basis", "deviceLabel", "panelType") if field in data}
+        region = {field: data[field] for field in ("box", "basis", "deviceLabel", "panelType", "changeAssisted", "readingTimeMs")
+                  if field in data}
         region.update(elements=[], connections=[])
         frame.setdefault("interfaces", []).append(region)
         regions[node_id] = region
     elif region := regions.get(data.get("screenId")):
         if kind == "ui_element":
-            fields = ("role", "box", "basis", "text")
+            fields = ("role", "box", "basis", "text", "mosaic")
             region["elements"].append({field: data[field] for field in fields if field in data})
         else:
             region["connections"].append({field: data[field] for field in ("from", "to", "segment")})
 
 
-def restore_verified_panel(frame, box):
-    """Preserve the mobile layout when reusing snapshots that stored only its object observation."""
+def restore_verified_panel(frame, box, panel_type="mobile-ui"):
+    """Preserve the layout when reusing snapshots that stored only its object observation."""
     regions = frame.setdefault("interfaces", [])
     for region in regions:
         if region["basis"] == "frame-layout" and overlap(box, region["box"]) >= .95:
-            region["panelType"] = "mobile-ui"
+            region["panelType"] = panel_type
             return
-    regions.insert(0, {"box": box, "basis": "frame-layout", "panelType": "mobile-ui",
+    regions.insert(0, {"box": box, "basis": "frame-layout", "panelType": panel_type,
                        "elements": [], "connections": []})

@@ -4,6 +4,7 @@ from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from math import hypot, isfinite
 
+from voice_studio.vision.frame_changes import BASIS as FRAME_CHANGE_DETAIL
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 
 MAX_GAP_MS = 1800
@@ -99,22 +100,28 @@ def crosses_panel(checks, first, second, *boxes):
     return any(box_coverage(box, panel) >= .9 for _, panel in checks[left:right] for box in boxes)
 
 
-def measured_motion_match(previous, current, overlap_score):
+def measured_motion_match(previous, current, overlap_score, *, with_anchor=False):
     """Recover a modest box shift using an exact cleaned foreground comparison.
 
     Source times, label and box must identify the preceding track observation.
     The worker measures these normalized crops at gaps up to 1400 ms. Background
     similarity alone cannot extend tracking, and reciprocal uniqueness is still
     decided by split_tracks over all geometric and appearance-backed candidates.
+    A short pair of change-crop observations can tolerate no overlap with stronger
+    foreground and edge evidence. Cross-pass matching needs an explicit anchor comparison.
     """
     gap = current["startMs"] - previous["startMs"]
-    if not 0 < gap <= MAX_APPEARANCE_GAP_MS or overlap_score < .35:
+    changes = sum(item["data"].get("detailBasis") == FRAME_CHANGE_DETAIL for item in (previous, current))
+    rapid = changes >= (1 if with_anchor else 2) and 0 < gap <= 160
+    if not 0 < gap <= MAX_APPEARANCE_GAP_MS or (overlap_score < .35 and not rapid):
         return False
     label = previous["label"].casefold()
     if label != current["label"].casefold():
         return False
     box = tuple(previous["data"]["box"])
     for match in current["data"].get("objectMatches") or ():
+        if with_anchor and (not rapid or match.get("comparisonBasis") != "frame-change-anchor"):
+            continue
         if (match["timeMs"] != previous["startMs"] or match["label"].casefold() != label
                 or tuple(match["box"]) != box):
             continue
@@ -122,7 +129,10 @@ def measured_motion_match(previous, current, overlap_score):
                                ("objectSimilarity", "edgeSimilarity", "scaleRatio"))
         if any(type(value) not in (int, float) or not isfinite(value) for value in (inside, edges, scale)):
             continue
-        if .94 <= inside <= 1 and .75 <= edges <= 1 and .65 <= scale <= 1.54:
+        if rapid and overlap_score < .35:
+            if .97 <= inside <= 1 and .9 <= edges <= 1 and .8 <= scale <= 1.25:
+                return True
+        elif .94 <= inside <= 1 and .75 <= edges <= 1 and .65 <= scale <= 1.54:
             return True
     return False
 
@@ -175,7 +185,7 @@ def append_detail_tracks(baseline, detail, *, panel_checks=()):
     nodes_by_stamp = defaultdict(list)
     for index, track in enumerate(baseline):
         for item in track:
-            nodes_by_stamp[item["startMs"]].append((index, item["data"]["box"]))
+            nodes_by_stamp[item["startMs"]].append((index, item))
     stamps = sorted(nodes_by_stamp)
     for track in detail:
         candidates = set()
@@ -184,8 +194,11 @@ def append_detail_tracks(baseline, detail, *, panel_checks=()):
             start = bisect_left(stamps, stamp - MAX_GAP_MS)
             stop = bisect_right(stamps, stamp + MAX_GAP_MS)
             for nearby_stamp in stamps[start:stop]:
-                for owner, box in nodes_by_stamp[nearby_stamp]:
-                    if (overlap(box, sample["data"]["box"]) >= MIN_IOU
+                for owner, node in nodes_by_stamp[nearby_stamp]:
+                    box = node["data"]["box"]
+                    score = overlap(box, sample["data"]["box"])
+                    before, after = (node, sample) if nearby_stamp <= stamp else (sample, node)
+                    if ((score >= MIN_IOU or measured_motion_match(before, after, score, with_anchor=True))
                             and not crosses_panel(panel_checks, nearby_stamp, stamp, box, sample["data"]["box"])):
                         candidates.add(owner)
             if len(candidates) > 1:
@@ -223,10 +236,10 @@ def add_object_tracks(graph):
         stamp = node["startMs"]
         shot = next(graph.intersecting_shots(stamp, stamp + 1), None)
         if shot:
-            if node["data"].get("source") == "interface-layout" and node["label"] == "mobile-ui":
+            if node["data"].get("source") == "interface-layout" and node["label"] in ("mobile-ui", "ui"):
                 panels[shot].append((stamp, node["data"]["box"]))
             baseline, detail = grouped[shot, node["label"].casefold()]
-            frames = detail if node["data"].get("detailBasis") == SMALL_OBJECT_DETAIL else baseline
+            frames = detail if node["data"].get("detailBasis") in (SMALL_OBJECT_DETAIL, FRAME_CHANGE_DETAIL) else baseline
             frames[stamp].append(node)
     for checks in panels.values():
         checks.sort(key=lambda check: check[0])

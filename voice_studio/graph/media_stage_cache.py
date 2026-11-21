@@ -15,8 +15,9 @@ import os
 from time import perf_counter
 
 from voice_paths import ensure_temporary_root, workspace_temp
+from voice_studio.core.optional_runtime import runtime_path
 from voice_studio.core.storage_cache import use_cache
-from voice_studio.graph.media_analysis_revolver import AnalysisRevolver, analysis_fingerprint, result_fingerprint
+from voice_studio.graph.media_analysis_revolver import AnalysisRevolver, analysis_fingerprint, file_identity, result_fingerprint
 from voice_studio.graph.media_stage_selection import StageSelection
 
 LAYER_ENV = {
@@ -61,6 +62,13 @@ class IncrementalStages:
         started = perf_counter()
         environment = {key: os.environ.get(key) for key in LAYER_ENV[name]}
         environment["mods"] = layer_fingerprint(name)
+        if name in {"visual", "people"}:
+            # Installing MediaPipe also enables hair and appearance sampling in the face pass.
+            marker = runtime_path("mediapipe") / ".studio-ready"
+            try:
+                environment["mediapipe"] = file_identity(marker)
+            except FileNotFoundError:
+                pass
         key = result_fingerprint([self.revision, settings, environment, upstream])
         requested_key, requested_settings = key, settings
         pointer = self.manifest["layers"].get(name)
@@ -121,7 +129,7 @@ class IncrementalStages:
         def measure():
             mosaics = []
 
-            def capture(index, path):
+            def capture(index, path, markdown=None):
                 """Keep the image before the worker removes its temporary directory."""
                 mosaics.append({"index": index, "png": b64encode(path.read_bytes()).decode("ascii")})
                 return None
@@ -143,9 +151,16 @@ class IncrementalStages:
                 index = image["index"]
                 path = work / f"cached-scroll-{index}.png"
                 path.write_bytes(b64decode(image["png"], validate=True))
-                url = publish_mosaic(index, path)
-                if url and 0 <= index < len(scene.get("interfaceScrolls", [])):
-                    scene["interfaceScrolls"][index]["previewUrl"] = url
+                pages = scene.get("interfaceScrolls", [])
+                if not 0 <= index < len(pages):
+                    continue
+                page = pages[index]
+                from voice_studio.vision.video_scene import mosaic_markdown
+
+                markdown = mosaic_markdown(page)
+                url = publish_mosaic(index, path, markdown) if markdown else publish_mosaic(index, path)
+                if url:
+                    page["previewUrl"] = url
         return scene
 
 
@@ -190,9 +205,15 @@ def usable_visual(result):
 
 
 def usable_scene(result):
-    """A successful wrapper must not hide an unavailable detector or partial OCR."""
+    """Cache complete detection and OCR, including crops recovered by the fallback."""
+    stages = result.get("stages", {})
+    ocr_recovered = stages.get("apple-vision") == "partial" and stages.get("tesseract") == "ok"
+    workers_complete = all(status == "ok" or (name == "apple-vision" and ocr_recovered)
+                           for name, status in stages.items())
     return (result.get("status") == "ok" and result.get("interfaceStatus", "ok") == "ok"
-            and all(status == "ok" for status in result.get("stages", {}).values()))
+            and workers_complete
+            and (result.get("frameChanges") or {}).get("status", "ok") == "ok"
+            and (result.get("frameChangeObjects") or {}).get("status", "ok") == "ok")
 
 
 def usable_speech(result):
@@ -226,13 +247,17 @@ def replay_progress(name, settings, result, emit, elapsed):
             names.append("whisper-recovery")
     for stage_name in names:
         state = "done"
+        reason = None
         if name == "visual":
             measured = (result.get("videoEvidence") or {}).get("stages", {})
-            if stage_name == "speaker-review" and not result.get("speakerReview"):
-                state = "skipped"
+            if stage_name == "speaker-review":
+                review = result.get("speakerReview") or {}
+                if not review or review.get("status") == "skipped":
+                    state = "skipped"
+                    reason = review.get("reason") or "Причина пропуска отсутствует в сохранённом анализе"
             elif measured.get(stage_name) in ("no-phrases", "no-video"):
                 state = "skipped"
             elif measured.get(stage_name) == "partial":
                 state = "partial"
         emit({"stage": stage_name, "state": state, "reused": True, "cacheHit": True,
-              "cacheLayer": name, "elapsedMs": elapsed})
+              "cacheLayer": name, "elapsedMs": elapsed, **({"reason": reason} if reason else {})})

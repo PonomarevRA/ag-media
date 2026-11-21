@@ -3,7 +3,7 @@ import {effectiveSpeaker, mixedSpeakerLabel} from "./speaker-label.js";
 import {packMedia} from "./person-layer.js";
 
 export const FRAME_COLORS = Object.freeze({
-  face: "#f5f1e8", speech: "#ffb34e", body: "#70dddb", object: "#99e198", text: "#c7adfb", interface: "#98bfff",
+  face: "#f5f1e8", speech: "#ffb34e", body: "#70dddb", object: "#99e198", text: "#c7adfb", interface: "#98bfff", change: "#ffdf66",
 });
 const {face: FACE, speech: SPEAKING, body: BODY} = FRAME_COLORS;
 const OBJECT_LIMIT = 3;
@@ -336,7 +336,7 @@ function indexObjectTracks(clips) {
   const rows = [];
   for (const clip of clips) {
     // The independently measured panel has its own outline.
-    if (clip.label === "mobile-ui") continue;
+    if (clip.label === "mobile-ui" || clip.label === "ui") continue;
     const isolated = clip.boxSamples.length === 1;
     rows.push({clip, isolated, startMs: clip.startMs - (isolated ? SCENE_RADIUS_MS : 0),
       endMs: clip.endMs + (isolated ? SCENE_RADIUS_MS : 0)});
@@ -430,9 +430,22 @@ function drawTextRegions(ctx, text, width, height) {
   ctx.restore();
 }
 
+/** Draw measured pixel changes as dashed outlines beneath faces and captions. */
+function drawChanges(ctx, changes, width, height) {
+  if (!changes?.length) return;
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = FRAME_COLORS.change;
+  ctx.setLineDash([3, 3]);
+  for (const {box: [x, y, w, h]} of changes) {
+    ctx.strokeRect(x * width, y * height, w * width, h * height);
+  }
+  ctx.restore();
+}
+
 /** Use one layout and draw order for browser pixels and the MP4 render instructions. */
 export function paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, cuts, timeMs, width, height,
-                                    selected, textFrames = [], lookups, onFrame, panelFrames = [], objectTracks = null) {
+                                    selected, textFrames = [], lookups, onFrame, panelFrames = [], objectTracks = null, changes = []) {
   const bounds = [0, 0, width, height];
   const {faces, phrase, speakerFace, speakingFaces} = frameAnnotation(evidence, phrases, timeMs, lookups);
   const overlap = phrase && (mixedSpeakerLabel(phrase, timeMs) ||
@@ -442,7 +455,7 @@ export function paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, cuts, t
     : objectMarksAt(objectTracks, cuts, timeMs, nearbyFrame);
   const textFrame = selected ?? sceneFrameAt(textFrames, cuts, timeMs);
   const panelFrame = selected?.panelChecked ? selected : sceneFrameAt(panelFrames, cuts, timeMs, PANEL_RADIUS_MS);
-  const panels = panelFrame?.interfaces?.filter(panel => panel?.panelType === "mobile-ui") ?? [];
+  const panels = panelFrame?.interfaces?.filter(panel => panel?.panelType === "mobile-ui" || panel?.panelType === "ui") ?? [];
   const objects = selected
     ? objectMarks.filter(item => !DISPLAY_LABELS.has(item.label) || !coveredByPanel(item.box, panels, .9))
     : prominentMarks(objectMarks, panels, OBJECT_LIMIT);
@@ -452,6 +465,7 @@ export function paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, cuts, t
     drawObjects(ctx, objects, width, height);
     drawTextRegions(ctx, text, width, height);
   }
+  drawChanges(ctx, changes, width, height);
   drawPanels(ctx, panels, width, height);
   const marks = personMarks(evidence?.personLayer, faces, timeMs);
   for (const hit of faces) {
@@ -472,7 +486,7 @@ export function paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, cuts, t
     timeMs, faces, marks, speakingFaces, phrase, speechLabel,
     personCount: personCountAt(evidence?.editorTimeline?.personPilot?.samples ?? [], cuts, timeMs, lookups?.personCuts),
     shot: cuts.length ? Math.max(1, after(cuts, timeMs, value => value) + (cuts[0] > 0 ? 1 : 0)) : null,
-    objects, text, panels,
+    objects, text, panels, changes,
   });
 }
 
@@ -502,9 +516,15 @@ function recordDrawing(measure, target) {
 }
 
 /** Build sparse timed vectors and coalesce identical adjacent painted samples. */
-export function previewExportPlan(measure, evidence, phrases, sceneFrames, cuts, width, height, durationMs, textFrames = [], panelFrames = [], objectClips) {
+export function previewExportPlan(measure, evidence, phrases, sceneFrames, cuts, width, height, durationMs, textFrames = [], panelFrames = [], objectClips, changes = []) {
   const boundaries = new Set([0, durationMs]);
   const objectTracks = indexObjectTracks(objectClips);
+  const changesAt = intervalLookup(changes);
+  for (const row of changes) {
+    for (const edge of [row.startMs, row.endMs]) {
+      if (0 < edge && edge < durationMs) boundaries.add(edge);
+    }
+  }
   for (const edge of objectTracks?.edges ?? []) {
     if (0 < edge && edge < durationMs) boundaries.add(edge);
   }
@@ -545,7 +565,7 @@ export function previewExportPlan(measure, evidence, phrases, sceneFrames, cuts,
     const start = times[index], end = times[index + 1];
     const commands = [];
     paintTechnicalFrame(recordDrawing(measure, commands), evidence, phrases, sceneFrames, cuts, start, width, height,
-                        null, textFrames, lookups, undefined, panelFrames, objectTracks);
+                        null, textFrames, lookups, undefined, panelFrames, objectTracks, changesAt(start)?.regions);
     const key = JSON.stringify(commands);
     const previous = samples.at(-1);
     if (commands.length && previous && previous[1] === start && lastKey === key) previous[1] = end;
@@ -557,7 +577,7 @@ export function previewExportPlan(measure, evidence, phrases, sceneFrames, cuts,
 
 /** Render one synchronized overlay frame without consuming player input. */
 /** Mount the live overlay and notify the monitor after painting or hiding it. */
-export function mountVideoOverlay(video, canvas, options, toggle, onFrame) {
+export function mountVideoOverlay(video, canvas, options, toggle, onFrame, changeToggle) {
   const ctx = canvas.getContext("2d");
   const frameCallbacks = typeof video.requestVideoFrameCallback === "function";
   let evidence;
@@ -573,7 +593,15 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame) {
   let cuts = [];
   let sceneCuts = null;
   let inferredCuts = [];
+  let changeRows = [];
+  let changesAt = intervalLookup();
   let pending;
+
+  /** Use source intervals only; different layers keep their own sampling tolerance. */
+  function visibleChanges(at) {
+    // FFmpeg timestamps are rounded to milliseconds, while the player uses fractional seconds.
+    return changeToggle?.checked && toggle.checked ? changesAt(Math.round(at))?.regions : undefined;
+  }
 
   function paint(time = video.currentTime) {
     const width = video.clientWidth;
@@ -593,7 +621,7 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame) {
     const selected = sceneFrame && video.paused && Math.abs(timeMs - sceneFrame.timeMs) < 120 ? sceneFrame : null;
     ctx.translate(left, top);
     paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, sceneCuts ?? (cuts.length ? cuts : inferredCuts), timeMs,
-                        Math.round(imageWidth), Math.round(imageHeight), selected, textFrames, lookups, onFrame, panelFrames, objectTracks);
+                        Math.round(imageWidth), Math.round(imageHeight), selected, textFrames, lookups, onFrame, panelFrames, objectTracks, visibleChanges(timeMs));
   }
 
   function schedule() {
@@ -619,9 +647,13 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame) {
   }
 
   function update() {
-    const hasVisualData = evidence?.timeline?.frames?.length || sceneFrame || sceneFrames.length || objectTracks?.rows.length || textFrames.length || panelFrames.length;
+    const hasVisualData = evidence?.timeline?.frames?.length || sceneFrame || sceneFrames.length || objectTracks?.rows.length || textFrames.length || panelFrames.length || changeRows.length;
     const available = Boolean(ctx && hasVisualData && video.videoWidth);
     options.hidden = !available;
+    if (changeToggle) {
+      changeToggle.closest("label").hidden = !available || !changeRows.length;
+      changeToggle.disabled = !toggle.checked;
+    }
     canvas.hidden = !available || !toggle.checked;
     if (canvas.hidden) {
       cancel();
@@ -634,6 +666,7 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame) {
   }
 
   toggle.addEventListener("change", update);
+  changeToggle?.addEventListener("change", update);
   for (const event of ["loadedmetadata", "emptied", "error"]) video.addEventListener(event, update);
   video.addEventListener("play", schedule);
   for (const event of ["seeked", "pause", "ended"]) {
@@ -653,24 +686,36 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame) {
       const lastCue = phrases.reduce((end, cue) => Math.max(end, cue.endMs), 0);
       const duration = Math.max(lastCue, Math.round(video.duration * 1000));
       const plan = previewExportPlan(ctx, evidence, phrases, sceneFrames, sceneCuts ?? (cuts.length ? cuts : inferredCuts),
-                                     Math.round(width), Math.round(height), duration, textFrames, panelFrames, objectClips);
+                                     Math.round(width), Math.round(height), duration, textFrames, panelFrames, objectClips,
+                                     changeToggle?.checked && toggle.checked ? changeRows : []);
       return packMedia(source, plan);
     },
     /** Use the monitor renderer on a frozen source frame and return its nearby UI geometry. */
     paintSnapshot(context, width, height, stamp) {
       const boundaries = sceneCuts ?? (cuts.length ? cuts : inferredCuts);
       paintTechnicalFrame(context, evidence, phrases, sceneFrames, boundaries, stamp, width, height,
-                          null, textFrames, lookups, undefined, panelFrames, objectTracks);
-      return sceneFrameAt(interfaceFrames, boundaries, stamp)?.interfaces ??
+                          null, textFrames, lookups, undefined, panelFrames, objectTracks, visibleChanges(stamp));
+      const rows = sceneFrameAt(interfaceFrames, boundaries, stamp)?.interfaces ??
         sceneFrameAt(panelFrames, boundaries, stamp, PANEL_RADIUS_MS)?.interfaces ?? [];
+      return rows.map(panel => {
+        if (panel.elements?.length || !Number.isInteger(panel.readingTimeMs)) return panel;
+        const index = after(interfaceFrames, panel.readingTimeMs, frame => frame.timeMs) - 1;
+        const reading = interfaceFrames[index];
+        if (reading?.timeMs !== panel.readingTimeMs) return panel;
+        const prior = reading.interfaces.find(row => row.elements?.length &&
+          coveredByPanel(row.box, [panel], .98) && coveredByPanel(panel.box, [row], .98));
+        return prior ? {...panel, elements: prior.elements, connections: prior.connections} : panel;
+      });
     },
     setSceneData(data) {
       const samples = data?.frames ?? [];
+      changeRows = (data?.frameChanges?.rows ?? []).filter(row => Array.isArray(row?.regions) && row.regions.length);
+      changesAt = intervalLookup(changeRows);
       sceneFrames = samples.filter(frame => frame.objectChecked !== false);
       textFrames = samples.filter(frame => frame.text?.length);
       interfaceFrames = samples.filter(frame => frame.interfaces?.length);
       panelFrames = samples.filter(frame => frame.panelChecked ||
-        frame.interfaces?.some(panel => panel?.panelType === "mobile-ui"));
+        frame.interfaces?.some(panel => panel?.panelType === "mobile-ui" || panel?.panelType === "ui"));
       sceneCuts = data?.shotStartsMs ?? null;
       inferredCuts = sceneCuts === null ? samples.filter((frame, index) => index && frame.shot !== samples[index - 1].shot)
                                                 .map(frame => frame.timeMs) : [];

@@ -18,6 +18,10 @@ For repeat requests, use `agent-memory` and check the project’s local `.ag-med
 2. For small or uncertain text, request `mode="full"` with only the region of interest as normalized
    `[x, y, width, height]`. Reuse the same `session_id` for related captures to reuse OCR on unchanged areas.
    For overlapping captures of a scrolling viewport, use `screen_scroll` in capture order.
+   Request `format=markdown` from either tool for a visual table and role sections with exact coordinates.
+   Use `screen_crop` for a local screenshot or downloaded mosaic with the Markdown pixel box
+   `[x, y, width, height]`. For an original video frame, pass `at_ms` and use the frame box
+   with `coordinate_space=normalized`. The tool returns the cropped PNG and its source coordinates.
 3. For physical objects in a still image, open the image in Studio and enable **Objects**. That
    local analysis can include OCR and UI evidence in the same JSON export. `screen_analyze` is
    the screenshot OCR/layout tool; it does not run general object detection.

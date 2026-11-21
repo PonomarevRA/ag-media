@@ -17,7 +17,11 @@ PIP_INTEGRITY = (1841526, "c46efd13b6aa8279f33f2864459c8ce587ea6a1a59ee20de05586
 PACKAGES = {
     "sherpa": (("sherpa-onnx==1.13.8",), "import sherpa_onnx"),
     "vision": (("opencv-python-headless==4.13.0.92",), "import cv2; assert hasattr(cv2, 'FaceDetectorYN')"),
+    "mediapipe": (("mediapipe==0.10.32",),
+                  "import cv2, mediapipe as mp; assert mp.tasks.vision.FaceLandmarker and mp.tasks.vision.ImageSegmenter"),
     "light-asd": (("scipy==1.18.1",), "import torch; from scipy.io import wavfile; assert torch.version.cuda is None"),
+    "dub-background": (("torchaudio==2.8.0", "numpy==2.5.5", "soundfile==0.14.0", "cffi==2.0.0", "pycparser==2.23"),
+                       "import soundfile; from torchaudio.models import hdemucs_high; assert callable(hdemucs_high)"),
     "mlx": (("mlx-audio==0.6.5", "mlx==0.32.4", "soundfile"),
             "import mlx.core; from mlx_audio.tts.utils import load_model; import soundfile"),
 }
@@ -30,13 +34,19 @@ def install_runtime(group):
         return
     target = runtime_path(group)
     requirements, probe = PACKAGES[group]
-    indexes = []
+    options = []
+    probe_runtimes = []
     if group == "light-asd":
         if sys.platform == "darwin":
             requirements = (*requirements, "torch==2.8.0")
         else:
             requirements = (*requirements, "torch==2.8.0+cpu")
-            indexes = ["--extra-index-url", "https://download.pytorch.org/whl/cpu"]
+            options = ["--extra-index-url", "https://download.pytorch.org/whl/cpu"]
+    elif group == "dub-background":
+        # Audio separation shares Torch with Light-ASD. Older Light-ASD installs relied on vision for NumPy.
+        install_runtime("light-asd")
+        options = ["--no-deps"]
+        probe_runtimes = [str(runtime_path("light-asd"))]
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with TemporaryDirectory(dir=target.parent, prefix=".studio-install-") as folder:
         work = Path(folder)
@@ -48,11 +58,11 @@ def install_runtime(group):
         command = [sys.executable, "-I", "-B", "-c", PIP_BOOTSTRAP, str(archive),
                    "--isolated", "--disable-pip-version-check", "install", "--no-input",
                    "--only-binary=:all:", "--ignore-installed", "--no-compile", "--index-url", "https://pypi.org/simple",
-                   *indexes, "--target", str(staged), *requirements]
+                   *options, "--target", str(staged), *requirements]
         env = {**os.environ, "PIP_CONFIG_FILE": os.devnull}
         subprocess.run(command, env=env, check=True, timeout=900)
-        subprocess.run([sys.executable, "-I", "-B", "-c", "import sys; sys.path.insert(0,sys.argv[1]); " + probe,
-                        str(staged)], check=True, timeout=60)
+        subprocess.run([sys.executable, "-I", "-B", "-c", "import sys; sys.path[:0] = sys.argv[1:]; " + probe,
+                        str(staged), *probe_runtimes], check=True, timeout=60)
         (staged / ".studio-ready").touch()
         with suppress(FileExistsError):
             if not target.exists():

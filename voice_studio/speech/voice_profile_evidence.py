@@ -33,10 +33,15 @@ def speaking_evidence(cue, result, visual_scope=None):
         return None
     if (face is not None and activity.get("state") == "visible-active"
             and 10 <= active <= total and active / total >= .8):
-        return {"subjectId": f"{visual_scope}:face:{face}", "basis": "audio-visual-active-speaker",
+        witness = {"activeFrames": active, "phraseFrames": total, "faceId": face, "timeMs": cue["startMs"]}
+        for key in ("faceEvidence", "changeReview", "profileFace", "identitySimilarity"):
+            if key in activity:
+                witness[key] = activity[key]
+        verified_face = activity.get("profileFace")
+        subject = verified_face if type(verified_face) is int and activity.get("faceEvidence") == "original-head-crops" else face
+        return {"subjectId": f"{visual_scope}:face:{subject}", "basis": "audio-visual-active-speaker",
                 "strength": "explicit", "visualScope": str(visual_scope), "identityScope": "window-local",
-                "evidence": [{"activeFrames": active, "phraseFrames": total,
-                "faceId": face, "timeMs": cue["startMs"]}]}
+                "evidence": [witness]}
     return None
 
 

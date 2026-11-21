@@ -17,7 +17,9 @@ class ScrollPreviewTests(TestCase):
             cache = root / "previews"
             store = ScrollPreviews(cache)
             with store.analysis() as publish:
-                first_key, _ = PREVIEW_PATH.fullmatch(publish(0, source)).groups()
+                first_key, _ = PREVIEW_PATH.fullmatch(publish(0, source, "# OCR")).groups()
+            document = store.path(first_key, 0, markdown=True)
+            self.assertEqual(document.read_text(), "# OCR")
             os.utime(store.path(first_key, 0), (1, 1))
             store = ScrollPreviews(cache)
             self.assertEqual(store.read(first_key, 0), PNG_HEADER + b"first")
@@ -39,6 +41,7 @@ class ScrollPreviewTests(TestCase):
                 self.assertIsNotNone(store.read(first_key, 0))
                 self.assertIsNone(store.read(second_key, 0))
             self.assertIsNone(store.read(first_key, 0))
+            self.assertFalse(document.exists())
             self.assertEqual(store.read(second_key, 1), PNG_HEADER + b"second")
             self.assertIsNone(store.read("f" * 32, 0))
 

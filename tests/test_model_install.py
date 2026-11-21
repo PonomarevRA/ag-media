@@ -121,3 +121,4 @@ class RuntimeLaunchTests(TestCase):
                 with ActivityWorkerSession(command, []) as worker:
                     output = subprocess.check_output(worker.command, env=worker.env, text=True, timeout=10)
             self.assertEqual(output.strip(), "vision")
+            self.assertFalse((vision / "__pycache__").exists())

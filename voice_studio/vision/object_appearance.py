@@ -1,10 +1,12 @@
 """Measure object appearance on the scene worker's decoded frames."""
 
 from itertools import combinations, product
+from math import hypot
 
 import cv2
 import numpy as np
 
+from voice_studio.vision.frame_changes import BASIS as CHANGE_CROP
 from voice_studio.vision.scene_objects import iou
 
 OBJECT_SIZE = 64
@@ -74,15 +76,28 @@ def compare(first, second):
             "scaleRatio": round(float(second[4] / first[4]), 3)}
 
 
+def nearby_same_label(left, right):
+    """Bound comparisons of displaced crop detections using size and center distance."""
+    if left["label"] != right["label"]:
+        return False
+    x, y, w, h = left["box"]
+    u, v, p, q = right["box"]
+    distance = hypot(x + w / 2 - u - p / 2, y + h / 2 - v - q / 2)
+    return distance <= min(.12, 2 * max(w, h, p, q))
+
+
 class ObjectAppearance:
     """Retain only descriptors from the preceding object sample in the same shot."""
 
-    def __init__(self):
+    def __init__(self, min_overlap=.35, nearby_ms=0):
+        """Enable close fast-motion comparisons only for the opt-in crop pass."""
+        self.min_overlap = min_overlap
+        self.nearby_ms = nearby_ms
         self.previous = ()
         self.shot = None
         self.stamp = 0
 
-    def add(self, image, frame):
+    def add(self, image, frame, *, mixed_passes=False):
         """Attach bounded evidence to frame items, indexed by the source box and time."""
         current = []
         for item in frame["objects"][:12]:
@@ -96,8 +111,15 @@ class ObjectAppearance:
             comparisons.append((product(self.previous, current), self.stamp))
         for pairs, previous_time in comparisons:
             for (left, first), (right, second) in pairs:
-                if iou(left["box"], right["box"]) < .35:
+                if mixed_passes and (previous_time == stamp or
+                                     (left.get("detailBasis") == CHANGE_CROP) == (right.get("detailBasis") == CHANGE_CROP)):
                     continue
+                overlap = iou(left["box"], right["box"])
+                if overlap < .35:
+                    gap = stamp - previous_time
+                    if (overlap < self.min_overlap or not 0 < gap <= self.nearby_ms
+                            or not nearby_same_label(left, right)):
+                        continue
                 metrics = compare(first, second)
                 right.setdefault("objectMatches", []).append({
                     "timeMs": previous_time, "label": left["label"],

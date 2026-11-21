@@ -1,10 +1,11 @@
 """Plan local scene OCR and object recognition without re-running face detection."""
 
 from voice_studio.core.process_usage import process_usage
-from voice_studio.mod_runtime import model_provider, is_replacement
+from voice_studio.mod_runtime import current_snapshot, model_provider, is_replacement
 
 from bisect import bisect_left
 import json
+import logging
 from pathlib import Path
 import re
 import subprocess
@@ -18,10 +19,13 @@ from voice_studio.vision.video_revolver import VISION, VISUAL_SLOT, probe_video,
 
 from voice_paths import model_path, temporary_directory
 MAX_OCR_REGIONS = 128
-MAX_SCROLL_FRAMES = 180
-SCROLL_SAMPLE_MS = 200
+MAX_SCROLL_FRAMES = 320
+SCROLL_SAMPLE_MS = 65
+PANEL_SAMPLE_MS = 400
 SCENE_CUT_THRESHOLD = 0.30
 LOW_CONTRAST_CUT = 0.16
+CLOCK_FILTER = ("scale=112:112:force_original_aspect_ratio=decrease,"
+                "select='gte(scene,0)',metadata=mode=print:key=lavfi.scene_score:file=frames.log")
 SCENE_FRAME = re.compile(r"^frame:(\d+)\s+pts:\S+\s+pts_time:(\S+)")
 
 
@@ -44,10 +48,18 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 start, end = window
                 inputs.extend(["-ss", f"{start / 1000:.3f}", "-t", f"{(end - start) / 1000:.3f}"])
             inputs.extend(["-i", str(source)])
-            frames, native_cuts = scan_frames(inputs, root)
+            frames, native_cuts, changes = scan_scene(inputs, root, colors_only=colors_only)
             supplied_cuts = evidence.get("editorTimeline", {}).get("shots", [])
             cuts = merge_shot_cuts(frames, native_cuts, supplied_cuts)
             plan = sample_plan(frames, cuts, object_sampling)
+            if changes and changes["status"] == "ok":
+                from voice_studio.vision.frame_changes import augment_plan
+                cuts_by_ordinal = {frames[index][0] for index in cuts if 0 <= index < len(frames)}
+                kept = [row for row in changes["rows"] if row["sourceFrame"] not in cuts_by_ordinal]
+                changes["cutCandidatesRemoved"] = len(changes["rows"]) - len(kept)
+                changes["rows"] = kept
+                augment_plan(plan, frames, cuts, changes)
+                changes.pop("objectRows", None)
             if not plan:
                 return {"status": "no-video"}
             label_visible_faces(plan, evidence.get("timeline") or {})
@@ -64,9 +76,16 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             for index, page in enumerate(result.get("interfaceScrolls", [])):
                 filename = page.pop("_mosaicFile", None)
                 if publish_mosaic and isinstance(filename, str) and re.fullmatch(r"screen-scroll-[0-9]+\.png", filename):
-                    url = publish_mosaic(index, root / filename)
+                    url = publish_mosaic(index, root / filename, mosaic_markdown(page))
                     if url:
                         page["previewUrl"] = url
+            if changes:
+                result["frameChanges"] = changes
+                if changes["status"] != "ok":
+                    result.setdefault("stages", {})["frame-changes"] = changes["status"]
+                objects_status = (result.get("frameChangeObjects") or {}).get("status", "ok")
+                if objects_status != "ok":
+                    result.setdefault("stages", {})["frame-change-objects"] = objects_status
             result["shotStartsMs"] = [frames[index][1] for index in sorted(cuts) if 0 < index < len(frames)]
             starts = [0, *result["shotStartsMs"]]
             for shot in result.get("shotColors", []):
@@ -75,17 +94,50 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             result["elapsedMs"] = round((perf_counter() - started) * 1000)
             return result
     except (OSError, ValueError, subprocess.SubprocessError):
-        return {"status": "failed"}
+        logging.getLogger(__name__).exception("Scene analysis failed")
+        return {"status": "failed", "reason": "Не удалось обработать сцену. Пересчитайте «Надписи, предметы и камера»."}
     finally:
         VISUAL_SLOT.release()
 
 
+def mosaic_markdown(page):
+    """Format a screenshot page from saved OCR without running its vision models again."""
+    from voice_studio.vision.screen_markdown import scroll_markdown
+
+    return scroll_markdown([page]) if "mosaicText" in page else None
+
+
+def scan_scene(inputs, folder, *, colors_only):
+    """Use the optional algorithm in the early pass and keep baseline usable on failure."""
+    from voice_studio.mods import ModError
+    from voice_studio.vision.frame_changes import BASIS, CAPABILITY, MOD_ID
+
+    changes = None
+    if not colors_only:
+        snapshot = current_snapshot()
+        record = snapshot.to_wire()["mods"].get(MOD_ID, {})
+        if record.get("enabled"):
+            try:
+                changes = snapshot.invoke_mod(MOD_ID, CAPABILITY, {
+                    "inputs": inputs, "folder": folder, "clockFilter": CLOCK_FILTER,
+                })
+                frames, cuts = read_frame_clock(folder)
+                return frames, cuts, changes
+            except (ModError, OSError, ValueError, subprocess.SubprocessError):
+                changes = {"status": "failed", "basis": BASIS}
+    frames, cuts = scan_frames(inputs, folder)
+    return frames, cuts, changes
+
+
 def scan_frames(inputs, folder):
     """Read native timestamps and hard cuts from a low-resolution decode of the selected input."""
-    filters = ("scale=112:112:force_original_aspect_ratio=decrease,"
-               "select='gte(scene,0)',metadata=mode=print:key=lavfi.scene_score:file=frames.log")
-    ffmpeg([*inputs, "-map", "0:V:0", "-an", "-sn", "-filter_threads", "2", "-vf", filters,
+    ffmpeg([*inputs, "-map", "0:V:0", "-an", "-sn", "-filter_threads", "2", "-vf", CLOCK_FILTER,
             "-f", "null", "-"], cwd=folder, timeout=900)
+    return read_frame_clock(folder)
+
+
+def read_frame_clock(folder):
+    """Read the same low-resolution cut scores for either scan path."""
     frames, scores = [], []
     with (folder / "frames.log").open() as lines:
         for line in lines:
@@ -178,22 +230,40 @@ def scroll_clock(frames, cuts):
 def dense_scroll_samples(folder, request, candidates):
     """Decode only a capped subset of panel-motion intervals; OCR is deferred to the mosaic."""
     import cv2
+    from voice_studio.vision.frame_change_panels import matching_panel
+    from voice_studio.vision.scene_objects import iou
     from voice_studio.vision.screen_analysis import side_panel
-    from voice_studio.vision.screen_scroll import scrolling_intervals
+    from voice_studio.vision.screen_scroll import scrolling_intervals, stable_runs
 
     if not candidates or not request.get("scrollClock"):
         return []
     ranges = scrolling_intervals(candidates, padding_ms=SCROLL_SAMPLE_MS)
+    stable = {}
+    for shot, rows in stable_runs(candidates):
+        stable.setdefault(shot, []).append((rows[0][0], rows[-1][0]))
     current = {candidate[1] for candidate in candidates}
-    selected = []
+    hints = {}
+    for shot, stamp, _, region in candidates:
+        if region.get("changeAssisted") or region.get("knownPanel"):
+            hints.setdefault(shot, []).append((stamp, region))
+    moving, still, last_still = [], [], {}
     for shot, stamp, source_frame in request["scrollClock"]:
         if stamp in current:
             continue
+        entry = {"sourceFrame": source_frame, "timeMs": stamp, "shot": shot}
         if any(start <= stamp <= end for start, end in ranges.get(shot, ())):
-            selected.append({"sourceFrame": source_frame, "timeMs": stamp, "shot": shot})
+            moving.append(entry)
+        elif (stamp - last_still.get(shot, -PANEL_SAMPLE_MS) >= PANEL_SAMPLE_MS
+              and any(start <= stamp <= end for start, end in stable.get(shot, ()))):
+            still.append(entry)
+            last_still[shot] = stamp
+    # Preserve temporal coverage on stable panels while assigning most of the budget to scroll.
+    motion_limit = MAX_SCROLL_FRAMES - min(len(still), MAX_SCROLL_FRAMES // 4)
+    selected = evenly_spaced(moving, motion_limit)
+    selected.extend(evenly_spaced(still, MAX_SCROLL_FRAMES - len(selected)))
     if not selected:
         return []
-    selected = evenly_spaced(selected, MAX_SCROLL_FRAMES)
+    selected.sort(key=lambda row: row["sourceFrame"])
     target = folder / "screen-dense"
     target.mkdir()
     try:
@@ -206,7 +276,21 @@ def dense_scroll_samples(folder, request, candidates):
         if not path.is_file():
             continue
         image = cv2.imread(str(path))
-        if image is not None and (region := side_panel(image)):
+        if image is None:
+            continue
+        nearby = hints.get(sample["shot"], ())
+        stamp = sample["timeMs"]
+        index = bisect_left(nearby, stamp, key=lambda item: item[0])
+        neighbors = nearby[max(0, index - 1):index + 1]
+        hint = min(neighbors, key=lambda item: abs(item[0] - stamp), default=None)
+        region = None
+        if hint and abs(hint[0] - stamp) <= 1200:
+            if hint[1].get("changeAssisted"):
+                region = matching_panel(image, hint[1])
+            elif (len(neighbors) == 2 and neighbors[0][0] <= stamp <= neighbors[1][0]
+                  and all(row.get("knownPanel") and iou(row["box"], hint[1]["box"]) >= .9 for _, row in neighbors)):
+                region = hint[1]
+        if region := region or side_panel(image):
             samples.append((sample["shot"], sample["timeMs"], path, region, sample["sourceFrame"]))
     return samples
 
@@ -283,6 +367,7 @@ def analyze_frames(folder):
     if request.get("colorsOnly"):
         return read_shot_colors(folder, request["samples"], cv2)
     from voice_studio.vision.camera_motion import CameraMotion
+    from voice_studio.vision.frame_change_objects import review_change_objects
     from voice_studio.vision.object_appearance import ObjectAppearance, retain_confirmed_matches
     from voice_studio.vision.scene_objects import ObjectDetector, calibrate_tiles, confirm_objects, refine_drinkware
     from voice_studio.vision.scene_ocr import recognize
@@ -327,11 +412,12 @@ def analyze_frames(folder):
             if sample["objects"] and detector:
                 stages["nanodet"] = "partial"
             continue
-        add_shot_color(colors, sample, image, cv2)
-        ui_activity.add(image, sample)
-        motion_started = perf_counter()
-        camera.add(image, sample)
-        motion_seconds += perf_counter() - motion_started
+        if not sample.get("changeOnly"):
+            add_shot_color(colors, sample, image, cv2)
+            ui_activity.add(image, sample)
+            motion_started = perf_counter()
+            camera.add(image, sample)
+            motion_seconds += perf_counter() - motion_started
         frame = {"timeMs": sample["timeMs"], "sourceFrame": sample["sourceFrame"],
                  "shot": shot, "text": [], "objects": [], "objectChecked": False}
         if detector and sample["objects"]:
@@ -380,14 +466,19 @@ def analyze_frames(folder):
     ocr_ms = round((perf_counter() - ocr_started) * 1000)
     started_interface = perf_counter()
     scroll_started = perf_counter()
+    screens.retain_recognized_screens(readings)
     supplemental = dense_scroll_samples(folder, request, screens.scroll_candidates)
     mosaics = {}
     scrolls, scroll_statuses = screens.scroll(mosaics, (row[:4] for row in supplemental),
+                                               folder=folder,
                                                include_mosaic_files=request.get("includeMosaicFiles", False))
     scroll_ms = round(1000 * (perf_counter() - scroll_started))
-    interfaces, screen_crops, screen_statuses = screens.summarize(frame_paths, readings, scrolls)
+    interfaces, screen_crops, screen_statuses = screens.summarize(frame_paths, readings, scrolls, supplemental=supplemental)
     merge_scroll_layouts(interfaces, mosaics)
     screens.retain_panels(interfaces, scrolls, supplemental)
+    assisted = any("changeBands" in sample for sample in request["samples"])
+    change_objects = review_change_objects(detector, request["samples"], frames, folder,
+                                           interfaces=interfaces if assisted else None)
     present = {frame["timeMs"] for frame in frames}
     for shot, stamp, _, _, source_frame in supplemental:
         if stamp not in present and stamp in interfaces:
@@ -402,7 +493,7 @@ def analyze_frames(folder):
             frame["interfaces"] = interfaces[stamp]
             scroll_lines = [{"text": row["text"], "box": row["box"]}
                             for region in interfaces[stamp] for row in region["elements"]
-                            if row["basis"] == "scroll-mosaic"]
+                            if row["basis"] == "scroll-mosaic" and row.get("text")]
             if scroll_lines:
                 frame["text"] = merge_readings(scroll_lines, frame["text"])
     screen_complete = all(
@@ -420,6 +511,7 @@ def analyze_frames(folder):
             "ocrPasses": len(jobs), "ocrMs": ocr_ms, "objectMs": round(object_seconds * 1000),
             "objectAppearanceMs": round(appearance_seconds * 1000),
             "objectFrames": sum(row["checked"] for row in checks_by_shot.values()),
+            **({"frameChangeObjects": change_objects} if change_objects is not None else {}),
             "objectModelRuns": detector.model_runs if detector else 0,
             "objectViewCacheHits": detector.cache_hits if detector else 0,
             "cameraMotion": camera.intervals, "cameraMotionMs": round(motion_seconds * 1000),

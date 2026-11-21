@@ -52,7 +52,8 @@ class ProsodyAlignmentTests(TestCase):
         self.assertEqual(generation_options('chatterbox',job),{})
         self.assertEqual(generation_options('qwen',{**job,'pronunciationMode':'neutral'}),{'ref_text':None})
         self.assertEqual(generation_options('chatterbox',{**job,'pronunciationMode':'neutral'}),{'cfg_weight':0.0})
-        with self.assertRaises(ValueError):pronunciation_mode('neutral','ru')
+        self.assertEqual(generation_options('qwen',{**job,'language':'ru','pronunciationMode':'neutral'}),{'ref_text':None})
+        with self.assertRaises(ValueError):pronunciation_mode('neutral','de')
         with self.assertRaises(ValueError):pronunciation_mode([], 'en')
         with self.assertRaises(ValueError):generation_options('qwen',{**job,'maxTokens':True})
 

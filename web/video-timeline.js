@@ -7,6 +7,7 @@ import {
   mountObjectFrameDialog, objectAccent, objectAppearance, objectLabelSummary, objectProfileAppearances, objectProfileViews, scrollPreviewUrl,
 } from "./video-object-profile.js";
 import {mountObjectAppearanceTimeline} from "./video-object-appearance-timeline.js";
+import {attachStudioIcon} from "./studio-icons.js";
 
 const LEVELS = [.035, .065, .11, .19, .32];
 
@@ -525,10 +526,37 @@ function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) 
       image.dataset.preview = url;
       image.alt = uiText("Склейка прокрутки интерфейса");
       const caption = document.createElement("figcaption");
-      caption.textContent = `${timecode(page.startMs)}–${timecode(page.endMs)}`;
+      const time = document.createElement("span");
+      time.textContent = `${timecode(page.startMs)}–${timecode(page.endMs)}`;
+      if (Number.isFinite(page.height) && page.viewportHeight > 0 && page.addedPixels > 0) {
+        const screens = (page.height / page.viewportHeight).toFixed(1);
+        time.textContent += uiText` · ${screens} экрана`;
+      }
+      const save = document.createElement("a");
+      save.className = "studio-icon studio-quiet-action";
+      save.dataset.icon = "download";
+      save.setAttribute("data-hint", "");
+      save.setAttribute("aria-label", uiText("Скачать склейку PNG"));
+      save.href = url;
+      save.download = `scroll-${Math.round(page.startMs)}-${Math.round(page.endMs)}.png`;
+      attachStudioIcon(save);
+      caption.append(time, save);
+      const markdown = page.markdownAvailable === true ? document.createElement("a") : null;
+      if (markdown) {
+        markdown.className = "studio-icon studio-quiet-action";
+        markdown.dataset.icon = "markdown";
+        markdown.setAttribute("data-hint", "");
+        markdown.setAttribute("aria-label", uiText("Скачать Markdown"));
+        markdown.href = url.replace(/\.png$/, ".md");
+        markdown.download = save.download.replace(/\.png$/, ".md");
+        attachStudioIcon(markdown);
+        caption.append(markdown);
+      }
       image.addEventListener("error", () => {
         image.hidden = true;
-        caption.textContent = uiText("Временная склейка недоступна. Запусти анализ заново.");
+        time.textContent = uiText("Временная склейка недоступна. Запусти анализ заново.");
+        save.hidden = true;
+        if (markdown) markdown.hidden = true;
       });
       figure.append(caption, image);
       scrollPages.append(figure);

@@ -14,7 +14,7 @@ DETAILS = {"compact": (8, 160, 4000), "full": (24, 600, 16000)}
 SECTIONS = {
     "speech": ("utterance",),
     "ocr": ("text_observation",),
-    "events": ("shot", "camera_motion", "person_motion", "audio_music", "audio_background",
+    "events": ("shot", "frame_change", "camera_motion", "person_motion", "audio_music", "audio_background",
                "pause", "overlap", "person_count", "dialogue_issue"),
     "objects": ("object_observation", "object_alias"),
     "ui": ("screen_region", "ui_element", "ui_connection", "ui_activity"),
@@ -24,7 +24,7 @@ FACT_FIELDS = ("score", "confidence", "basis", "source", "box", "horizontal", "v
                "depth", "depthBasis", "role", "text", "count", "estimate", "overlapUnresolved",
                "speakerAssignment", "speakerBasis", "visualSpeakerBasis", "asrModel", "cutMs", "position",
                "rawSpeaker", "meaning", "notConfirmedError", "priority", "active", "outlineCoverage",
-               "contentDelta", "notSpeechProbability", "geometryStatus", "panelPresence")
+               "contentDelta", "changedPixels", "notSpeechProbability", "geometryStatus", "panelPresence")
 REFERENCE_RELATIONS = ("spoken_by", "participant", "raw_participant", "sample_of", "alias_of",
                        "in_shot", "contained_in", "in_screen", "overlap_of", "matched_voice_profile", "in_panel")
 REVIEW_SCORE = .5

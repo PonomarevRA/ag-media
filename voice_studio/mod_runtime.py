@@ -23,15 +23,18 @@ LAYER_CAPABILITIES = {
     'speech': ('speech.asr', 'speech.diarization', 'speech.embedding-resource'),
     'voice': ('speech.embedding', 'speech.embedding-resource'),
     'audio': ('audio.classification',),
-    'visual': ('vision.visual-batch', 'vision.faces', 'vision.face-embedding', 'vision.active-speaker', 'vision.expressions', 'vision.objects', 'vision.appearance'),
+    'visual': ('vision.visual-batch', 'vision.faces', 'vision.face-embedding', 'vision.active-speaker', 'vision.expressions', 'vision.objects', 'vision.appearance', 'vision.frame-changes'),
     'people': ('vision.person-batch', 'vision.objects', 'vision.gaze', 'vision.segmentation'),
-    'scene': ('vision.scene-batch', 'vision.objects', 'vision.ocr'),
+    'scene': ('vision.scene-batch', 'vision.objects', 'vision.ocr', 'vision.frame-changes'),
     'object_review': ('vision.objects',),
 }
 
 
 def _builtin(mod_id, capability, payload, settings):
     """Invoke the exact selected checkpoint, preserving the previous native runner."""
+    if mod_id == 'builtin.frame-changes':
+        from voice_studio.vision.frame_changes import run_scan
+        return run_scan(payload['inputs'], payload['folder'], payload['clockFilter'], settings)
     if '_call' in payload:
         return payload['_call']()
     operation = payload['_operation']
@@ -63,7 +66,7 @@ def _builtin(mod_id, capability, payload, settings):
         from voice_studio.audio.audio_processing import denoise_native
         return denoise_native(*args, **kwargs, provider=key if payload.get('_explicit') else None)
     elif capability == 'vision.ocr':
-        kwargs['backend'] = key if payload.get('_explicit') else None
+        kwargs['backend'] = key if payload.get('_explicit') else kwargs.get('backend')
     elif capability == 'synthesis.tts':
         bound = inspect.signature(function).bind(*args, **kwargs)
         bound.arguments['model'] = key

@@ -21,6 +21,7 @@ import json
 import cv2
 import numpy as np
 from voice_studio.vision.adaptive_faces import ANCHOR_STEP, ScanFrame, detect_adaptively
+from voice_studio.vision.active_speaker_changes import MAX_RECHECKS, recheck_activity
 from voice_studio.core.analysis_stages import MAX_ACTIVITY_CUES
 from voice_studio.vision.clothing_review import review_clothing
 from voice_studio.speech.speaker_photos import collect as collect_photos, thumbnail
@@ -407,6 +408,13 @@ def score_spans(args, frames, tracks, aliases, spans):
         raise ValueError('Audio must be 16 kHz mono 16-bit PCM WAV')
     network, classifier = load_model(model_resource('vision.active-speaker', 'builtin.light-asd', args.weights))
     activity = {}
+    remaining = MAX_RECHECKS if getattr(args, "activity_change_threshold", None) else 0
+    rechecks = {"attempted": 0, "accepted": 0}
+
+    def infer(video, audio):
+        """Use the resident Light-ASD model for a baseline or clipped follow-up."""
+        return audio_visual_scores(network, classifier, video, audio)
+
     with torch.inference_mode():
         for number, track in enumerate(tracks, 1):
             if len(track) < 12:
@@ -421,15 +429,26 @@ def score_spans(args, frames, tracks, aliases, spans):
             video, audio = build_features(frames, track, samples)
             if len(video) < 2:
                 continue
-            scores = audio_visual_scores(network, classifier, video, audio)
+            scores = infer(video, audio)
             activity[number] = scores
             for span in overlapping:
-                result = summarize(scores, track, span, frames)
+                measured = scores
+                if remaining:
+                    start = max(0, ceil_frame(span['start_ms']) - first_frame)
+                    end = min(len(scores), ceil_frame(span['end_ms']) - first_frame)
+                    measured, attempted = recheck_activity(video, audio, scores, start, end,
+                                                           args.activity_change_threshold, infer)
+                    remaining -= attempted
+                    rechecks["attempted"] += attempted
+                result = summarize(measured, track, span, frames)
                 if result:
                     result.update(track=number, face=aliases[number],
                                   track_start_ms=first_frame * 40, track_end_ms=last_frame * 40)
+                    if measured is not scores:
+                        result["changeReview"] = 1
+                        rechecks["accepted"] += 1
                     span['candidates'].append(result)
-    return activity
+    return activity, rechecks
 
 
 def score_scan(args, signatures, scan, start, *, include_identity=False):
@@ -439,7 +458,7 @@ def score_scan(args, signatures, scan, start, *, include_identity=False):
     aliases, matches = group_tracks(tracks, signatures.samples, qualities=qualities)
     tracked = perf_counter()
     spans = [dict(span, candidates=[]) for span in args.spans_ms]
-    activity = score_spans(args, frames, tracks, aliases, spans) if spans else {}
+    activity, rechecks = score_spans(args, frames, tracks, aliases, spans) if spans else ({}, {})
     scored = perf_counter()
     active_faces = appearance_priorities(spans)
     aliases, outfits, clothing = review_clothing(args.video, tracks, signatures.samples, aliases,
@@ -472,6 +491,8 @@ def score_scan(args, signatures, scan, start, *, include_identity=False):
         },
         'spans': spans,
     }
+    if getattr(args, "activity_change_threshold", None) and rechecks:
+        result["faceTracking"]["changeActivity"] = rechecks
     if scan.expressions is not None:
         result["facialExpressions"] = scan.expressions.data(aliases)
     if args.yunet_sampling == "adaptive":
@@ -545,6 +566,7 @@ def parse_arguments(arguments=None):
     parser.add_argument('--sface', type=Path)
     parser.add_argument('--expressions-model', type=Path)
     parser.add_argument('--weights', type=Path, required=True)
+    parser.add_argument('--activity-change-threshold', type=int)
     parser.add_argument('--spans-ms', type=parse_spans, required=True)
     parser.add_argument('--photo-source', type=Path)
     parser.add_argument('--photo-formats')

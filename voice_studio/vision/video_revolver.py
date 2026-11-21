@@ -99,6 +99,7 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
                 result["stages"]["light-asd"] = "partial" if partial else "ok"
                 if partial:
                     progress["state"] = "partial"
+                confirm_profile_face_links(source, formats, phrases, observations, result)
         except (OSError, ValueError, subprocess.SubprocessError):
             result["stages"]["light-asd"] = "failed"
             reason = "Light-ASD не обработал кадры. Проверьте установку модели и повторите анализ."
@@ -131,6 +132,30 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
     expression_layer = finalize_expressions(result, phrases, clock)
     result["stages"]["facial-expressions"] = expression_layer["status"]
     return result
+
+
+def confirm_profile_face_links(source, formats, phrases, observations, visual):
+    """Recheck isolated face changes in Assist mode before building voice profiles."""
+    from voice_studio.vision.frame_changes import assist_settings
+    from voice_studio.vision.speaker_face_recheck import boundary_pairs
+
+    if not assist_settings():
+        return
+    pairs = boundary_pairs(phrases, observations, visual)
+    if not pairs:
+        return
+    try:
+        with temporary_directory() as folder:
+            request = Path(folder) / "speaker-face-pairs.json"
+            request.write_text(json.dumps({"source": str(source), "formats": formats,
+                                           "yunet": str(MODEL), "sface": str(SFACE), "pairs": pairs}), encoding="utf-8")
+            review = run_worker("voice_studio.vision.speaker_face_recheck", [request], [VISION], timeout=25)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return
+    visual["faceTracking"]["profileFaceReview"] = {"compared": len(pairs), "confirmed": len(review["matches"])}
+    for match in review["matches"]:
+        activity = observations[str(match["cueMs"])]
+        activity.update(profileFace=match["face"], faceEvidence="original-head-crops", identitySimilarity=match["similarity"])
 
 
 def classify_span(span, identity_cuts=()):
@@ -168,8 +193,12 @@ def confirmed_cut_candidates(track, others, total):
 
 def activity_metadata(track, total):
     """Record the exact activity track, its grouped face and a representative frame."""
-    return {"activeFrames": track["positive_frames"], "phraseFrames": total, "track": track["track"],
-            "face": track.get("face", track["track"]), "sample": track["representative"]}
+    result = {"activeFrames": track["positive_frames"], "phraseFrames": total, "track": track["track"],
+              "face": track.get("face", track["track"]), "sample": track["representative"]}
+    for key in ("faceEvidence", "changeReview"):
+        if key in track:
+            result[key] = track[key]
+    return result
 
 
 def select_phrases(phrases, limit=MAX_PHRASES):
@@ -260,9 +289,15 @@ def raw_activity_window(source, wav, audio_start_ms, formats, scan_start, scan_e
             if sampling == "adaptive":
                 pilot_args.append("--person-pilot-count-only")
         expression_args = ["--expressions-model", model_path("vision", "facial_expression_recognition_mobilefacenet_2022july.onnx")]
+        from voice_studio.vision.frame_changes import assist_settings
+        settings = assist_settings()
+        changes = []
+        if spans and settings:
+            changes = ["--activity-change-threshold", settings["pixelThreshold"]]
         arguments = ["--video", proxy, "--audio", aligned, "--yunet", MODEL, "--sface", SFACE,
                      "--yunet-sampling", sampling,
-                     "--weights", ASD_WEIGHTS, "--spans-ms", json.dumps(spans), *photo_args, *pilot_args, *expression_args]
+                     "--weights", ASD_WEIGHTS, "--spans-ms", json.dumps(spans), *photo_args, *pilot_args,
+                     *expression_args, *changes]
         return worker.request(arguments, 100 if photo_args or pilot_args else 60)
 
 

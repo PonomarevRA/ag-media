@@ -11,6 +11,7 @@ MAX_PREVIEWS = 16
 MAX_PREVIEW_BYTES = 4 * 1024 * 1024
 PREVIEW_KEY = re.compile(r"[a-f0-9]{32}")
 PREVIEW_PATH = re.compile(r"/api/scene-scroll-preview/([a-f0-9]{32})/([0-9]{1,2})\.png")
+MARKDOWN_PATH = re.compile(r"/api/scene-scroll-preview/([a-f0-9]{32})/([0-9]{1,2})\.md")
 PNG_HEADER = b"\x89PNG\r\n\x1a\n"
 
 
@@ -35,7 +36,7 @@ class ScrollPreviews:
             order = self.started
         published = completed = False
 
-        def publish(index, source):
+        def publish(index, source, markdown=None):
             """Copy one bounded worker PNG before the worker's scratch directory is removed."""
             nonlocal published
             if not 0 <= index < MAX_PREVIEWS:
@@ -53,6 +54,13 @@ class ScrollPreviews:
             except OSError:
                 return None
             published = True
+            if markdown:
+                try:
+                    staged = folder / f"{index}.md.part"
+                    staged.write_text(markdown, encoding="utf-8")
+                    staged.replace(folder / f"{index}.md")
+                except OSError:
+                    pass
             return f"/api/scene-scroll-preview/{key}/{index}.png"
 
         try:
@@ -79,11 +87,12 @@ class ScrollPreviews:
                     and folder.name not in self.active and not folder.is_symlink()):
                 shutil.rmtree(folder, ignore_errors=True)
 
-    def path(self, key, index):
+    def path(self, key, index, *, markdown=False):
         """Look up a slot by an opaque token, including results from the previous server process."""
         if not PREVIEW_KEY.fullmatch(key) or not 0 <= index < MAX_PREVIEWS:
             return None
-        return self.root / key / f"{index}.png"
+        suffix = "md" if markdown else "png"
+        return self.root / key / f"{index}.{suffix}"
 
     def read(self, key, index):
         """Read the requested page if it still belongs to the current or in-flight generation."""

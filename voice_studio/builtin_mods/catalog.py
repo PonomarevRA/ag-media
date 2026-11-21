@@ -10,6 +10,7 @@ import shutil
 import sys
 
 from voice_paths import PROJECT_ROOT, model_path, dependency_path
+from voice_studio.speech.transcription_languages import LANGUAGE_LABELS
 
 # Keep each checkpoint a separate mod even when several share a runtime.
 MODELS = (
@@ -46,6 +47,7 @@ MODELS = (
     ('stress-context', 'Stress context model', 'prosody.context', 'prosody/context.json', 'Project trained model', 'prosody/stress_context.py:predict'),
     ('stress-lexical', 'Stress lexical model', 'prosody.lexical', 'prosody/selected.json.packed', 'Project trained model', 'prosody/stress_char_runtime.py:predict'),
     ('visual-batch', 'Existing visual batch pipeline', 'vision.visual-batch', None, 'See constituent model licenses', 'vision/video_revolver.py:review_video'),
+    ('frame-changes', 'Frame change regions', 'vision.frame-changes', None, 'MIT; uses installed FFmpeg and OpenCV', 'vision/frame_changes.py:run_scan'),
     ('scene-batch', 'Existing scene batch pipeline', 'vision.scene-batch', None, 'See constituent model licenses', 'vision/video_scene.py:review_scene'),
     ('person-batch', 'Existing person batch pipeline', 'vision.person-batch', None, 'See constituent model licenses', 'vision/person_layers.py:dispatch_layers'),
     ('coqui', 'Coqui XTTS v2', 'synthesis.tts', 'xtts/model.pth', 'Coqui Public Model License 1.0.0', 'synthesis/engines.py:generate'),
@@ -54,7 +56,7 @@ MODELS = (
 
 def resource_protocol(capability):
     """Separate compatible local artifacts from architecture-independent batch outputs."""
-    batch_vision = {'vision.ocr', 'vision.visual-batch', 'vision.scene-batch', 'vision.person-batch'}
+    batch_vision = {'vision.ocr', 'vision.visual-batch', 'vision.scene-batch', 'vision.person-batch', 'vision.frame-changes'}
     return capability.endswith('-resource') or capability.startswith('prosody.') or (
         capability.startswith('vision.') and capability not in batch_vision)
 
@@ -98,8 +100,23 @@ def manifests():
                                       'protocol': 'local-model-resource-v1' if resource_protocol(capability) else 'named-batch-result-v1'}})
     for item in result:
         key = item['id']
+        if key == 'builtin.frame-changes':
+            item['defaultEnabled'] = False
+            item['description'] = 'Local pixel changes. Assist mode adds split-screen OCR and targeted object checks.'
+            item['settings'] = {'mode': 'measure', 'pixelThreshold': 24}
+            item['settingsSchema']['properties'].update({
+                'mode': {'type': 'string', 'enum': ['measure', 'objects', 'assist'], 'title': 'Mode'},
+                'pixelThreshold': {'type': 'integer', 'minimum': 8, 'maximum': 96,
+                                   'title': 'Pixel threshold (8-bit channel)'},
+            })
         if key.startswith('builtin.whisper-'):
             maximum = min(32, max(1, os.cpu_count() or 1))
+            item['settings']['language'] = 'auto'
+            item['settingsSchema']['required'] = ['language']
+            item['settingsSchema']['properties']['language'] = {
+                'type': 'string', 'enum': list(LANGUAGE_LABELS), 'enumLabels': list(LANGUAGE_LABELS.values()),
+                'title': 'Язык распознавания',
+                'description': 'Применяется, когда язык не задан для отдельной транскрипции.'}
             item['settingsSchema']['properties']['threads'] = {
                 'type': 'integer', 'minimum': 1, 'maximum': maximum,
                 'title': 'CPU threads',

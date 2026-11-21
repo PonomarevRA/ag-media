@@ -24,6 +24,7 @@ PROFILES = {
     "dialogue_audit_job": (("sound", "graph"), "audit status очередь проверка диалог"),
     "speaker_profiles": (("sound", "face"), "digital voice profile audio video anchors reference голос профиль якоря говорящий"),
     "browser_ml_capabilities": (("sound", "face", "picture", "ui"), "WebNN browser acceleration cosine embedding векторы ускорение браузер"),
+    "screen_crop": (("picture", "ui"), "crop cut region frame screenshot pixels coordinates вырезать кадр скриншот координаты"),
     "screen_scroll": (("picture", "ui"), "screenshot scrolling stitch mosaic OCR скриншот прокрутка мозаика"),
     "screen_analyze": (("picture", "ui"), "screenshot UI interface button form diagram OCR скриншот интерфейс кнопка поле схема черновик"),
     "audio_separate": (("sound",), "stems dialogue music effects разделение дорожки реплики музыка звуки шумодав"),

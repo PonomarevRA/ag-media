@@ -22,6 +22,7 @@ BOX_COLORS = {
     "body": "DBDD70",
     "object": "78DC89",
     "text": "E8E671",
+    "change": "66DFFF",
     "target": "E5A1FF",
 }
 

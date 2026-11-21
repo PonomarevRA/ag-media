@@ -951,7 +951,8 @@ main .intro { padding: 20px 24px; background: var(--instrument-metal); border-ra
 
 .capture-options { margin-block: 12px; }
 .capture-options summary { cursor: pointer; color: var(--accent); padding-block: 10px; }
-.media-dub { padding-block: 6px; border-block: 1px solid var(--line); }
+.media-dub { padding-block: 6px; border-block: 1px solid var(--line); overflow-wrap: anywhere; }
+.media-dub-options { align-items: end; }
 .media-dub-cues { display: grid; gap: 12px; padding-inline-start: 1.45rem; }
 .media-dub-cues li { min-width: 0; padding-block-end: 8px; border-block-end: 1px solid var(--line); }
 .media-dub-cues li p { margin-block: 0 4px; overflow-wrap: anywhere; }
@@ -1338,7 +1339,8 @@ button.editor-icon {
 .editor-object-details dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .editor-object-scroll { margin-block-start: .65rem; }
 .editor-object-scroll figure { margin: .5rem 0 0; }
-.editor-object-scroll figcaption { margin-block-end: .25rem; font-size: .85em; }
+.editor-object-scroll figcaption { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .5rem; margin-block-end: .25rem; font-size: .85em; }
+.editor-object-scroll figcaption .studio-icon { color: var(--ink); text-decoration: none; }
 .editor-object-scroll img { display: block; max-inline-size: 100%; block-size: auto; }
 .editor-object-text { margin-block-start: .65rem; }
 .editor-object-text h5 { margin: 0; font-size: 1em; }
@@ -1844,6 +1846,7 @@ button.editor-icon {
 .media-frame-details [data-frame-kind="face"] { --frame-accent: var(--frame-face); }
 .media-frame-details :is([data-frame-kind="body"], [data-frame-kind="body-count"]) { --frame-accent: var(--frame-body); }
 .media-frame-details [data-frame-kind="interface"] { --frame-accent: var(--frame-interface); }
+.media-frame-details [data-frame-kind="change"] { --frame-accent: var(--frame-change); }
 .media-frame-details [data-frame-kind="object"] { --frame-accent: var(--frame-object); }
 .media-frame-details [data-frame-kind="text"] { --frame-accent: var(--frame-text); }
 .media-frame-details [data-frame-kind="speech"][data-confirmed="true"] { --frame-accent: var(--frame-speech); }

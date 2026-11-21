@@ -18,6 +18,7 @@ from voice_studio.audio.dialogue_pauses import measure_dialogue_pauses, shift_di
 from voice_studio.synthesis.engines import ffmpeg
 from voice_studio.vision.facial_expressions import finalize_expressions
 from voice_studio.vision.face_speakers import bind_faces
+from voice_studio.graph.frame_change_graph import change_coverage, shift_change_rows
 from voice_studio.vision.person_motion import measure_people_motion
 from voice_studio.graph.media_analysis_revolver import AnalysisRevolver, result_fingerprint
 from voice_studio.graph.media_stage_selection import StageSelection
@@ -264,6 +265,20 @@ def apply_visual_evidence(result, visual, start, end, id_base, speech_start):
     combined["simultaneousFaces"].extend(shifted_spans(visual.get("simultaneousFaces", []), start, end, id_base))
 
 
+def offset_screen_panel(panel, offset):
+    """Preserve document boxes and shift only their references to the window clock."""
+    shifted = dict(panel)
+    if type(panel.get("readingTimeMs")) is int:
+        shifted["readingTimeMs"] += offset
+    if "elements" in panel:
+        shifted["elements"] = [
+            {**item, "mosaic": {**address, "pageStartMs": address["pageStartMs"] + offset}}
+            if isinstance((address := item.get("mosaic")), dict) and type(address.get("pageStartMs")) is int else item
+            for item in panel["elements"]
+        ]
+    return shifted
+
+
 def apply_scene_evidence(result, scene, start, end):
     """Align window-local scene facts to the source clock without changing checkpoints.
 
@@ -273,6 +288,8 @@ def apply_scene_evidence(result, scene, start, end):
                if row["timeMs"] + start < end]
     for row in sampled:
         row["objects"] = [offset_object_matches(item, start) for item in row.get("objects", [])]
+        if "interfaces" in row:
+            row["interfaces"] = [offset_screen_panel(panel, start) for panel in row["interfaces"]]
     result["sceneEvidence"]["frames"].extend(sampled)
     if activity := scene.get("uiActivity"):
         target = result["sceneEvidence"].setdefault("uiActivity", {"version": activity.get('version', 1), "panels": [], "samples": []})
@@ -291,10 +308,17 @@ def apply_scene_evidence(result, scene, start, end):
     if scene.get("interfaceScrolls"):
         result["sceneEvidence"].setdefault("interfaceScrolls", []).extend(
             {**row, "startMs": row["startMs"] + start, "endMs": row["endMs"] + start,
+             **({"controls": [{**item, "timeMs": item["timeMs"] + start} if "timeMs" in item else item
+                              for item in row["controls"]]} if "controls" in row else {}),
+             **({"mosaicText": [{**item, "timeMs": item["timeMs"] + start} if "timeMs" in item else item
+                                for item in row["mosaicText"]]} if "mosaicText" in row else {}),
              "viewports": [{**view, "timeMs": view["timeMs"] + start} for view in row.get("viewports", ())]}
             for row in scene["interfaceScrolls"] if row["endMs"] + start <= end)
     result["sceneEvidence"].setdefault("cameraMotion", []).extend(
         shifted_spans(scene.get("cameraMotion", []), start, end))
+    if scene.get("frameChanges"):
+        changes = result["sceneEvidence"].setdefault("frameChanges", {"rows": []})
+        changes["rows"].extend(shift_change_rows(scene, start, end))
     base = (start // SPEECH_WINDOW_MS) * ID_BLOCK
     result["sceneEvidence"].setdefault("moodbook", []).extend(
         {**row, "representativeMs": row["representativeMs"] + start,
@@ -342,7 +366,8 @@ def scene_coverage(scene, start, end, samples):
     return interval(start, end, status, samples=samples, statuses=stages,
                     objectSampling=scene.get("objectSampling"), objectFrames=scene.get("objectFrames"),
                     interfaceFrames=scene.get("interfaceFrames"), interfaceOcrCrops=scene.get("interfaceOcrCrops"),
-                    interfaceStatus=scene.get("interfaceStatus"), interfaceOcrStatuses=scene.get("interfaceOcrStatuses"))
+                    interfaceStatus=scene.get("interfaceStatus"), interfaceOcrStatuses=scene.get("interfaceOcrStatuses"),
+                    **({"frameChanges": detail} if (detail := change_coverage(scene)) else {}))
 
 
 def speech_coverage(start, end, report, status="ok", offset=0):

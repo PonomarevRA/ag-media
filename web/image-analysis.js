@@ -1,4 +1,4 @@
-import {apiText, uiText} from "./i18n.js";
+import {apiText, uiLocale, uiText} from "./i18n.js";
 import {imageFileError, imageItems} from "./image-analysis-model.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -10,6 +10,7 @@ export function mountImageAnalysis(find, request, {onOpen, setBusy, workbench}) 
   const panel = find("image-analysis"), image = find("image-preview"), overlay = find("image-overlay");
   const status = find("image-status"), list = find("image-detections"), summary = find("image-summary");
   const run = find("image-run"), cancel = find("image-cancel"), download = find("image-json");
+  const markdown = find("image-markdown");
   const objects = find("image-objects"), ui = find("image-ui"), mode = find("image-detail");
   const layers = {objects: find("image-layer-objects"), ui: find("image-layer-ui"), text: find("image-layer-text")};
   let source = null, url = null, report = null, items = [], selected = null, controller = null, epoch = 0;
@@ -86,7 +87,7 @@ export function mountImageAnalysis(find, request, {onOpen, setBusy, workbench}) 
     panel.setAttribute("aria-busy", "true");
     status.textContent = uiText("Анализируем картинку локально…");
     try {
-      const data = await request("analyze-image", source, {mode: mode.value, ui: ui.checked ? "1" : "0",
+      const data = await request("analyze-image", source, {mode: mode.value, ui: ui.checked ? "1" : "0", markdown: uiLocale,
         objects: objects.checked ? "1" : "0", signal: abort.signal, onProgress(event) {
           if (generation !== epoch) return;
           if (event.stage === "image_validate") status.textContent = uiText("Проверяем изображение…");
@@ -107,6 +108,7 @@ export function mountImageAnalysis(find, request, {onOpen, setBusy, workbench}) 
       const seconds = ((data.requestElapsedMs ?? data.elapsedMs ?? 0) / 1000).toFixed(1);
       status.textContent = warnings.length ? warnings.join(" ") : uiText`Готово · ${seconds} с`;
       download.disabled = false;
+      markdown.disabled = !report.markdown;
       render();
     } catch (error) {
       if (generation === epoch) status.textContent = abort.signal.aborted
@@ -132,7 +134,7 @@ export function mountImageAnalysis(find, request, {onOpen, setBusy, workbench}) 
     image.src = url;
     find("image-source").textContent = file.name;
     summary.textContent = status.textContent = "";
-    download.disabled = true;
+    download.disabled = markdown.disabled = true;
     panel.hidden = false;
     workbench.hidden = true;
     analyze();
@@ -145,11 +147,20 @@ export function mountImageAnalysis(find, request, {onOpen, setBusy, workbench}) 
   for (const control of Object.values(layers)) control.onchange = render;
   download.onclick = () => {
     if (!report) return;
-    const href = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], {type: "application/json"}));
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = "image-analysis.json";
-    try { link.click(); } finally { setTimeout(() => URL.revokeObjectURL(href), 30000); }
+    const {markdown: _document, ...measurements} = report;
+    saveImageReport(JSON.stringify(measurements, null, 2), "application/json", "image-analysis.json");
+  };
+  markdown.onclick = () => {
+    if (report?.markdown) saveImageReport(report.markdown, "text/markdown;charset=utf-8", "image-analysis.md");
   };
   return {open, clear, snapshot: () => report};
+}
+
+/** Save the requested representation of an already completed image analysis. */
+function saveImageReport(content, type, filename) {
+  const href = URL.createObjectURL(new Blob([content], {type}));
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  try { link.click(); } finally { setTimeout(() => URL.revokeObjectURL(href), 30000); }
 }

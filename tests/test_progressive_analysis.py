@@ -15,6 +15,8 @@ import wave
 from voice_studio.graph.media_graph_ingest import SPEECH_WINDOW_MS, analyze_windows
 from voice_studio.speech.media_transcript import transcribe_media
 from voice_studio.app.server import Handler
+from voice_studio.mods import ModExecutionError
+from voice_studio.speech import media_transcript
 
 
 def pcm_fixture(path):
@@ -25,6 +27,23 @@ def pcm_fixture(path):
 
 
 class ProgressiveAnalysisTests(TestCase):
+    def test_optional_person_worker_failure_does_not_stop_scene(self):
+        """A replacement worker error reports its own stage and preserves object analysis."""
+        events = []
+        evidence = {"timeline": {"frames": [[1]]}}
+        result = {"status": "ok", "frames": []}
+        with patch.dict("os.environ", {"VOICE_VIDEO_PARALLEL": "0"}), \
+                patch.object(media_transcript, "preview_people", side_effect=ModExecutionError("broken worker")), \
+                patch.object(media_transcript, "review_scene", return_value=result), \
+                self.assertLogs(media_transcript.__name__, level="ERROR"):
+            scene = media_transcript.analyze_detail_layers(
+                None, None, evidence, body=True, gaze=True, scene=True, object_sampling="basic", emit=events.append)
+        self.assertIs(scene, result)
+        self.assertEqual(evidence["personLayer"]["status"], "failed")
+        self.assertEqual([(event["stage"], event["state"]) for event in events], [
+            ("person-layer", "running"), ("person-layer", "failed"), ("scene", "running"), ("scene", "done")])
+        self.assertIn("Остальные этапы продолжатся", events[1]["reason"])
+
     def test_experimental_languages_are_routed_only_for_clip_uploads(self):
         """The full recording assembled by live capture keeps the existing language policy."""
         handler = Mock()
@@ -38,6 +57,11 @@ class ProgressiveAnalysisTests(TestCase):
         self.assertEqual(handler.receive_media.call_args.args, ("ps",))
         self.assertTrue(handler.receive_media.call_args.kwargs["clip_languages"])
         self.assertEqual(handler.receive_media.call_args.kwargs["object_sampling"], "small-detail")
+
+        handler.path = "/api/transcribe-media?lang=en&speech_lang=default"
+        Handler.do_POST(handler)
+        self.assertEqual(handler.receive_media.call_args.args, (None,))
+        self.assertTrue(handler.receive_media.call_args.kwargs["clip_languages"])
 
         handler.receive_media.reset_mock()
         handler.path = "/api/transcribe-capture?lang=ru&speech_lang=ps"

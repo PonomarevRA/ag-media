@@ -10,9 +10,11 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 from threading import BoundedSemaphore
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from voice_studio.core.optional_runtime import runtime_environment, runtime_ready
 from voice_studio.core.worker_process import worker_command
 from voice_studio.synthesis.engines import ROOT, ffmpeg
 from voice_studio.vision.video_revolver import PYTHON, VISION
@@ -26,11 +28,21 @@ MAX_EXPORT_MS = 6_000
 MAX_EXPORT_FRAMES = 360
 SLOT = BoundedSemaphore(1)
 PTS = re.compile(r"\bn:\s*(\d+)\s+pts:\s*-?\d+\s+pts_time:\s*(-?[\d.]+)")
+MEDIAPIPE_INSTALL = "Установите MediaPipe в разделе «Моды и модели»."
 
 
 def layer_plan(*, body=False, gaze=False, masks=False):
     """Use NanoDet only for body geometry and MediaPipe only for the requested task."""
     return {"body": bool(body or masks), "gaze": bool(gaze and not masks), "masks": bool(masks)}
+
+
+def mediapipe_interpreter():
+    """Resolve the verified external runtime, with a fallback for source checkouts."""
+    if runtime_ready("mediapipe"):
+        return Path(sys.executable), "mediapipe"
+    if MP_PYTHON.is_file():
+        return MP_PYTHON, None
+    return None, None
 
 
 def select_frames(source, work, start_ms, end_ms, formats, *, native=False):
@@ -61,20 +73,35 @@ def select_frames(source, work, start_ms, end_ms, formats, *, native=False):
 @model_provider('vision.person-batch', 'builtin.person-batch')
 def dispatch_layers(work, frames, timeline, plan, target=None):
     """Run one isolated native worker with only the interpreters and models it needs."""
-    interpreter = MP_PYTHON if plan["gaze"] or plan["masks"] else PYTHON
-    if not interpreter.is_file():
-        raise ValueError("Локальный движок MediaPipe недоступен.")
-    request = {"frames": frames, "timeline": timeline, "plan": plan, "target": target,
+    interpreter, runtime = PYTHON, "vision"
+    effective = plan
+    if plan["gaze"] or plan["masks"]:
+        media_python, media_runtime = mediapipe_interpreter()
+        if media_python:
+            interpreter, runtime = media_python, media_runtime
+        elif plan["masks"]:
+            raise ValueError(MEDIAPIPE_INSTALL)
+        elif not plan["body"]:
+            return {"status": "unavailable", "plan": plan, "gazeUnavailable": True, "reason": MEDIAPIPE_INSTALL}
+        else:
+            effective = {**plan, "gaze": False}
+    request = {"frames": frames, "timeline": timeline, "plan": effective, "target": target,
                "models": {"body": str(model_path("vision", "nanodet.onnx")), "gaze": str(EYES_MODEL),
                           "masks": str(SEGMENT_MODEL)}}
     arguments = work / "request.json"
     arguments.write_text(json.dumps(request), encoding="utf-8")
     environment = {**os.environ, "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"}
-    if interpreter == PYTHON:
+    if runtime == "vision":
         environment["PYTHONPATH"] = str(VISION)
+    environment = worker_environment(environment)
+    if runtime:
+        environment = runtime_environment(runtime, environment)
     result = subprocess.run(worker_command(interpreter, "voice_studio.workers.person_layer_worker", arguments),
-                            env=worker_environment(environment), capture_output=True, text=True, timeout=75, check=True)
-    return json.loads(result.stdout)
+                            env=environment, capture_output=True, text=True, timeout=75, check=True)
+    layer = json.loads(result.stdout)
+    if effective != plan:
+        layer.update(plan=plan, gazeUnavailable=True, reason=MEDIAPIPE_INSTALL)
+    return layer
 
 
 @contextmanager

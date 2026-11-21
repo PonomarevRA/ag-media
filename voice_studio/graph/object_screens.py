@@ -5,6 +5,7 @@ from collections import defaultdict
 import re
 
 from voice_studio.graph.media_graph_objects import overlap
+from voice_studio.graph.media_graph_interfaces import PANEL_TYPES
 
 DESKTOP_COMMANDS = ("selection pane", "picture layout", "picture effects", "behind text", "in front of text",
                     "edit wrap points", "position wrap", "bring forward", "send backward",
@@ -17,7 +18,7 @@ PANEL_MATCH_RADIUS_MS = 750
 
 
 class VerifiedPanels:
-    """Locate measured mobile layouts at or near a frame, without crossing a cut or negative check."""
+    """Locate measured panels at or near a frame without crossing a cut or negative check."""
 
     def __init__(self, graph, frames, coordinates):
         self.graph = graph
@@ -28,7 +29,7 @@ class VerifiedPanels:
             if type(stamp) is not int or not 0 <= stamp < graph.duration:
                 continue
             boxes = [box for panel in frame.get("interfaces") or ()
-                     if isinstance(panel, dict) and panel.get("panelType") == "mobile-ui"
+                     if isinstance(panel, dict) and panel.get("panelType") in PANEL_TYPES
                      and (box := coordinates(panel.get("box")))]
             if not boxes and not frame.get("panelChecked"):
                 continue
@@ -136,6 +137,10 @@ def panel_scroll_previews(graph, tracks, pages, coordinates):
         ranked = sorted(matches, key=matches.get, reverse=True)
         if ranked and (len(ranked) == 1 or matches[ranked[0]] > 1.2 * matches[ranked[1]]):
             output.setdefault(ranked[0], []).append({
-                field: page[field] for field in ("previewUrl", "startMs", "endMs")
+                **{field: page[field] for field in ("previewUrl", "startMs", "endMs")},
+                **{field: page[field] for field in ("height", "viewportHeight", "addedPixels") if field in page},
+                "markdownAvailable": "mosaicText" in page,
             })
+    for matches in output.values():
+        matches.sort(key=lambda row: (-row.get("addedPixels", 0), row["startMs"]))
     return output

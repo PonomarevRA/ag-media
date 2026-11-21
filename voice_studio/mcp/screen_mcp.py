@@ -1,5 +1,6 @@
 """Expose local screenshot OCR and geometry as an editable first-pass description."""
 
+from base64 import b64encode
 from collections import Counter
 from hashlib import sha256
 import json
@@ -11,9 +12,12 @@ from stat import S_ISREG
 from time import perf_counter
 from typing import Literal
 
+from mcp.types import ImageContent, TextContent
+
 from voice_paths import temporary_directory
 from voice_studio.core.mcp_lanes import AsyncWorkLane
 from voice_studio.vision.video_revolver import VISION, run_worker
+from voice_studio.vision.screen_markdown import screenshot_markdown, scroll_markdown
 from voice_studio.vision.screen_session import ScreenSessions, retain
 from voice_studio.graph.media_graph_model import box_coordinates
 
@@ -104,6 +108,8 @@ def screen_ids(result):
         item["elementId"] = sha256(signature.encode()).hexdigest()[:16]
 
     for item in (result.get("interface") or {}).get("elements", []):
+        assign(item, item["role"], item.get("text") or "")
+    for item in (result.get("controlGrid") or {}).get("controls", []):
         assign(item, item["role"], item.get("text") or "")
     structure = result.get("structure") or {}
     for item in structure.get("windows", []):
@@ -201,23 +207,48 @@ def register_screen_tools(mcp):
     @mcp.tool()
     async def screen_analyze(file_path: str, language: Literal["ru", "en"] = "ru",
                              mode: Literal["overview", "full"] = "full",
-                             region: list[float] | None = None, session_id: str | None = None) -> dict:
+                             region: list[float] | None = None, session_id: str | None = None,
+                             format: Literal["json", "markdown"] = "json") -> dict:
         """Read a local PNG/JPEG screenshot with offline OCR.
         Use overview for one fast OCR pass and a map of visible windows, lists, and timeline clips.
         Use full for detailed OCR of the whole screenshot or a selected normalized [x,y,width,height] region.
+        Set format=markdown for a visual table and role sections with pixel coordinates for screen_crop.
         Reuse one session_id across calls to avoid OCR on unchanged pixels. The draft language does not change OCR.
         Uses an independent bounded UI lane while video analysis runs; a simultaneous UI request returns busy.
         """
-        return await UI_LANE.run(analyze_screenshot, file_path, language, mode=mode,
-                                        region=region, session_id=session_id)
+        result = await UI_LANE.run(analyze_screenshot, file_path, language, mode=mode,
+                                   region=region, session_id=session_id)
+        if format == "markdown":
+            return {"status": result["status"], "markdown": screenshot_markdown(result, language)}
+        return result
 
     @mcp.tool()
     async def screen_scroll(file_paths: list[str], region: list[float] | None = None,
-                            timestamps_ms: list[int] | None = None, session_id: str | None = None) -> dict:
+                            timestamps_ms: list[int] | None = None, session_id: str | None = None,
+                            format: Literal["json", "markdown"] = "json", language: Literal["ru", "en"] = "ru") -> dict:
         """Register overlapping screenshots after small vertical scrolls and OCR each coherent mosaic once.
         Supply two to 24 local PNG/JPEG paths in capture order. Use region [x,y,width,height] for the scrolling content.
         Returned lines point to captureIndex, timeMs and a normalized box on the original screenshot.
+        Set format=markdown for a table and role sections with stitched-image pixel coordinates and source times.
         Repeat the same ordered capture sequence with a session_id to reuse its draft without OCR.
         Uses the independent UI lane rather than the long-video analysis queue.
         """
-        return await UI_LANE.run(analyze_scroll_screenshots, file_paths, region, timestamps_ms, session_id)
+        result = await UI_LANE.run(analyze_scroll_screenshots, file_paths, region, timestamps_ms, session_id)
+        if format == "markdown":
+            return {"status": result["status"], "markdown": scroll_markdown(result["stretches"], language)}
+        return result
+
+
+    @mcp.tool()
+    async def screen_crop(file_path: str, region: list[float], coordinate_space: Literal["pixel", "normalized"] = "pixel",
+                          at_ms: int | None = None, max_side: int = 1024) -> list[TextContent | ImageContent]:
+        """Return a PNG crop and its source coordinates without calling a recognition model.
+        Supply absolute local PNG/JPEG path, including a downloaded scroll mosaic, or pass at_ms for a video frame.
+        region is [x,y,width,height] measured from the top-left. Use pixel for Markdown boxes, normalized for graph boxes.
+        max_side caps the returned PNG after cropping. The source file is read-only.
+        """
+        from voice_studio.vision.screen_crop import crop_screen
+
+        details, png = await UI_LANE.run(crop_screen, file_path, region, coordinate_space, at_ms, max_side, screenshot_bytes)
+        return [TextContent(type="text", text=json.dumps(details)),
+                ImageContent(type="image", mimeType="image/png", data=b64encode(png).decode("ascii"))]

@@ -266,7 +266,7 @@ def profile_visual_evidence(evidence, *, offset=0, id_base=0):
         if not isinstance(phrase, dict):
             continue
         activity = deepcopy(_mapping(phrase.get('activity')))
-        for field in ('face', 'track'):
+        for field in ('face', 'track', 'profileFace'):
             if _integer(activity.get(field)):
                 activity[field] += id_base
             else:

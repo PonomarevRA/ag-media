@@ -310,7 +310,7 @@ def analyze_layout(image, region, lines):
     connected = {index for _, _, _, first, second in links for index in (first, second)}
     outlined_text = sum(bool(group) for group in assigned)
     if region.get("basis") == "frame-layout" and not links:
-        panel = source_box[2] <= .5 and source_box[3] >= .9
+        panel = region.get("changeAssisted") or (source_box[2] <= .5 and source_box[3] >= .9)
         if panel:
             if outlined_text < 1 or len(text) < 3:
                 return None

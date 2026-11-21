@@ -1,11 +1,29 @@
 """Check routing and the frame-clock and face-track mask contract."""
 
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
-from voice_studio.vision.person_layers import layer_plan, validate_mask_request
+from voice_studio.vision.person_layers import dispatch_layers, layer_plan, validate_mask_request
 
 
 class PersonLayerTests(TestCase):
+    def test_body_still_runs_without_mediapipe(self):
+        """A missing gaze runtime keeps NanoDet data without claiming gaze was measured."""
+        plan = layer_plan(body=True, gaze=True)
+        with TemporaryDirectory() as folder, \
+                patch("voice_studio.vision.person_layers.mediapipe_interpreter", return_value=(None, None)), \
+                patch("voice_studio.vision.person_layers.subprocess.run", return_value=SimpleNamespace(stdout='{"frames": [{"timeMs":0}]}')):
+            result = dispatch_layers(Path(folder), [], {}, plan)
+            request = json.loads((Path(folder) / "request.json").read_text())
+        self.assertEqual(request["plan"], layer_plan(body=True))
+        self.assertEqual(result["plan"], plan)
+        self.assertTrue(result["gazeUnavailable"])
+        self.assertEqual(result["frames"], [{"timeMs": 0}])
+
     def test_tasks_load_only_their_dependencies(self):
         self.assertEqual(layer_plan(), {"body": False, "gaze": False, "masks": False})
         self.assertEqual(layer_plan(gaze=True), {"body": False, "gaze": True, "masks": False})

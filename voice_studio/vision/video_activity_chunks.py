@@ -75,6 +75,7 @@ class ActivityTimeline:
         self.person_windows = []
         self.expression_samples = []
         self.expression_statuses = []
+        self.change_activity = Counter()
         self.face_gallery = FaceIdentityGallery()
 
     def add(self, report, start, end, scan_start, cue_starts):
@@ -121,7 +122,7 @@ class ActivityTimeline:
         for span in report["spans"]:
             original = cue_starts.get(span["start_ms"])
             if original is not None:
-                self._span(span, original, scan_start, tracks, faces)
+                self._span(span, original, scan_start, tracks, faces, returning)
         return min(end, start + len(core) * STEP)
 
     def _expressions(self, layer, start, end, offset, tracks, faces):
@@ -136,8 +137,8 @@ class ActivityTimeline:
             if start <= time < end and track is not None and face is not None:
                 self.expression_samples.append({**row, "timeMs": time, "track": track, "faceId": face})
 
-    def _span(self, span, original, offset, tracks, faces):
-        """Merge counts for the exact same track across non-overlapping parts of a cue."""
+    def _span(self, span, original, offset, tracks, faces, returning):
+        """Merge speech counts and reconcile a face change only on corroborated tracks."""
         start, end = original
         merged = self.spans.setdefault(start, {"start_ms": start, "end_ms": end, "candidates": {}})
         for row in span["candidates"]:
@@ -148,24 +149,44 @@ class ActivityTimeline:
             sample = row["representative"]
             if sample:
                 sample = {**sample, "time_ms": sample["time_ms"] + offset}
-            before = merged["candidates"].get(track)
+            key = track
+            before = merged["candidates"].get(key)
+            promoted = False
+            if before is not None and before["face"] != face:
+                pair = {before["face"], face}
+                matched = returning.get(row["face"])
+                cut = any(start < time < end for time in self.cuts)
+                co_visible = any(pair.issubset({hit[6] for hit in hits})
+                                 for hits in self.frames[start // STEP:(end + STEP - 1) // STEP])
+                alternative = track, face
+                if (alternative not in merged["candidates"] and matched and matched[0] == face
+                        and not cut and not co_visible and tuple(sorted(pair)) not in self.distinct):
+                    before["face"] = face
+                    before["faceEvidence"] = "cross-window-face"
+                    promoted = True
+                else:
+                    key = alternative
+                    before = merged["candidates"].get(key)
             if before is None:
-                merged["candidates"][track] = {**row, "track": track, "face": face,
+                merged["candidates"][key] = {**row, "track": track, "face": face,
                     "track_start_ms": row["track_start_ms"] + offset, "track_end_ms": row["track_end_ms"] + offset,
                     "representative": sample}
             else:
-                if sample and (not before["representative"] or row["mean_logit"] > before["mean_logit"]):
+                if sample and (promoted or not before["representative"] or row["mean_logit"] > before["mean_logit"]):
                     before["representative"] = sample
                     before["mean_logit"] = row["mean_logit"]
                 before["frames"] += row["frames"]
                 before["positive_frames"] += row["positive_frames"]
                 before["track_end_ms"] = max(before["track_end_ms"], row["track_end_ms"] + offset)
+                if row.get("changeReview"):
+                    before["changeReview"] = before.get("changeReview", 0) + row["changeReview"]
 
     def _editor(self, report, start, end, offset, tracks, faces):
         """Keep only real cuts within this core and apply the same mapping to profiles."""
         editor = report["editorTimeline"]
         self._people(editor.get("personPilot"), start, end, offset)
         tracking = report["faceTracking"]
+        self.change_activity.update(tracking.get("changeActivity", {}))
         if tracking.get("status") == "ok":
             self.status = "ok"
         self.samples += tracking.get("samples", 0)
@@ -224,6 +245,8 @@ class ActivityTimeline:
         tracking = {"status": self.status, "tracks": self.next_track - 1, "faces": self.next_face - 1,
                     "samples": self.samples, "matches": list(self.matches), "identityCuts": len(self.cuts),
                     "identityCutTimesMs": list(self.cuts), "distinctFaces": sorted(self.distinct)}
+        if self.change_activity:
+            tracking["changeActivity"] = dict(self.change_activity)
         editor = {"durationMs": duration_ms, "shots": list(self.shots), "facePhotos": dict(self.photos),
                   "faceAttributes": dict(self.attributes), "clothingByFace": dict(self.outfits)}
         if self.person_windows:

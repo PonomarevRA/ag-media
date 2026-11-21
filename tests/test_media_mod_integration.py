@@ -66,6 +66,23 @@ class MediaModIntegrationTests(TestCase):
         command = process.call_args.args[0]
         self.assertEqual(command[command.index('-m') + 1], str(recognition.SMALL_MODEL))
 
+    def test_whisper_language_uses_captured_active_model_unless_explicitly_overridden(self):
+        """File languages follow the selected provider and explicit auto remains available."""
+        resolve = recognition.resolve_whisper_language
+        self.registry.configure('builtin.whisper-base', {'language': 'bn'})
+        self.registry.configure('builtin.whisper-small', {'language': 'en'})
+        with runtime.execution_scope():
+            self.assertEqual(resolve(None, None, clip_languages=True), 'bn')
+            self.assertEqual(resolve(None, recognition.SMALL_MODEL, clip_languages=True), 'en')
+            self.assertEqual(resolve(None, None), 'auto')
+            self.assertEqual(resolve('ru', None, clip_languages=True), 'ru')
+            self.assertEqual(resolve('auto', None, clip_languages=True), 'auto')
+        self.registry.select('speech.asr', 'builtin.whisper-small')
+        with runtime.execution_scope():
+            self.assertEqual(resolve(None, None, clip_languages=True), 'en')
+        with self.assertRaises(ModError):
+            self.registry.configure('builtin.whisper-base', {'language': 'unknown'})
+
     def test_asr_replacement_reaches_real_media_pipeline_and_additional_stage(self):
         self.package('test.asr', 'speech.asr', "return [{'result': {'language': 'en'}, 'transcription': [{'text': settings['tag'], 'offsets': {'from': 0, 'to': 700}}]}]", settings={'tag': 'replacement was invoked'})
         self.package('test.extra', 'analysis.custom', "return {'source': payload['sourcePath'], 'text': payload['transcript']}", kind='stage')
@@ -291,7 +308,7 @@ class MediaModIntegrationTests(TestCase):
             self.assertEqual(voice_profiles.local_encoder_id(), 'sherpa-3d-speaker:' + sha256(resources['speech.embedding-resource'].read_bytes()).hexdigest())
         runtime_file = self.root / 'python'
         runtime_file.touch()
-        with patch.object(clothing_review, 'MP_PYTHON', runtime_file), patch.object(clothing_review, 'BODY_MODEL', absent / 'body.onnx'), patch.object(clothing_review, 'MASK_MODEL', absent / 'mask.tflite'), patch.object(clothing_review, 'borderline_pairs', return_value=[]) as pairs, patch.object(clothing_review, 'choose_sample_tracks', return_value={}):
+        with patch.object(clothing_review, 'mediapipe_interpreter', return_value=(runtime_file, None)), patch.object(clothing_review, 'BODY_MODEL', absent / 'body.onnx'), patch.object(clothing_review, 'MASK_MODEL', absent / 'mask.tflite'), patch.object(clothing_review, 'borderline_pairs', return_value=[]) as pairs, patch.object(clothing_review, 'choose_sample_tracks', return_value={}):
             result = clothing_review.review_clothing('source', [], {}, {}, 320, 240)
         pairs.assert_called_once()
         self.assertEqual(result[2]['status'], 'skipped')

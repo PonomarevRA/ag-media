@@ -85,7 +85,8 @@ export function mountMediaTranscript(request, currentLanguage) {
   const profileDialog = mountSpeakerProfileDialog(find, playback);
   let activeProfiles = [];
   const overlay = mountVideoOverlay(playback, find("media-overlay"), find("media-overlay-options"),
-                                    find("media-overlay-toggle"), mountFrameDetails(find("media-frame-details")));
+                                    find("media-overlay-toggle"), mountFrameDetails(find("media-frame-details")),
+                                    find("media-change-toggle"));
   const editorTimeline = mountVideoTimeline(find, playback, (target, button) =>
     profileDialog.open(typeof target === "object"
       ? faceProfile(target.faceId, displayedEvidence, exportData?.speakerProfileIndex, exportData?.durationMs)
@@ -169,6 +170,7 @@ export function mountMediaTranscript(request, currentLanguage) {
   let captureLimit;
   let transcript;
   let captureLanguage;
+  let captureLanguageMode;
   let dialoguePauses;
   let captured;
   let exportData;
@@ -646,8 +648,9 @@ export function mountMediaTranscript(request, currentLanguage) {
       }
       if (sampledPhrases) notes.push(uiText`Кадры для ${sampledPhrases} фраз`);
       const people = videoEvidence.personLayer;
-      if (people?.status === "unavailable") notes.push(uiText("Фигуры или оценка взгляда недоступны"));
-      if (people?.gazeUnavailable) notes.push(uiText("Оценка взгляда недоступна"));
+      if (people?.reason) notes.push(apiText(people.reason));
+      else if (people?.status === "unavailable" || people?.status === "failed") notes.push(uiText("Фигуры или оценка взгляда недоступны"));
+      else if (people?.gazeUnavailable) notes.push(uiText("Оценка взгляда недоступна"));
       evidenceStatus.textContent = notes.join(" · ");
       evidenceStatus.hidden = !notes.length;
     }
@@ -940,7 +943,10 @@ export function mountMediaTranscript(request, currentLanguage) {
     queue = queue.then(async () => {
       try {
         const data = await request("transcribe-chunk", blob, {language, speech_lang: captureLanguage});
-        if (captureLanguage === "auto" && data.segments.length) captureLanguage = data.language;
+        if (["auto", "default"].includes(captureLanguage) && data.segments.length) {
+          captureLanguage = data.language;
+          captureLanguageMode = data.languageMode;
+        }
         const next = data.segments.map(segment => ({
           ...segment, startMs: segment.startMs + offset, endMs: segment.endMs + offset
         }));
@@ -1000,7 +1006,7 @@ export function mountMediaTranscript(request, currentLanguage) {
     busy(true);
     transcript = [];
     captureLanguage = captureSpeechLanguage();
-    const automatic = captureLanguage === "auto";
+    captureLanguageMode = captureLanguage;
     dialoguePauses = [];
     captured = [];
     pending = elapsed = failures = 0;
@@ -1033,7 +1039,7 @@ export function mountMediaTranscript(request, currentLanguage) {
         }
         status.textContent = uiText("Обрабатываем оставшиеся фрагменты…");
         await queue;
-        const resolved = captureLanguage === "auto" ? language : captureLanguage;
+        const resolved = ["auto", "default"].includes(captureLanguage) ? language : captureLanguage;
         let data = {segments: transcript, text: transcript.map(row => row.text).join(" "),
           srt: subtitles(transcript, resolved), language: resolved, durationMs: elapsed, skippedChunks: failures,
           dialoguePauses};
@@ -1061,7 +1067,7 @@ export function mountMediaTranscript(request, currentLanguage) {
           list.replaceChildren();
           appendSegments(data.segments);
         }
-        if (automatic && data.segments.length) data.languageMode = "auto";
+        if (captureLanguageMode === "auto" && data.segments.length) data.languageMode = "auto";
         exportTranscript(data);
         status.textContent = uiText`Захват завершён · фраз: ${data.segments.length}` + detectedLanguage(data) + speakerStatus(data) +
           (data.skippedChunks ? uiText` · пропусков: ${data.skippedChunks}` : "");

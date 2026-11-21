@@ -7,6 +7,7 @@ import csv
 from hashlib import sha256
 from io import StringIO
 import json
+import re
 import os
 from pathlib import Path
 import shutil
@@ -106,7 +107,8 @@ def merge_lines(lines, *, line_limit=24, keep_numbers=False):
     kept = []
     for line in sorted(lines, key=lambda row: -row["score"]):
         text = line["text"].strip()
-        minimum = 1 if keep_numbers and text.isdecimal() else 3
+        numeric = re.fullmatch(r"[+−-]?\d+(?:[.,:]\d+)*(?:\s*[°%])?", text) is not None
+        minimum = 1 if keep_numbers and numeric else 3
         if sum(char.isalnum() for char in text) < minimum or (not keep_numbers and text.isdecimal()) or line["score"] < .49:
             continue
         if any(text.casefold() == row["text"].casefold() and iou(line["box"], row["box"]) >= .35

@@ -16,6 +16,28 @@ def fixture(count, track, distance=.1):
 
 
 class ActivityChunkTests(TestCase):
+    def test_speaker_span_reconciles_only_a_corroborated_face_on_the_same_track(self):
+        """A returning face can correct an earlier ID without conflating co-visible faces."""
+        for same_subject in (True, False):
+            with self.subTest(same_subject=same_subject):
+                timeline = ActivityTimeline(20_000)
+                cue = (9400, 11420)
+                candidate = {"track": 6, "face": 4, "representative": {"time_ms": 9600},
+                             "frames": 15, "positive_frames": 14, "mean_logit": .3,
+                             "track_start_ms": 9000, "track_end_ms": 10000}
+                timeline._span({"candidates": [candidate]}, cue, 0, {6: 5}, {4: 4}, {})
+                following = {**candidate, "face": 7, "frames": 35, "positive_frames": 32,
+                             "representative": {"time_ms": 10040}, "mean_logit": .5}
+                if not same_subject:
+                    timeline.frames[246] = [[1, .1, .2, .2, .2, 1, 3], [5, .6, .2, .2, .2, 1, 4]]
+                timeline._span({"candidates": [following]}, cue, 0, {6: 5}, {7: 3}, {7: (3, .704)})
+                rows = list(timeline.spans[cue[0]]["candidates"].values())
+                if same_subject:
+                    self.assertEqual([(row["face"], row["positive_frames"]) for row in rows], [(3, 46)])
+                    self.assertEqual(rows[0]["faceEvidence"], "cross-window-face")
+                else:
+                    self.assertEqual([(row["face"], row["positive_frames"]) for row in rows], [(4, 14), (3, 32)])
+
     @patch("voice_studio.vision.video_revolver.ffmpeg")
     def test_people_count_request_controls_native_worker_and_original_clock(self, ffmpeg):
         worker = Mock()

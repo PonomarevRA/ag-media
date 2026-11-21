@@ -31,7 +31,7 @@ from voice_studio.synthesis.video_dub import build_video_dub, suggest_english
 from voice_studio.vision.person_layers import export_clothing_masks
 from voice_studio.app.live_capture import EXTENSION_ORIGIN, MAX_BYTES as MAX_LIVE_BYTES, LiveBusy, LiveCapture
 from voice_studio.audio.music_sample import music_sample
-from voice_studio.app.scroll_previews import PREVIEW_PATH, ScrollPreviews
+from voice_studio.app.scroll_previews import MARKDOWN_PATH, PREVIEW_PATH, ScrollPreviews
 from voice_studio.app.studio import Studio, require_text
 from voice_studio.core.storage_cache import cache_lock, mark_cache_used
 from voice_studio.app.studio_storage import StudioStorage
@@ -82,8 +82,10 @@ class Handler(LoopbackRequestHandler):
         return language
 
     def transcription_language(self, query, fallback, *, clip=False):
-        """Resolve recognition independently of the recording and synthesis workspace."""
+        """Separate explicit speech language from the workspace and captured mod defaults."""
         language = query.get("speech_lang", [fallback])[0]
+        if language == "default":
+            return None
         supported = CLIP_LANGUAGES if clip else STUDIO_LANGUAGES
         if language != "auto" and language not in supported:
             if clip:
@@ -123,6 +125,12 @@ class Handler(LoopbackRequestHandler):
             elif url.path in STATIC:
                 name, mime = STATIC[url.path]
                 self.file(ROOT / "web" / name, mime)
+            elif markdown := MARKDOWN_PATH.fullmatch(url.path):
+                path = self.server.scroll_previews.path(markdown[1], int(markdown[2]), markdown=True)
+                if path is None:
+                    self.reply(404, {"error": "Файл Markdown недоступен."})
+                else:
+                    self.file(path, "text/markdown; charset=utf-8", attachment="scroll-analysis.md")
             elif preview := PREVIEW_PATH.fullmatch(url.path):
                 image = self.server.scroll_previews.read(preview[1], int(preview[2]))
                 if image is None:
@@ -463,8 +471,9 @@ class Handler(LoopbackRequestHandler):
             if url.path == "/api/video-dub":
                 with self.uploaded_media(overlay=True) as (path, dub):
                     output = path.with_name("dub.zip")
-                    build_video_dub(path, dub, path.parent, output)
-                    self.file(output, "application/zip", attachment="english-dub.zip")
+                    report = build_video_dub(path, dub, path.parent, output)
+                    filename = "russian-dub.zip" if report["dubLanguage"] == "ru" else "english-dub.zip"
+                    self.file(output, "application/zip", attachment=filename)
                 return
             if url.path == "/api/video-dub-translate":
                 with self.uploaded_media(overlay=True) as (path, dub):

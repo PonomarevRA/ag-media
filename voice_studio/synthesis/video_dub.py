@@ -1,4 +1,4 @@
-"""Render an English dub from a reviewed transcript on the source video's clock."""
+"""Render a dub from a reviewed transcript on the source video's clock."""
 
 import json
 from pathlib import Path
@@ -24,6 +24,12 @@ SLOT = BoundedSemaphore(1)
 ENGLISH_WAV = "english.wav"
 DIALOGUE_WAV = "english-dialogue.wav"
 DUAL_AUDIO_MP4 = "original-and-english.mp4"
+DUB_FILES = {
+    "en": (ENGLISH_WAV, DIALOGUE_WAV, DUAL_AUDIO_MP4, "english.srt"),
+    "ru": ("russian.wav", "russian-dialogue.wav", "original-and-russian.mp4", "russian.srt"),
+}
+AUDIO_LANGUAGES = {"ru": "rus", "en": "eng"}
+DUB_TRACK_NAMES = {"ru": "Russian dub", "en": "English dub"}
 
 
 def source_streams(source):
@@ -47,10 +53,14 @@ def source_streams(source):
     return round(duration * 1000), video.get("codec_name"), audio.get("codec_name")
 
 
-def clean_cues(metadata, duration_ms, *, require_english=True):
+def clean_cues(metadata, duration_ms, *, require_text=True):
     """Validate ordered non-overlapping slots and translations before allocating audio."""
     rows = metadata.get("cues")
-    mode = pronunciation_mode(metadata.get("pronunciationMode", "source"), "en")
+    dub_language = metadata.get("dubLanguage", "en") if require_text else "en"
+    if dub_language not in ("ru", "en"):
+        raise ValueError("Выбери русский или английский язык дубляжа.")
+    mode = pronunciation_mode(metadata.get("pronunciationMode", "source"), dub_language)
+    text_key = "englishText" if dub_language == "en" else "targetText"
     language = metadata.get("sourceLanguage")
     if language not in ("ru", "en") or not isinstance(rows, list) or not 1 <= len(rows) <= MAX_DUB_CUES:
         raise ValueError("Нужна расшифровка на русском или английском, до 400 реплик.")
@@ -64,17 +74,19 @@ def clean_cues(metadata, duration_ms, *, require_english=True):
             raise ValueError(f"Укажи спикера и таймкод для реплики №{index}.")
         if not last_end <= start < end <= duration_ms:
             raise ValueError(f"Исправь таймкод или пересечение в реплике №{index}.")
-        original, english = (row.get(key) for key in ("sourceText", "englishText"))
-        values = (original, english) if require_english else (original,)
+        original, translation = (row.get(key) for key in ("sourceText", text_key))
+        values = (original, translation) if require_text else (original,)
         if any(not isinstance(value, str) or not 1 <= len(value.strip()) <= 1000 for value in values):
-            raise ValueError(f"Добавь исходный текст и английский перевод реплики №{index}.")
+            raise ValueError(f"Проверь исходный текст и текст дубляжа реплики №{index}.")
         if row.get("overlap"):
             raise ValueError(f"Раздели перекрывающуюся речь в реплике №{index} перед дубляжом.")
         cue = {"startMs": start, "endMs": end, "speaker": number, "sourceText": " ".join(original.split()),
-               "englishText": " ".join(english.split()) if require_english else ""}
+               text_key: " ".join(translation.split()) if require_text else ""}
+        if dub_language != "en":
+            cue["dubLanguage"] = dub_language
         if mode != "source":
             cue["pronunciationMode"] = mode
-        if require_english and (speed := row.get("tempo")) is not None:
+        if require_text and (speed := row.get("tempo")) is not None:
             if type(speed) not in (int, float) or not MIN_SPEED <= speed <= MAX_SPEED:
                 raise ValueError(f"Укажи темп от 0,8 до 1,8 для реплики №{index}.")
             cue["tempo"] = speed
@@ -114,7 +126,7 @@ def decode_original(source, pcm, rate):
 def suggest_english(source, metadata, folder):
     """Translate each timed speech slot locally with multilingual Whisper Small."""
     duration, _, _ = source_streams(source)
-    cues, language = clean_cues(metadata, duration, require_english=False)
+    cues, language = clean_cues(metadata, duration, require_text=False)
     if language == "en":
         return [cue["sourceText"] for cue in cues]
     rate = 16_000
@@ -206,6 +218,8 @@ def render_cue(cue, index, references, window, folder, deadline):
     allowed = max(45, min(180, (cue["endMs"] - cue["startMs"]) / 250))
     has_take = False
     primary = references[cue["speaker"]]
+    language = cue.get("dubLanguage", "en")
+    text = cue["englishText"] if language == "en" else cue["targetText"]
     fallback = primary.get("fallback")
     prompts = (primary, primary, fallback) if fallback else (primary,) * 3
     if fallback and "tempo" in cue:
@@ -214,7 +228,7 @@ def render_cue(cue, index, references, window, folder, deadline):
         # Reproduce the baseline seed when returning to the original prompt.
         seed = 419 + index + (0 if prompt is fallback else attempt * 1009)
         try:
-            generate("qwen", {"output": str(raw), "text": cue["englishText"], "language": "en",
+            generate("qwen", {"output": str(raw), "text": text, "language": language,
                               "seed": seed, "references": [prompt],
                               "pronunciationMode": cue.get("pronunciationMode", "source"),
                               "deadline": min(deadline, monotonic() + allowed)}, False)
@@ -230,55 +244,59 @@ def render_cue(cue, index, references, window, folder, deadline):
             break
     if not has_take:
         raise ValueError(f"Qwen3-TTS не успела синтезировать реплику №{index}.")
-    raise ValueError(f"Английская реплика №{index} выходит за свой интервал. Сократи перевод или увеличь темп.")
+    raise ValueError(f"Реплика №{index} выходит за свой интервал. Сократи текст дубляжа или увеличь темп.")
 
 
-def create_english_track(cues, references, windows, duration_ms, folder):
+def create_dialogue_track(cues, references, windows, duration_ms, folder, filename):
     """Place every rendered cue and silence at exact sample boundaries."""
     deadline = monotonic() + 1200
     position, audit = 0, []
-    with open_pcm(folder / DIALOGUE_WAV) as english:
+    with open_pcm(folder / filename) as dialogue:
         for index, (cue, window) in enumerate(zip(cues, windows, strict=True), 1):
             pcm, rendered_start, rendered_end, speed, raw_ms, used_fallback = render_cue(
                 cue, index, references, window, folder, deadline,
             )
             start = sample_index(rendered_start)
-            write_silence(english, start - position)
-            english.writeframesraw(pcm)
+            write_silence(dialogue, start - position)
+            dialogue.writeframesraw(pcm)
             position = start + len(pcm) // 2
             audit.append({**cue, "rawDurationMs": raw_ms, "tempo": speed, "voiceReferenceFallback": used_fallback,
                           "sourceSpeechStartMs": window[0], "sourceSpeechEndMs": window[1],
                           "renderedStartMs": rendered_start, "renderedEndMs": rendered_end})
-        write_silence(english, sample_index(duration_ms) - position)
+        write_silence(dialogue, sample_index(duration_ms) - position)
     return audit
 
 
-def mux_tracks(source, folder, source_lang, video_codec, audio_codec):
+def mux_tracks(source, folder, source_lang, dub_language, video_codec, audio_codec):
     """Tag both tracks and preserve compatible bitstreams from the original."""
     video = ["-c:v", "copy"] if video_codec in {"h264", "hevc", "av1"} else [
         "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
-    default_language = {"ru": "rus", "en": "eng"}[source_lang]
+    mixed, _, video_file, _ = DUB_FILES[dub_language]
     ffmpeg(["-protocol_whitelist", "file,pipe", "-format_whitelist", FORMATS, "-i", str(source),
-            "-i", str(folder / ENGLISH_WAV), "-map", "0:V:0", "-map", "0:a:0", "-map", "1:a:0",
+            "-i", str(folder / mixed), "-map", "0:V:0", "-map", "0:a:0", "-map", "1:a:0",
             *video, "-c:a:0", "copy" if audio_codec == "aac" else "aac", "-c:a:1", "aac", "-b:a:1", "192k",
-            "-metadata:s:a:0", f"language={default_language}", "-metadata:s:a:0", "handler_name=Original",
-            "-metadata:s:a:1", "language=eng", "-metadata:s:a:1", "handler_name=English dub",
+            "-metadata:s:a:0", f"language={AUDIO_LANGUAGES[source_lang]}", "-metadata:s:a:0", "handler_name=Original",
+            "-metadata:s:a:1", f"language={AUDIO_LANGUAGES[dub_language]}",
+            "-metadata:s:a:1", f"handler_name={DUB_TRACK_NAMES[dub_language]}",
             "-disposition:a:0", "default", "-disposition:a:1", "0", "-movflags", "+faststart",
-            str(folder / DUAL_AUDIO_MP4)], timeout=360)
+            str(folder / video_file)], timeout=360)
 
 
 def finish_video_dub(source, folder, archive, report, video_codec, audio_codec):
-    """Mix an aligned English voice with the source bed and package the final media."""
+    """Mix the aligned dialogue with the source bed and package the final media."""
     report = {**report, "background": {"model": MODEL_NAME, "file": BACKGROUND_WAV}}
-    mix_english(folder / DIALOGUE_WAV, folder / BACKGROUND_WAV, report["durationMs"], folder / ENGLISH_WAV)
-    mux_tracks(source, folder, report["sourceLanguage"], video_codec, audio_codec)
+    language = report["dubLanguage"]
+    mixed, dialogue, video_file, subtitle_file = DUB_FILES[language]
+    text_key = "englishText" if language == "en" else "targetText"
+    mix_english(folder / dialogue, folder / BACKGROUND_WAV, report["durationMs"], folder / mixed)
+    mux_tracks(source, folder, report["sourceLanguage"], language, video_codec, audio_codec)
     subtitles = "\n\n".join(
-        f"{index}\n{srt_time(cue['renderedStartMs'])} --> {srt_time(cue['renderedEndMs'])}\n{cue['englishText']}"
+        f"{index}\n{srt_time(cue['renderedStartMs'])} --> {srt_time(cue['renderedEndMs'])}\n{cue[text_key]}"
         for index, cue in enumerate(report["cues"], 1)) + "\n"
     with ZipFile(archive, "w", compression=ZIP_STORED) as output:
-        for filename in (ENGLISH_WAV, DIALOGUE_WAV, BACKGROUND_WAV, DUAL_AUDIO_MP4):
+        for filename in (mixed, dialogue, BACKGROUND_WAV, video_file):
             output.write(folder / filename, filename)
-        output.writestr("english.srt", subtitles)
+        output.writestr(subtitle_file, subtitles)
         output.writestr("dub-report.json", json.dumps(report, ensure_ascii=False, indent=2))
     return report
 
@@ -294,8 +312,11 @@ def build_video_dub(source, metadata, folder, archive):
             raise ValueError("Локальная модель Qwen3-TTS недоступна.")
         prepare_background(source, duration, folder)
         references, windows = render_reference_tracks(source, cues, folder)
-        audit = create_english_track(cues, references, windows, duration, folder)
-        report = {"durationMs": duration, "sourceLanguage": language, "dubLanguage": "en", "model": "qwen",
+        dub_language = metadata.get("dubLanguage", "en")
+        _, dialogue, _, _ = DUB_FILES[dub_language]
+        audit = create_dialogue_track(cues, references, windows, duration, folder, dialogue)
+        report = {"durationMs": duration, "sourceLanguage": language, "dubLanguage": dub_language, "model": "qwen",
+                  "pronunciationMode": metadata.get("pronunciationMode", "source"),
                   "references": reference_report(references),
                   "cues": audit}
         return finish_video_dub(source, folder, archive, report, video_codec, audio_codec)

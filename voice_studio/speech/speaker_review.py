@@ -201,18 +201,25 @@ def review_visible_cues(cues, profiles, turns, audio_start_ms, merged):
     return decisions
 
 
+def skip_review(result, reason):
+    """Keep the explanation in the visual report for both fresh and cached runs."""
+    result["speakerReview"] = {"status": "skipped", "reason": reason}
+
+
 def review_speakers(result, wav, audio_start_ms, *, alternate=True):
-    """Run the independent evidence pass without changing raw Sherpa cluster labels."""
+    """Review raw Sherpa clusters and record why a review could not proceed."""
     evidence = result.get("videoEvidence", {})
     timeline = evidence.get("timeline")
     if not timeline:
-        return None
+        return skip_review(result, "Нет видеоданных о говорящих для проверки")
     cues = result["segments"]
     replies = find_replies(cues, evidence, audio_start_ms)
     spans = anchor_spans(cues, audio_start_ms)
     enough_clusters = len(spans) >= 2
     if not enough_clusters and not replies:
-        return None
+        if spans:
+            return skip_review(result, "Одна голосовая группа, коротких реплик для проверки нет")
+        return skip_review(result, "Нет подходящих голосовых образцов или коротких реплик для проверки")
     embeddings = extract_embeddings(wav, spans) if enough_clusters else {}
     profiles = build_profiles(cues, timeline, embeddings) if enough_clusters else {}
     merges = validate_pairs(profiles, result.get("speechOverlaps", []))
@@ -236,7 +243,7 @@ def review_speakers(result, wav, audio_start_ms, *, alternate=True):
     except (OSError, ValueError, subprocess.SubprocessError):
         voiced = []
     if not enough_clusters and not restored and not voiced:
-        return None
+        return skip_review(result, "Дополнительная проверка не подтвердила смену говорящего")
     report = {"version": REVIEW_VERSION, "analyzedClusters": len(profiles),
               "voiceSamples": sum(len(profile.samples) for profile in profiles.values()), "merges": merges,
               "secondClustering": needs_alternate, "cueDecisions": reviewed, "shortReplyDecisions": restored, "voicedWindowDecisions": voiced}

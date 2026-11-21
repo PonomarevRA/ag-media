@@ -73,6 +73,29 @@ def prepare_weights():
     print(f"{action} · {path}", flush=True)
 
 
+def prepare_dub_background():
+    """Prepare the first-install companion model from the provisioned Python environment."""
+    from voice_studio.core.workspace_lock import workspace_lock
+    from voice_studio.provision.jobs import install_initial_background
+    from voice_paths import dependency_path
+
+    last_step = None
+
+    def progress(stage, received=None, total=None, artifact=None):
+        """Show dependency and checkpoint progress without printing every download chunk."""
+        nonlocal last_step
+        step = (stage, received * 10 // total * 10) if total else (stage, None)
+        if step != last_step:
+            detail = "зависимости" if stage == "runtime" else f"веса {step[1]}%"
+            print(f"HDemucs · {detail}", flush=True)
+            last_step = step
+
+    guard = dependency_path("model-install")
+    guard.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with workspace_lock(guard):
+        install_initial_background(progress)
+
+
 def main():
     """Prepare requested resources and keep the Studio in this terminal session."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -91,6 +114,9 @@ def main():
         prepare_tools()
         python = prepare_python()
         prepare_weights()
+        subprocess.run([str(python), "-B", "-c",
+                        "from voice_studio.app.first_run import prepare_dub_background; prepare_dub_background()"],
+                       cwd=PROJECT_ROOT, check=True)
         if options.prepare_only:
             return 0
         command = [str(python), str(PROJECT_ROOT / "ag_media_studio.py"), "--data", str(options.data), "--port", "0"]

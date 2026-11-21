@@ -9,7 +9,8 @@ import re
 from voice_studio.audio.audio_scene import LABELS as AUDIO_LABELS, clean_audio_layers
 from voice_studio.audio.dialogue_pauses import clean_dialogue_pauses
 from voice_studio.graph.object_screens import VerifiedPanels, panel_scroll_previews, screen_evidence
-from voice_studio.graph.media_graph_interfaces import add_interface_observations
+from voice_studio.graph.media_graph_interfaces import PANEL_TYPES, add_interface_observations
+from voice_studio.graph.frame_change_graph import add_frame_changes, change_coverage
 from voice_studio.graph.media_graph_expressions import add_facial_expressions
 from voice_studio.graph.scene_hierarchy import add_scene_hierarchy
 from voice_studio.graph.ui_activity_graph import add_ui_activity
@@ -19,6 +20,7 @@ from voice_studio.graph.media_graph_objects import DISPLAY_LABELS, add_object_tr
 from voice_studio.graph.media_object_profiles import add_object_profiles
 from voice_studio.speech.person_mentions import clean_mentions
 from voice_studio.speech.speaker_profiles import APPEARANCE_FIELDS, cue_number
+from voice_studio.vision.frame_changes import BASIS as FRAME_CHANGE_DETAIL
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 from voice_studio.vision.video_colors import hex_rgb
 
@@ -26,11 +28,11 @@ KIND_NAMES = {
     "ru": {"audio_track": "Звуковая дорожка", "video_track": "Видеодорожка", "shot": "План",
            "speaker": "Спикер", "face": "Лицо", "frame": "Кадр", "overlap": "Пересечение голосов",
            "object": "Предметы", "text": "Надписи", "speech": "Реплики", "faces": "Лица",
-           "camera_motion": "Движение камеры", "person_motion": "Движение персонажа"},
+           "frame_change": "Изменение в кадре", "camera_motion": "Движение камеры", "person_motion": "Движение персонажа"},
     "en": {"audio_track": "Audio track", "video_track": "Video track", "shot": "Shot",
            "speaker": "Speaker", "face": "Face", "frame": "Frame", "overlap": "Overlapping speech",
            "object": "Objects", "text": "Screen text", "speech": "Utterances", "faces": "Faces",
-           "camera_motion": "Camera motion", "person_motion": "Character motion"},
+           "frame_change": "Frame change", "camera_motion": "Camera motion", "person_motion": "Character motion"},
 }
 MAX_TEXT = 4096
 COLOR_HEX = re.compile(r"#[0-9a-fA-F]{6}")
@@ -101,6 +103,8 @@ def source_coverage(report, duration):
                     for key in ("statuses", "interfaceOcrStatuses"):
                         if isinstance(statuses := row.get(key), dict):
                             item[key] = compact_source_data(statuses, tuple(statuses))
+                    if modality == "scene" and (detail := change_coverage(row)):
+                        item["frameChanges"] = detail
                     coverage[modality].append(item)
         return coverage
     evidence = report.get("videoEvidence") or {}
@@ -131,6 +135,8 @@ def source_coverage(report, duration):
         coverage["scene"][0].update(compact_source_data(
             scene, ("objectSampling", "objectFrames", "interfaceFrames", "interfaceOcrCrops", "interfaceStatus")),
             statuses=compact_source_data(stages, tuple(stages)))
+        if detail := change_coverage(scene):
+            coverage["scene"][0]["frameChanges"] = detail
         if isinstance(screen_ocr := scene.get("interfaceOcrStatuses"), dict):
             coverage["scene"][0]["interfaceOcrStatuses"] = compact_source_data(screen_ocr, tuple(screen_ocr))
     return coverage
@@ -516,14 +522,15 @@ def scene_observations(graph, report, *, keep_display_aliases=False):
                     add_scene_observation(graph, stamp, kind, source, index, label, box, item, screen=screen)
         interfaces = row.get("interfaces") or []
         # Appended crop detections keep the baseline indexes, including the synthetic panel.
-        panel_offset = sum(item.get("detailBasis") != SMALL_OBJECT_DETAIL for item in row.get("objects") or ())
+        panel_offset = sum(item.get("detailBasis") not in (SMALL_OBJECT_DETAIL, FRAME_CHANGE_DETAIL) for item in row.get("objects") or ())
         for index, panel in enumerate(interfaces, start=panel_offset):
-            if not isinstance(panel, dict) or panel.get("panelType") != "mobile-ui":
+            if not isinstance(panel, dict) or panel.get("panelType") not in PANEL_TYPES:
                 continue
             if not (box := box_coordinates(panel.get("box"))):
                 continue
-            screen = {"type": "mobile-ui", "basis": "verified-panel"}
-            node_id = add_scene_observation(graph, stamp, "object", "interface-layout", index, "mobile-ui", box, {}, screen=screen)
+            panel_type = panel["panelType"]
+            screen = {"type": panel_type, "basis": "verified-panel"}
+            node_id = add_scene_observation(graph, stamp, "object", "interface-layout", index, panel_type, box, {}, screen=screen)
             if keep_display_aliases:
                 verified[stamp, tuple(box)] = node_id
         add_interface_observations(graph, stamp, interfaces, box_coordinates)
@@ -552,6 +559,7 @@ def object_matches(item, stamp):
             continue
         metrics = compact_source_data(entry, ("objectSimilarity", "edgeSimilarity", "backgroundSimilarity"))
         matches.append({"timeMs": time, "label": label.strip()[:512], "box": box, "scaleRatio": scale,
+                        **({"comparisonBasis": "frame-change-anchor"} if entry.get("comparisonBasis") == "frame-change-anchor" else {}),
                         **{key: value for key, value in metrics.items()
                            if type(value) in (int, float) and -1 <= value <= 1}})
     return matches[:3]
@@ -816,7 +824,7 @@ def add_video_shots(graph, report, coverage, video_track):
 def object_layers(report):
     """Project shot-local tracks, measured box samples and profiles onto the editor source clock."""
     scene = report["sceneEvidence"]
-    if not any(row.get("objects") or any(isinstance(panel, dict) and panel.get("panelType") == "mobile-ui"
+    if not any(row.get("objects") or any(isinstance(panel, dict) and panel.get("panelType") in PANEL_TYPES
                for panel in row.get("interfaces") or ()) for row in scene.get("frames", [])):
         return {"objectTimeline": [], "objectProfiles": []}
     editor = (report.get("videoEvidence") or {}).get("editorTimeline") or {}
@@ -862,6 +870,7 @@ def build_graph(report, *, kind, duration_ms, object_reconciliation=False):
         person_observations(graph, report)
         add_person_counts(graph, report)
         add_motion(graph, report, video_track, bindings)
+        add_frame_changes(graph, report.get("sceneEvidence") or {}, video_track, box_coordinates)
         faces, step = face_samples(graph, report, cues, bindings)
         add_facial_expressions(graph, report, video_track)
         tracks = add_object_tracks(graph)

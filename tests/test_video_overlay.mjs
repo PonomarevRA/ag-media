@@ -255,3 +255,11 @@ test("measured object tracks hold through sparse frames, update on a measurement
   assert.deepEqual(positionsAt(425), [65]);
   assert.deepEqual(positionsAt(426), []);
 });
+
+test("change boxes are exported only during the measured source frame", () => {
+  const witness = {startMs: 680, endMs: 720, regions: [{box: [.2, .3, .04, .05], changedPixels: 100}]};
+  const args = [measure, {}, [], [], [], 400, 200, 1600, [], [], undefined];
+  assert.deepEqual(previewExportPlan(...args).samples, []);
+  const {samples} = previewExportPlan(...args, [witness]);
+  assert.deepEqual(samples, [[680, 720, [["stroke", "#ffdf66", 80, 60, 16, 10, 1.5, [3, 3]]]]]);
+});

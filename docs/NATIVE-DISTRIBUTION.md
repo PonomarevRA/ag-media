@@ -22,6 +22,8 @@ Whisper, synthesis, OCR and other model providers require separately provisioned
 compatible runtimes and weights. The native application opens without downloads. In Settings → Mods and
 models → Install models, choose a feature to install its model and supported
 runtime from upstream. The installed files stay outside the application bundle.
+On Apple Silicon with macOS 26 or later, installing Transcription or Qwen3-TTS
+also provisions HDemucs for retaining the video's background in a dub.
 To prepare the Whisper Base weights from a source checkout, run
 `python -m voice_studio.app.first_run --models-only`. The same external model
 directory is used by the source and desktop applications on the same platform.

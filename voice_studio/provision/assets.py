@@ -79,6 +79,11 @@ LIGHT_ASD = (
           "https://raw.githubusercontent.com/Junhua-Liao/Light-ASD/ed38c232de5efe0261dbd68627c0ade7cdfe14eb/weight/pretrain_AVA_CVPR.model",
           4175289, "d44bc3ea7baa8e0946fa3921311714a630ed8b90a1928fab0dbe30d918909317"),
 )
+DUB_BACKGROUND = (
+    Asset("separation/hdemucs_high_trained.pt",
+          "https://download.pytorch.org/torchaudio/models/hdemucs_high_trained.pt",
+          334697255, "a004b2790d73ffeaa535db458a1a79b539dfdbafbccc31f275d07e632ebd7816"),
+)
 VISION = (
     Asset("vision/yunet.onnx", f"{ZOO}/face_detection_yunet/face_detection_yunet_2023mar.onnx",
           232589, "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"),
@@ -88,6 +93,14 @@ VISION = (
           3800954, "4b82da9944b88577175ee23a459dce2e26e6e4be573def65b1055dc2d9720186"),
     Asset(f"vision/{EXPRESSION}", f"https://huggingface.co/opencv/facial_expression_recognition/resolve/b473270576eabddaacffd08adb4bed27b3fc54e6/{EXPRESSION}",
           4791892, MODEL_SHA256),
+)
+MEDIAPIPE = (
+    Asset("mediapipe/face_landmarker.task",
+          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          3758596, "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"),
+    Asset("mediapipe/selfie_multiclass_256x256.tflite",
+          "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite",
+          16371837, "c6748b1253a99067ef71f7e26ca71096cd449baefa8f101900ea23016507e0e0"),
 )
 
 

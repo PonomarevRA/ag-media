@@ -14,7 +14,7 @@ from voice_paths import publish_file, temporary_directory
 from uuid import uuid4
 import zlib
 
-from voice_studio.graph.media_graph_interfaces import INTERFACE_KINDS, restore_interface_observation, restore_verified_panel
+from voice_studio.graph.media_graph_interfaces import INTERFACE_KINDS, PANEL_TYPES, restore_interface_observation, restore_verified_panel
 from voice_studio.graph.media_graph_health import data_health
 from voice_studio.graph.media_graph_mod_extensions import snapshot_mod_provenance
 
@@ -176,6 +176,8 @@ def brief(row):
         facts = json.loads(row["data"])
         result.update({key: facts[key] for key in ("horizontal", "vertical", "zoom", "depth", "basis", "faceId")
                        if key in facts})
+    if row["kind"] == "frame_change":
+        result.update(json.loads(row["data"]))
     if row["kind"] == "shot":
         color = json.loads(row["data"]).get("color")
         if color:
@@ -387,8 +389,8 @@ class MediaGraphStore:
                 if row["kind"] == "frame":
                     frame["panelChecked"] = True
                 elif row["kind"] in ("object_observation", "object_alias"):
-                    if data.get("source") == "interface-layout" and row["label"] == "mobile-ui":
-                        panels.append((frame, data["box"]))
+                    if data.get("source") == "interface-layout" and row["label"] in PANEL_TYPES:
+                        panels.append((frame, data["box"], row["label"]))
                         continue
                     evidence = {name: data[name] for name in ("box", "score", "basis", "detailBasis", "objectPalette",
                                                              "objectMatches", "objectPartMatches") if name in data}
@@ -403,8 +405,8 @@ class MediaGraphStore:
                     restore_interface_observation(frame, regions, row["id"], row["kind"], data)
             for frame, index, item in aliases:
                 frame["objects"].insert(index, item)
-            for frame, box in panels:
-                restore_verified_panel(frame, box)
+            for frame, box, panel_type in panels:
+                restore_verified_panel(frame, box, panel_type)
             shot_colors, moodbook = [], []
             for shot in db.execute("SELECT start_ms, data FROM nodes WHERE kind='shot' ORDER BY start_ms, seq"):
                 data = json.loads(shot["data"])
@@ -417,6 +419,11 @@ class MediaGraphStore:
                 for row in db.execute("SELECT start_ms, end_ms, data FROM nodes "
                                       "WHERE kind='camera_motion' ORDER BY start_ms, seq")
             ]
+            changes = {}
+            for row in db.execute("SELECT start_ms, end_ms, data FROM nodes WHERE kind='frame_change' ORDER BY start_ms, seq"):
+                start = row["start_ms"]
+                witness = changes.setdefault(start, {"startMs": start, "endMs": row["end_ms"], "regions": []})
+                witness["regions"].append(json.loads(row["data"]))
             ui_activity = {**(metadata.get('uiActivity') or {}),
                            "version": (metadata.get('uiActivity') or {}).get('version', 1),
                            "truncated": (metadata.get("uiActivity") or {}).get("truncated") is True,
@@ -427,7 +434,8 @@ class MediaGraphStore:
                 ui_activity["truncated"] = ui_activity["truncated"] or facts.get("truncated") is True
                 ui_activity[key].append(facts)
         return {"status": "ok", "uiActivity": ui_activity, "frames": list(frames.values()), "shotColors": shot_colors, "moodbook": moodbook,
-                "cameraMotion": camera_motion}, coverage
+                "cameraMotion": camera_motion,
+                **({"frameChanges": {"rows": list(changes.values())}} if changes else {})}, coverage
 
     def frame_context(self, identity, at_ms=None, node_id=None):
         """Resolve a timestamp and fetch only evidence valid at that time."""
@@ -568,7 +576,7 @@ def object_sample_at(db, node_id, stamp):
 def mark_frame_target(db, context, node_id, stamp):
     """Highlight the selected timed object or UI evidence distinctly in the source frame."""
     item = db.execute("""
-        SELECT id, label, data FROM nodes WHERE id=? AND start_ms=? AND kind IN ('object_alias', ?, ?, ?)
+        SELECT id, label, data FROM nodes WHERE id=? AND start_ms=? AND kind IN ('object_alias', 'frame_change', ?, ?, ?)
     """, (node_id, stamp, *INTERFACE_KINDS)).fetchone()
     if item is None:
         item = object_sample_at(db, node_id, stamp)
@@ -670,6 +678,13 @@ def context_at(db, metadata, stamp):
         detail = json.loads(row["data"])
         if "box" in detail:
             boxes.append({"box": detail["box"], "label": row["label"], "kind": kinds[row["kind"]]})
+    changes = db.execute("""
+        SELECT data FROM nodes WHERE kind='frame_change' AND start_ms <= ? AND end_ms > ?
+        ORDER BY start_ms DESC, seq LIMIT 4
+    """, (stamp, stamp))
+    for row in changes:
+        detail = json.loads(row["data"])
+        boxes.append({"box": detail["box"], "kind": "change", "changedPixels": detail["changedPixels"]})
     shot = db.execute("""
         SELECT label, data FROM nodes WHERE kind='shot' AND start_ms <= ? AND end_ms > ?
         ORDER BY start_ms DESC, seq DESC LIMIT 1

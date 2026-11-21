@@ -13,7 +13,7 @@ IDENTIFIER = re.compile(r"^[a-z][a-z0-9.-]{0,95}$")
 VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.-]+)?$")
 SCHEMA_KEYS = {"type", "properties", "required", "additionalProperties", "enum", "items",
                "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems",
-               "description", "title", "default"}
+               "description", "title", "default", "enumLabels"}
 TYPES = {"object", "array", "string", "number", "integer", "boolean", "null"}
 
 
@@ -83,6 +83,11 @@ def validate_schema(schema, depth=0):
                 raise ModError(f"Schema {key} must be a nonnegative integer")
     if "enum" in schema and (not isinstance(schema["enum"], list) or not schema["enum"]):
         raise ModError("Schema enum must be a nonempty list")
+    if "enumLabels" in schema:
+        labels = schema["enumLabels"]
+        if ("enum" not in schema or not isinstance(labels, list) or len(labels) != len(schema["enum"])
+                or any(not isinstance(label, str) or not 1 <= len(label.strip()) <= 120 for label in labels)):
+            raise ModError("Schema enumLabels must name every enum value in order")
     json_bytes(schema)
 
 
