@@ -5,6 +5,8 @@ description: Find speaker changes, overlapping voices, uncertain assignments and
 
 # Audit dialogue
 
+For repeat requests, use `agent-memory` and check the project’s local `.ag-media-memory/` first to check the source and current report revision. Reuse matching evidence or recheck only the intervals affected by changes.
+
 1. Find the absolute original media path and its matching analysis report. Use a saved speech-ready or complete report containing `speechTurns`. When reusing an older report, supply its measured turns with `turns_path` or rerun the required speech stages.
 2. Discover `dialogue_audit` with the live MCP catalog. Start with `rerun=false` and poll `dialogue_audit_job` in the same session. Re-recognize only when requested or needed for a definite missing phrase, with bounded window, audio and time options.
 3. Review highest-priority candidates against the original sound and any direct visible activity. Clear video evidence can establish who was speaking at a time. Where it is ambiguous, use acoustic evidence and leave unresolved assignments explicit. A candidate alone never identifies a person.

@@ -6,6 +6,10 @@
 
 Schematic IDs and source timestamps; links retain provenance.
 
+## Memory for repeat analysis
+
+Install agent-memory and the Studio scenario skills into the folder you open in your client. From source, run python3 skills/install.py --project PATH --client codex. Desktop packages include the same script at Contents/Resources/studio/skills/install.py on macOS, source/skills/install.py on Windows, and /opt/ag-media-studio/studio/skills/install.py on Linux. Open a fresh client session. For a repeat request, match saved findings against the current snapshot, timecodes, and coverage first.
+
 ## Discover before calling
 
 See `docs/AGENT-SETUP.md` and `skills/README.md` in the repository for local MCP setup and scenario skills. Use the corresponding platform command for an open desktop app.

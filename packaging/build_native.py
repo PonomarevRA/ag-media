@@ -20,6 +20,23 @@ def run(arguments):
     subprocess.run([str(value) for value in arguments], check=True)
 
 
+def copy_agent_skills(source, destination):
+    """Copy only allowlisted skill resources, excluding all local project memory."""
+    profile = json.loads((source / "packaging/export-profiles.json").read_text())
+    for name in profile["common"]["files"]:
+        if not isinstance(name, str) or not name.startswith("skills/"):
+            continue
+        relative = Path(name)
+        if relative.is_absolute() or any(part.startswith(".") for part in relative.parts):
+            raise ValueError("Invalid bundled skill path")
+        item = source / relative
+        if any(entry.is_symlink() for entry in (item, *(source / parent for parent in relative.parents))):
+            raise ValueError("Bundled skill path cannot contain a symlink")
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, target)
+
+
 def copy_sources(source, destination):
     """Copy the finite application source/assets, excluding every data, engine and model directory."""
     destination.mkdir(parents=True)
@@ -32,6 +49,7 @@ def copy_sources(source, destination):
                 target = destination / item.relative_to(source)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, target)
+    copy_agent_skills(source, destination)
     for name in ("project.json", "THIRD-PARTY.md", "THIRD_PARTY_NOTICES.md", "LICENSE"):
         if (source / name).is_file():
             shutil.copy2(source / name, destination / name)

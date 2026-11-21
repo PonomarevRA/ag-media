@@ -1,0 +1,2 @@
+# Optional for agents working with YAML directly; required for automatic YAML parsing.
+PyYAML>=6.0.2,<7

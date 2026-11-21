@@ -39,8 +39,8 @@ and qualification evidence for macOS, Windows and Linux separately.
 
 [Agent setup](docs/AGENT-SETUP.md) covers local stdio from source, desktop MCP,
 the UI bridge and smoke checks. [Agent skills](skills/README.md) contains
-installation instructions and workflows for setup, interval review, UI review
-and dialogue audit.
+installation instructions for your own project and workflows for project memory,
+setup, interval review, UI review and dialogue audit.
 
 ## Data and development
 

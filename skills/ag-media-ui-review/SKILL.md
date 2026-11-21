@@ -5,6 +5,8 @@ description: Use local image recognition first for screenshots and UI recordings
 
 # Review a user interface
 
+For repeat requests, use `agent-memory` and check the project’s local `.ag-media-memory/` first: compare screenshot bytes, region and OCR settings for still images. Re-inspect the current revision for live controls.
+
 - **Live Studio.** Call `ui_windows`, choose the requested application window, then call `ui_inspect`. Use `ui_measure` with that revision. Discover rendered IDs without targets and measure the desired IDs and pairs together. Report CSS pixels, alignment axis and which boxes the numbers represent. Reinspect on revision changes or uncertain timeouts.
 - **Screenshot or image.** Start with the local workflow below. Use its text and regions as evidence before deciding whether visual interpretation is still needed.
 - **Review interaction.** Check mouse, keyboard focus and an accessible action name for icon-only buttons. Check tooltip placement and that a narrow view still reaches all actions. Observe actual behavior in the browser or native window where available. Report screenshot-based inferences as such.

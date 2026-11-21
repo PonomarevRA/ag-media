@@ -47,7 +47,7 @@
       "summary": "Prepare local transcription from a checkout, then open the Studio.",
       "summaryRu": "Prepare local transcription from a checkout, then open the Studio.",
       "summaryOrigin": "source-module-docstring",
-      "sha256": "5befd023f032daae3bfc25298700c13a145a5686d35bdfb7dd6df39a1f56bce1"
+      "sha256": "9935555ec6dd144874e52332da1c958bca5cf727c0ebad9740a585381a613004"
     },
     {
       "path": "voice_studio/app/http_transport.py",

@@ -5,6 +5,8 @@ description: Inspect a specific period in an AG Media Studio graph with timed di
 
 # Review a media interval
 
+For repeat requests, use `agent-memory` and check the project’s local `.ag-media-memory/` first to check whether a previous conclusion matches the source, snapshot, interval and coverage. If it does, reuse it before requesting another frame grid or transcript.
+
 1. Use `media_catalog(category="graph", query="interval", include_schema=true)` and resolve the exact source with `media_graph_list` and `media_graph_overview`. Pick one `snapshot_id` for related queries. If building is requested, pass the local file and use progressive snapshots for preliminary review.
 2. Call `media_graph_interval` with source milliseconds and a half-open interval of at most 60 seconds. Begin with `frames=false` when the question is about dialogue or timestamps. Request the frame grid or one `media_graph_frame` when visual evidence matters. Ask for `wire="expanded"` if the client needs plain JSON.
 3. Read coverage, omitted counts, and uncertainties before drawing conclusions. Quote ASR/OCR as observations. Check the actual frame time and regard draft speaker and object labels as hypotheses. Missing layers in an intermediate snapshot may be published later.

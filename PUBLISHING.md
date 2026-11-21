@@ -22,7 +22,7 @@ repository's first commit.
 `packaging/export-profiles.json` is the reviewed allowlist. Both profiles exclude
 credentials, environment files, user media, transcripts, model weights, installed
 dependencies, runtime state, caches, screenshots, reports and existing Git
-history. Both profiles include the getting-started and agent guides, four
+history. Both profiles include the getting-started and agent guides, bundled agent memory and
 workflow skills and portable synthetic tests. Private research tests stay
 outside both profiles. Review the allowlist before adding new files. The
 exporter rejects symlinks and forbidden paths in selected source.
