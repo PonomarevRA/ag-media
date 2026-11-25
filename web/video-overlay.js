@@ -14,6 +14,8 @@ const GAZE_LABELS = {left: "←", right: "→", center: "•"};
 const VERTICAL_DIRECTIONS = {up: "↑", down: "↓"};
 const SCENE_RADIUS_MS = 100;
 const PANEL_RADIUS_MS = 750;
+const CHANGE_PREVIEW_MS = 700;
+const CHANGE_VERIFICATION_LIMIT_MS = 2400;
 const intervalStart = row => row.startMs;
 
 /** Keep the same color in the browser and the serialized MP4 drawing instructions. */
@@ -437,10 +439,41 @@ function drawChanges(ctx, changes, width, height) {
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = FRAME_COLORS.change;
   ctx.setLineDash([3, 3]);
-  for (const {box: [x, y, w, h]} of changes) {
+  for (const {box: [x, y, w, h], recognition} of changes) {
     ctx.strokeRect(x * width, y * height, w * width, h * height);
+    const label = recognition?.text?.[0]?.text ?? recognition?.objects?.[0]?.label;
+    if (typeof label === "string" && label.trim()) {
+      const caption = label.slice(0, 28);
+      ctx.font = "600 12px system-ui";
+      const size = Math.min(width, ctx.measureText(caption).width + 8);
+      const left = Math.min(x * width, width - size);
+      const top = Math.max(0, y * height - 18);
+      ctx.fillStyle = "rgba(16, 13, 10, .94)";
+      ctx.fillRect(left, top, size, 18);
+      ctx.fillStyle = FRAME_COLORS.change;
+      ctx.fillText(caption, left + 4, top + 13);
+    }
   }
   ctx.restore();
+}
+
+/** Show matching inspected crops only up to their last visual check and within their shot. */
+export function previewChangeRegions(exact, inspected, cuts, time) {
+  const boundary = cuts[after(cuts, time, value => value) - 1] ?? 0;
+  const visible = [];
+  const overlaps = ({box}) => coveredByPanel(box, visible, .65)
+    || visible.some(region => coveredByPanel(region.box, [{box}], .65));
+  for (let index = after(inspected, time, intervalStart) - 1; index >= 0; index--) {
+    const row = inspected[index];
+    if (row.startMs < boundary || time - row.startMs > CHANGE_VERIFICATION_LIMIT_MS) break;
+    if (time > (row.endMs ?? row.startMs + CHANGE_PREVIEW_MS)) continue;
+    for (const region of row.regions) {
+      if (!overlaps(region)) visible.push(region);
+      if (visible.length >= 4) return visible;
+    }
+  }
+  if (!visible.length) return exact;
+  return visible.concat((exact ?? []).filter(region => !overlaps(region))).slice(0, 4);
 }
 
 /** Use one layout and draw order for browser pixels and the MP4 render instructions. */
@@ -594,13 +627,17 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame, chang
   let sceneCuts = null;
   let inferredCuts = [];
   let changeRows = [];
+  let inspectedChangeRows = [];
   let changesAt = intervalLookup();
   let pending;
 
-  /** Use source intervals only; different layers keep their own sampling tolerance. */
+  /** Keep instant measurements and give reviewed crops a short, shot-local preview. */
   function visibleChanges(at) {
     // FFmpeg timestamps are rounded to milliseconds, while the player uses fractional seconds.
-    return changeToggle?.checked && toggle.checked ? changesAt(Math.round(at))?.regions : undefined;
+    if (!changeToggle?.checked || !toggle.checked) return undefined;
+    const time = Math.round(at);
+    return previewChangeRegions(changesAt(time)?.regions, inspectedChangeRows,
+                                sceneCuts ?? (cuts.length ? cuts : inferredCuts), time);
   }
 
   function paint(time = video.currentTime) {
@@ -710,6 +747,10 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame, chang
     setSceneData(data) {
       const samples = data?.frames ?? [];
       changeRows = (data?.frameChanges?.rows ?? []).filter(row => Array.isArray(row?.regions) && row.regions.length);
+      inspectedChangeRows = changeRows.flatMap(row => row.regions.filter(region => region.recognition)
+        .map(region => ({startMs: region.recognition.sampleTimeMs ?? row.startMs,
+                        endMs: region.recognition.verifiedUntilMs, regions: [region]})))
+        .sort((first, second) => first.startMs - second.startMs);
       changesAt = intervalLookup(changeRows);
       sceneFrames = samples.filter(frame => frame.objectChecked !== false);
       textFrames = samples.filter(frame => frame.text?.length);

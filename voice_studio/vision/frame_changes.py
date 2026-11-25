@@ -21,6 +21,7 @@ MAX_FRAMES_PER_SECOND = 8
 MAX_PENDING_FRAMES = 16384
 MAX_OBJECT_FRAMES_PER_SECOND = 4
 MAX_OBJECT_REGIONS = 2
+MAX_RECOGNITION_REGIONS = 64
 GLOBAL_FRACTION = .32
 TIMEOUT = 480
 
@@ -210,18 +211,27 @@ def augment_plan(plan, frames, cuts, report):
             buckets[row["startMs"] // 1000].append(row)
         rows = [row for bucket in buckets.values() for row in local_pair(bucket)]
         assign_motion(plan, report.get("rows", ()), [0, *(frames[index][1] for index in boundaries)])
-    for row in rows:
+    def sample_for(row):
+        """Reuse a planned frame or schedule this exact source frame once."""
         ordinal = row["sourceFrame"]
         index = frame_indices[ordinal]
         if index in cuts:
-            continue
+            return None
         sample = by_frame.get(ordinal)
         if sample is None:
             sample = {"sourceFrame": ordinal, "timeMs": row["startMs"], "shot": bisect_right(boundaries, index),
                       "objects": False, "sectors": False, "ocr": False, "anchor": False, "phase": None,
                       "changeOnly": True}
             plan.append(sample)
-        sample["changeRegions"] = row["regions"][:MAX_OBJECT_REGIONS]
+            by_frame[ordinal] = sample
+        return sample
+    for row in rows:
+        if sample := sample_for(row):
+            sample["changeRegions"] = row["regions"][:MAX_OBJECT_REGIONS]
+    for row, index in recognition_witnesses(report.get("rows", ())):
+        if sample := sample_for(row):
+            sample.setdefault("changeRecognitionRegions", []).append(
+                {"index": index, "box": row["regions"][index]["box"]})
     plan.sort(key=lambda row: row["sourceFrame"])
 
 
@@ -231,6 +241,47 @@ def local_pair(rows):
     if len(local) >= 2 and local[1]["startMs"] - local[0]["startMs"] <= 160:
         return local[:2]
     return local[:1]
+
+
+def recognition_witnesses(rows):
+    """Pick the strongest compact region per second without requiring a NanoDet name."""
+    from voice_studio.vision.scene_sampling import evenly_spaced
+
+    candidates = defaultdict(list)
+    for row in rows:
+        second = row["startMs"] // 1000
+        for index, region in enumerate(row["regions"]):
+            _, _, width, height = region["box"]
+            area = width * height
+            pixels = region["changedPixels"]
+            if not .008 <= area <= .16 or min(width, height) < .055 or pixels < 240:
+                continue
+            density = pixels / (area * SIDE * SIDE)
+            if density < .12:
+                continue
+            score = density * pixels
+            candidates[second].append((score, row, index))
+    selected = []
+    for bucket in candidates.values():
+        score, row, index = max(bucket, key=lambda entry: entry[0])
+        box = row["regions"][index]["box"]
+        # During an entrance, the later comparable box more often encloses the settled graphic.
+        later = [entry for entry in bucket if entry[0] >= .25 * score
+                 and 0 < entry[1]["startMs"] - row["startMs"] <= 350
+                 and comparable_region(box, entry[1]["regions"][entry[2]]["box"])]
+        if later:
+            _, row, index = max(later, key=lambda entry: (entry[1]["startMs"], entry[0]))
+        selected.append((row, index))
+    return evenly_spaced(selected, MAX_RECOGNITION_REGIONS)
+
+
+def comparable_region(first, second):
+    """Require material overlap and similar extent before preferring a later witness."""
+    x, y, width, height = first
+    a, b, w, h = second
+    common = max(0, min(x + width, a + w) - max(x, a)) * max(0, min(y + height, b + h) - max(y, b))
+    smaller, larger = sorted((width * height, w * h))
+    return smaller >= .60 * larger and common >= .48 * smaller
 
 
 if __name__ == "__main__":

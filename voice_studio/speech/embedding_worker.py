@@ -23,6 +23,10 @@ class EmbeddingWorkerError(subprocess.SubprocessError):
     """A native request failed; only a later request may start a replacement process."""
 
 
+class EmbeddingWorkerDisconnected(EmbeddingWorkerError):
+    """The native transport closed before returning the requested result."""
+
+
 @dataclass
 class _Child:
     process: subprocess.Popen
@@ -37,7 +41,7 @@ def _stdout_reader(child):
         while True:
             line = child.process.stdout.readline(MAX_RESPONSE_BYTES + 1)
             if not line:
-                child.responses.put_nowait(EmbeddingWorkerError('Embedding worker closed stdout'))
+                child.responses.put_nowait(EmbeddingWorkerDisconnected('Embedding worker closed stdout'))
                 return
             if len(line) > MAX_RESPONSE_BYTES or not line.endswith(b'\n'):
                 child.responses.put_nowait(EmbeddingWorkerError('Embedding worker response exceeds limit'))
@@ -199,6 +203,9 @@ class EmbeddingWorker:
             except Empty as error:
                 raise subprocess.TimeoutExpired(self.command, timeout) from error
             if isinstance(response, Exception):
+                with self._state:
+                    if self._child is not child:
+                        raise EmbeddingWorkerError('Embedding worker was closed during request')
                 raise response
             value = json.loads(response)
             if not isinstance(value, dict) or value.get('id') != request['id']:
@@ -239,7 +246,8 @@ class EmbeddingWorker:
             child.process.stdin.flush()
         except (OSError, ValueError) as error:
             try:
-                child.responses.put_nowait(EmbeddingWorkerError(str(error)))
+                failure = EmbeddingWorkerDisconnected if isinstance(error, BrokenPipeError) else EmbeddingWorkerError
+                child.responses.put_nowait(failure(str(error)))
             except Full:
                 pass
 

@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {frameAnnotation, paintTechnicalFrame, personCountAt, previewExportPlan, sceneFrameAt} from "../web/video-overlay.js";
+import {frameAnnotation, paintTechnicalFrame, personCountAt, previewChangeRegions, previewExportPlan, sceneFrameAt} from "../web/video-overlay.js";
+
+test("reviewed change regions remain inspectable briefly on the same shot", () => {
+  const region = {box: [.61, .15, .30, .28], recognition: {status: "unclassified"}};
+  const inspected = [{startMs: 560, regions: [region]}];
+  assert.deepEqual(previewChangeRegions([], inspected, [0], 1000), [region]);
+  assert.deepEqual(previewChangeRegions([], inspected, [0, 900], 1000), []);
+  assert.deepEqual(previewChangeRegions([], inspected, [0], 1300), []);
+  assert.deepEqual(previewChangeRegions([{box: region.box}], inspected, [], 750), [region]);
+  assert.deepEqual(previewChangeRegions([], [{...inspected[0], endMs: 2000}], [0], 1900), [region]);
+  assert.deepEqual(previewChangeRegions([], [{...inspected[0], endMs: 2000}], [0], 2001), []);
+});
 
 test("person counts retain measured zero and do not cross a shot cut", () => {
   const samples = [{timeMs: 0, count: 2}, {timeMs: 1120, count: 0}];

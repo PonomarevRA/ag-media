@@ -80,6 +80,9 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                     if url:
                         page["previewUrl"] = url
             if changes:
+                if measured := result.pop("frameChangeRecognition", None):
+                    from voice_studio.vision.frame_change_recognition import attach_change_recognition
+                    attach_change_recognition(changes, measured)
                 result["frameChanges"] = changes
                 if changes["status"] != "ok":
                     result.setdefault("stages", {})["frame-changes"] = changes["status"]
@@ -435,6 +438,7 @@ def analyze_frames(folder):
         return read_shot_colors(folder, request["samples"], cv2)
     from voice_studio.vision.camera_motion import CameraMotion
     from voice_studio.vision.frame_change_objects import review_change_objects
+    from voice_studio.vision.frame_change_recognition import recognize_change_regions
     from voice_studio.vision.object_appearance import ObjectAppearance, retain_confirmed_matches
     from voice_studio.vision.scene_objects import ObjectDetector, calibrate_tiles, confirm_objects, refine_drinkware
     from voice_studio.vision.scene_ocr import recognize
@@ -547,6 +551,9 @@ def analyze_frames(folder):
     assisted = any("changeBands" in sample for sample in request["samples"])
     change_objects = review_change_objects(detector, request["samples"], frames, folder,
                                            interfaces=interfaces if assisted else None)
+    change_recognition = None
+    if any(sample.get("changeRecognitionRegions") for sample in request["samples"]):
+        change_recognition = recognize_change_regions(detector, request["samples"], folder, recognize=recognize)
     present = {frame["timeMs"] for frame in frames}
     for shot, stamp, _, _, source_frame in supplemental:
         if stamp not in present and stamp in interfaces:
@@ -581,6 +588,7 @@ def analyze_frames(folder):
             "objectAppearanceMs": round(appearance_seconds * 1000),
             "objectFrames": sum(row["checked"] for row in checks_by_shot.values()),
             **({"frameChangeObjects": change_objects} if change_objects is not None else {}),
+            **({"frameChangeRecognition": change_recognition} if change_recognition is not None else {}),
             "objectModelRuns": detector.model_runs if detector else 0,
             "objectViewCacheHits": detector.cache_hits if detector else 0,
             "cameraMotion": camera.intervals, "cameraMotionMs": round(motion_seconds * 1000),

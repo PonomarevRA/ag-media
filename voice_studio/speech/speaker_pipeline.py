@@ -10,7 +10,20 @@ from voice_studio.core.media_resources import run_batch_stage
 from voice_studio.speech.speaker_profiles import collect_profiles, cue_number
 
 LOGGER = logging.getLogger(__name__)
-PROFILE_PIPELINE_VERSION = 'source-profile-integration-2'
+PROFILE_PIPELINE_VERSION = 'source-profile-integration-3'
+
+
+def voice_profile_failure(error):
+    """Describe the recoverable failure without exposing local paths or model output."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return 'Голосовая модель не ответила вовремя'
+    if isinstance(error, FileNotFoundError):
+        return 'Файл голосовой модели или аудио недоступен'
+    if isinstance(error, ImportError):
+        return 'Среда голосовой модели недоступна'
+    if isinstance(error, subprocess.SubprocessError):
+        return 'Воркер голосовой модели не завершил запрос'
+    return 'Не удалось обработать голосовые образцы'
 
 
 def _mapping(value):
@@ -131,9 +144,12 @@ def attach_voice_profiles(report, wav, audio_start_ms, source_id, *, registry=No
                 raise ValueError('Invalid voice profile stage result')
         except (OSError, ValueError, TypeError, KeyError, AttributeError, ImportError, subprocess.SubprocessError) as error:
             LOGGER.warning('Source voice profiling unavailable: %s', type(error).__name__)
-            report['voiceProfileWarning'] = 'Голосовые профили недоступны; исходные метки сохранены.'
+            reason = voice_profile_failure(error)
+            report['voiceProfileWarning'] = reason + '. Исходные метки сохранены.'
             progress['state'] = 'failed'
+            progress['reason'] = reason
             return None
+    report.pop('voiceProfileWarning', None)
     report['voiceProfiles'] = public
     numbers = {voice['id']: voice['number'] for voice in _voices(report)}
     for original, cue in zip(originals, clean):

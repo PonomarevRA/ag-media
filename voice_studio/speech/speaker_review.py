@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from time import monotonic
 import wave
 
 from voice_studio.core.worker_process import worker_command
@@ -24,7 +25,7 @@ from voice_studio.speech.voiced_speaker_review import review_voiced_windows
 
 MAX_SAMPLES = 72
 MAX_CLUSTERS = 24
-REVIEW_VERSION = "av-profile-1"
+REVIEW_VERSION = "av-profile-2"
 
 
 @dataclass
@@ -58,12 +59,20 @@ def extract_embeddings(wav, spans):
     if mode not in ('oneshot', 'resident'):
         raise ValueError('VOICE_SPEAKER_EMBEDDING_MODE must be oneshot or resident')
     if mode == 'resident':
-        from voice_studio.speech.embedding_worker import get_worker
+        from voice_studio.speech.embedding_worker import EmbeddingWorkerDisconnected, get_worker
         weights = model_resource('speech.embedding-resource', 'builtin.sherpa-embedding', MODEL_PATH / 'embedding.onnx').resolve()
         identity = {'signature': file_signature(weights), 'threads': 2,
                     'configuration': current_snapshot().fingerprint(['speech.embedding', 'speech.embedding-resource'])}
         timeout = float(os.environ.get('VOICE_SPEAKER_EMBEDDING_TIMEOUT_SECONDS', '35'))
-        return get_worker().extract(wav, spans, weights, identity, timeout=timeout)
+        worker = get_worker()
+        deadline = monotonic() + timeout
+        try:
+            return worker.extract(wav, spans, weights, identity, timeout=timeout)
+        except EmbeddingWorkerDisconnected:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise
+            return worker.extract(wav, spans, weights, identity, timeout=remaining)
     command = worker_command(sys.executable, "voice_studio.speech.speaker_review", wav)
     proc = subprocess.run(command, input=json.dumps(spans),
                           env=runtime_environment("sherpa", worker_environment()), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=35, check=True)
@@ -215,13 +224,10 @@ def review_speakers(result, wav, audio_start_ms, *, alternate=True):
     cues = result["segments"]
     replies = find_replies(cues, evidence, audio_start_ms)
     spans = anchor_spans(cues, audio_start_ms)
-    enough_clusters = len(spans) >= 2
-    if not enough_clusters and not replies:
-        if spans:
-            return skip_review(result, "Одна голосовая группа, коротких реплик для проверки нет")
+    if not spans and not replies:
         return skip_review(result, "Нет подходящих голосовых образцов или коротких реплик для проверки")
-    embeddings = extract_embeddings(wav, spans) if enough_clusters else {}
-    profiles = build_profiles(cues, timeline, embeddings) if enough_clusters else {}
+    embeddings = extract_embeddings(wav, spans) if spans else {}
+    profiles = build_profiles(cues, timeline, embeddings) if spans else {}
     merges = validate_pairs(profiles, result.get("speechOverlaps", []))
     aliases = {row["from"]: row["to"] for row in merges}
     for cue in result["segments"]:
@@ -242,7 +248,7 @@ def review_speakers(result, wav, audio_start_ms, *, alternate=True):
                                       wav, audio_start_ms, extract_embeddings)
     except (OSError, ValueError, subprocess.SubprocessError):
         voiced = []
-    if not enough_clusters and not restored and not voiced:
+    if not any(embeddings.values()) and not restored and not voiced:
         return skip_review(result, "Дополнительная проверка не подтвердила смену говорящего")
     report = {"version": REVIEW_VERSION, "analyzedClusters": len(profiles),
               "voiceSamples": sum(len(profile.samples) for profile in profiles.values()), "merges": merges,

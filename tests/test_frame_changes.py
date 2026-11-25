@@ -39,6 +39,32 @@ class RegionPlanTests(TestCase):
         rows, _ = bound_samples(samples, clock, [], for_objects=True)
         self.assertEqual([r["startMs"] for r in rows], [680, 720, 760])
 
+    def test_larger_graphic_keeps_recognition_even_without_small_object_request(self):
+        """An animated card gets its own crop and exact graph reading."""
+        from voice_studio.vision.frame_change_recognition import attach_change_recognition
+
+        clock = [(index, index * 40) for index in range(30)]
+        card = {"box": [.6, .15, .31, .27], "changedPixels": 3000}
+        rows, _ = bound_samples([(7, [card])], clock, [])
+        layer = {"mode": "assist", "status": "ok", "rows": rows}
+        plan = sample_plan(clock, [], "basic")
+        augment_plan(plan, clock, set(), layer)
+        sample = next(row for row in plan if row["sourceFrame"] == 7)
+        self.assertEqual(sample["changeRecognitionRegions"], [{"index": 0, "box": card["box"]}])
+        self.assertNotIn("changeRegions", sample)
+        line = {"text": "Map", "box": [.65, .2, .12, .04]}
+        attach_change_recognition(layer, {"regions": [
+            {"sourceFrame": 7, "index": 0, "status": "recognized", "text": [line], "objects": [],
+             "sampleTimeMs": 440, "verifiedUntilMs": 680}]})
+        report = {"language": "en", "sceneEvidence": {"frames": []}, "coverage": {"scene": []}}
+        apply_scene_evidence(report, {"status": "ok", "frames": [], "frameChanges": layer}, 3000, 4200)
+        graph = build_graph(report, kind="video", duration_ms=4200)
+        change = next(node for node in graph["nodes"] if node["kind"] == "frame_change")
+        self.assertEqual(change["data"]["recognition"]["text"], [line])
+        self.assertEqual(change["data"]["recognition"]["verifiedUntilMs"], 3680)
+        self.assertEqual((change["startMs"], change["endMs"]), (3280, 3320))
+        self.assertIn((change["id"], "recognition_from_frame", "frame:3440"), graph["edges"])
+
     def test_dense_candidates_have_independent_measurement_and_inference_caps(self):
         """Use the dense clock before thinning and keep at most four extra frames per second."""
         clock = [(n, n * 10) for n in range(201)]

@@ -30,30 +30,6 @@ def cue(start=0, raw=1, identity=VOICE_A, number=1, **extra):
             'voiceProfileEvidence': {'basis': 'robust-audio-match'}, **extra}
 
 
-class SyntheticExtractor:
-    """Implement only Sherpa's stream protocol with a deterministic test voice."""
-
-    def create_stream(self):
-        """Reuse the stateless fixture stream."""
-        return self
-
-    def accept_waveform(self, rate, samples):
-        """Synthetic PCM still passes the real quality gate before reaching this double."""
-        pass
-
-    def input_finished(self):
-        """Complete one fixture span."""
-        pass
-
-    def is_ready(self, stream):
-        """Accept each complete synthetic span."""
-        return True
-
-    def compute(self, stream):
-        """Return normalized features without native inference or downloads."""
-        return [1, 0]
-
-
 class VoicePipelineHelperTests(TestCase):
     def setUp(self):
         """Create a bounded real PCM WAV and a registry with no native model dependency."""
@@ -68,7 +44,8 @@ class VoicePipelineHelperTests(TestCase):
 
     def attach(self, report):
         """Exercise the actual production helper and registry with only the encoder replaced."""
-        with patch('voice_studio.speech.speaker_review.embedding_extractor', return_value=SyntheticExtractor()):
+        with patch('voice_studio.speech.speaker_review.extract_embeddings',
+                   side_effect=lambda _wav, spans: {index: [[1, 0]] for index in spans}):
             return attach_voice_profiles(report, self.wav, 0, 'source', registry=self.registry, visual_scope='source:window:0')
 
     def visual_report(self, *, frozen=False):

@@ -28,7 +28,7 @@ class StageCacheTests(TestCase):
             def decode(arguments, **kwargs):
                 Path(arguments[-1]).write_bytes(b'pcm')
             ffmpeg = stack.enter_context(patch(MODULE + 'ffmpeg', side_effect=decode))
-            speech = {'segments': [{'startMs': 0, 'endMs': 1000, 'text': 'hello', 'speaker': 1}],
+            speech = {'segments': [{'startMs': 0, 'endMs': 900, 'text': 'hello', 'speaker': 1}],
                       'text': 'hello', 'durationMs': 1000, 'language': 'en'}
             asr = stack.enter_context(patch(MODULE + 'transcribe_wav', side_effect=lambda *a, **k: deepcopy(speech)))
             sound = stack.enter_context(patch(MODULE + 'analyze_audio_scene', side_effect=lambda *a: {
@@ -54,7 +54,7 @@ class StageCacheTests(TestCase):
             warm, stats = run(emit=cached_events.append)
             self.assertEqual(first, warm)
             self.assertTrue(all(row['reused'] for row in stats.values()))
-            reason = "Одна голосовая группа, коротких реплик для проверки нет"
+            reason = "Нет подходящих голосовых образцов или коротких реплик для проверки"
             self.assertEqual(first['speakerReview'], {'status': 'skipped', 'reason': reason})
             for events in (fresh_events, cached_events):
                 skipped, = [event for event in events

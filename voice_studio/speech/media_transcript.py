@@ -32,7 +32,7 @@ from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_L
 from voice_studio.speech.recognition import SMALL_MODEL, ready, recognize_file, recognize_result, resolve_whisper_language
 from voice_studio.vision.scene_transcript import reconcile_names
 from voice_studio.speech.speaker_diarization import detect_turns, label_phrases, label_words
-from voice_studio.speech.speaker_review import review_speakers
+from voice_studio.speech.speaker_review import REVIEW_VERSION, review_speakers
 from voice_studio.speech.speech_overlap import audio_overlaps, clip_overlaps, mixed_label, visual_overlaps
 from voice_studio.vision.video_revolver import review_video
 from voice_studio.vision.scene_sampling import DEFAULT_OBJECT_SAMPLING
@@ -190,9 +190,13 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
                                 progress["state"] = "skipped"
                                 if reason := (visual_result.get("speakerReview") or {}).get("reason"):
                                     progress["reason"] = reason
-                        except (OSError, ValueError, subprocess.SubprocessError):
+                        except (OSError, ValueError, ImportError, subprocess.SubprocessError) as error:
+                            from voice_studio.speech.speaker_pipeline import voice_profile_failure
+
+                            reason = voice_profile_failure(error)
                             progress["state"] = "failed"
-                            visual_result["speakerReview"] = {"status": "failed"}
+                            progress["reason"] = reason
+                            visual_result["speakerReview"] = {"status": "failed", "reason": reason}
                 bind_faces(visual_result)
                 visual_result["srt"] = render_srt(visual_result["segments"], visual_result["language"])
                 if publish is not None:
@@ -201,7 +205,8 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
                 return visual_result
 
             visual_result = cache.run("visual", {"peopleCount": people_count, "speakers": speakers,
-                                                   "speakerCount": speaker_count, "mergeSimilar": merge_similar},
+                                                   "speakerCount": speaker_count, "mergeSimilar": merge_similar,
+                                                   "speakerReview": REVIEW_VERSION},
                                       speech_input, measure_visual, usable_visual,
                                       publish=(lambda report: publish("visual", report)) if publish else None, emit=emit)
             result.update(visual_result)

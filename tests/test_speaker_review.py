@@ -1,7 +1,10 @@
 """Exercise guardrails for voice and face agreement and stable profile references."""
 
+from pathlib import Path
+import subprocess
+from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from voice_studio.vision.face_speakers import bind_faces
 from voice_studio.speech.speaker_profiles import attach_ids
@@ -10,6 +13,31 @@ from voice_studio.speech.speaker_review import VoiceProfile, review_speakers, re
 
 
 class SpeakerReviewTests(TestCase):
+    def test_only_a_disconnected_worker_is_retried_within_the_original_deadline(self):
+        """The managed provider recovers once from EOF without replaying a timeout."""
+        from voice_studio.speech.embedding_worker import EmbeddingWorkerDisconnected
+        from voice_studio.speech.speaker_review import extract_embeddings
+
+        spans = {1: [[0, 1400]]}
+        measured = {1: [[1, 0]]}
+        worker = Mock()
+        scope = SimpleNamespace(fingerprint=lambda _: "settings")
+        with patch.dict("os.environ", {"VOICE_SPEAKER_EMBEDDING_MODE": "resident",
+                                       "VOICE_SPEAKER_EMBEDDING_TIMEOUT_SECONDS": "35"}), \
+                patch("voice_studio.speech.embedding_worker.get_worker", return_value=worker), \
+                patch("voice_studio.speech.embedding_protocol.file_signature", return_value=[1, 2, 3, 4, 5]), \
+                patch("voice_studio.speech.speaker_review.model_resource", return_value=Path("fixture.onnx")), \
+                patch("voice_studio.speech.speaker_review.current_snapshot", return_value=scope), \
+                patch("voice_studio.speech.speaker_review.monotonic", side_effect=[100, 104, 200]):
+            worker.extract.side_effect = [EmbeddingWorkerDisconnected("EOF"), measured]
+            self.assertEqual(extract_embeddings.__wrapped__("fixture.wav", spans), measured)
+            self.assertEqual([call.kwargs["timeout"] for call in worker.extract.call_args_list], [35, 31])
+            worker.reset_mock()
+            worker.extract.side_effect = subprocess.TimeoutExpired("worker", 35)
+            with self.assertRaises(subprocess.TimeoutExpired):
+                extract_embeddings.__wrapped__("fixture.wav", spans)
+            self.assertEqual(worker.extract.call_count, 1)
+
     @staticmethod
     def short_reply_fixture():
         """Provide two independent references and one partially confirmed reply."""
@@ -54,7 +82,10 @@ class SpeakerReviewTests(TestCase):
                 if case == "inside cut":
                     evidence["editorTimeline"]["shots"].append({"startMs": 2400})
                 with patch('voice_studio.speech.speaker_review.extract_embeddings', return_value={0: sample, 1: anchors}):
-                    self.assertIsNone(review_speakers(result, None, 0))
+                    review = review_speakers(result, None, 0)
+                self.assertEqual(review["analyzedClusters"], 1)
+                self.assertEqual(review["shortReplyDecisions"], [])
+                self.assertEqual(review["merges"], [])
                 self.assertNotIn("profileSpeakerNumber", cue)
 
     def test_distinct_faces_and_simultaneous_voices_block_cluster_fusion(self):
