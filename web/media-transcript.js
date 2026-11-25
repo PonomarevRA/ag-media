@@ -10,6 +10,7 @@ import {mountTranscriptEditor, mountCueEditor} from "./transcript-editor.js";
 import {mergeAnalysisPartial, mountMediaAnalysis} from "./video-analysis.js";
 import {mountMusicSample} from "./music-sample.js";
 import {mountVideoScene} from "./video-scene.js";
+import {mountFrameInspection} from "./video-frame-inspection.js";
 import {mountFrameDetails} from "./video-frame-details.js";
 import {mountVideoOverlay} from "./video-overlay.js";
 import {mountVideoDub} from "./video-dub.js";
@@ -84,14 +85,16 @@ export function mountMediaTranscript(request, currentLanguage) {
   const clothing = mountClothingExport(find, playback, request);
   const profileDialog = mountSpeakerProfileDialog(find, playback);
   let activeProfiles = [];
+  const openProfile = (target, button) => profileDialog.open(typeof target === "object"
+    ? faceProfile(target.faceId, displayedEvidence, exportData?.speakerProfileIndex, exportData?.durationMs)
+    : activeProfiles.find(profile => profile.number === target), button, displayedEvidence);
   const overlay = mountVideoOverlay(playback, find("media-overlay"), find("media-overlay-options"),
-                                    find("media-overlay-toggle"), mountFrameDetails(find("media-frame-details")),
-                                    find("media-change-toggle"));
-  const editorTimeline = mountVideoTimeline(find, playback, (target, button) =>
-    profileDialog.open(typeof target === "object"
-      ? faceProfile(target.faceId, displayedEvidence, exportData?.speakerProfileIndex, exportData?.durationMs)
-      : activeProfiles.find(profile => profile.number === target), button, displayedEvidence),
-    overlay.paintSnapshot);
+    find("media-overlay-toggle"), mountFrameDetails(find("media-frame-details"),
+      (...args) => frameInspection.open(...args)), find("media-change-toggle"));
+  const editorTimeline = mountVideoTimeline(find, playback, openProfile, overlay.paintSnapshot);
+  const frameInspection = mountFrameInspection(find, playback, {
+    paint: overlay.paintSnapshot, openObject: editorTimeline.inspectFrameObject, openProfile,
+  });
   mountVideoShortcuts(playback, find("media-panel"), () => displayedEvidence?.timeline?.stepMs ?? 40);
   const scene = mountVideoScene(find, playback, overlay);
   const analysis = mountMediaAnalysis(find);
@@ -291,6 +294,7 @@ export function mountMediaTranscript(request, currentLanguage) {
     captureLanguage = null;
     dialoguePauses = null;
     profileDialog.reset();
+    frameInspection.reset();
     activeProfiles = [];
     renderSpeakerProfiles(find("media-speaker-profiles"), find("media-speaker-profile-list"), playback, [], null);
     draftTitle = null;
@@ -689,10 +693,10 @@ export function mountMediaTranscript(request, currentLanguage) {
     return data;
   }
 
-  /** Experimental languages apply to uploaded material only. */
+  /** Keep file language overrides outside the existing live capture contract. */
   function captureSpeechLanguage() {
-    const selected = speechLanguage.selectedOptions[0];
-    return selected?.parentElement.tagName === "OPTGROUP" ? "auto" : speechLanguage.value;
+    const language = speechLanguage.value;
+    return ["default", "auto", "ru", "en"].includes(language) ? language : "auto";
   }
 
   /** Run the shared single-request path for uploads and fixed-length URL captures. */

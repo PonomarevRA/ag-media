@@ -7,6 +7,7 @@ import subprocess
 
 from voice_studio.core.analysis_stages import ignore_progress, stage
 from voice_studio.core.media_resources import run_batch_stage
+from voice_studio.mods.errors import ModError
 from voice_studio.speech.speaker_profiles import collect_profiles, cue_number
 
 LOGGER = logging.getLogger(__name__)
@@ -142,7 +143,9 @@ def attach_voice_profiles(report, wav, audio_start_ms, source_id, *, registry=No
                                      window_id=window_id, visual_scope=visual_scope)
             if not isinstance(public, dict):
                 raise ValueError('Invalid voice profile stage result')
-        except (OSError, ValueError, TypeError, KeyError, AttributeError, ImportError, subprocess.SubprocessError) as error:
+        except (BrokenPipeError, ConnectionResetError):
+            raise
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, ImportError, ModError, subprocess.SubprocessError) as error:
             LOGGER.warning('Source voice profiling unavailable: %s', type(error).__name__)
             reason = voice_profile_failure(error)
             report['voiceProfileWarning'] = reason + '. Исходные метки сохранены.'
@@ -165,6 +168,33 @@ def attach_voice_profiles(report, wav, audio_start_ms, source_id, *, registry=No
             original['voiceProfileId'] = identity
             original['profileSpeakerNumber'] = number
     return public
+
+
+def measure_speaker_review(report, prepared_audio, offset, review, *, alternate, emit):
+    """Retry on an isolated copy of editable evidence and preserve the raw visual output."""
+    evidence = report["videoEvidence"]
+    phrases = deepcopy(evidence.get("phrases", {}))
+    working = {**report, "segments": deepcopy(report["segments"]),
+               "videoEvidence": {**evidence, "phrases": phrases}}
+    with stage(emit, "speaker-review") as progress:
+        try:
+            run_batch_stage(review, working, prepared_audio(), offset, alternate=alternate)
+        except (BrokenPipeError, ConnectionResetError):
+            raise
+        except (OSError, ValueError, ImportError, ModError, subprocess.SubprocessError) as error:
+            LOGGER.exception("Speaker review failed; visual checkpoint retained")
+            reason = voice_profile_failure(error) + ". Видеоразметка сохранена."
+            progress.update(state="failed", reason=reason)
+            return {"speakerReview": {"status": "failed", "reason": reason}}
+        details = working["speakerReview"]
+        if details.get("status") in {"skipped", "partial"}:
+            progress.update(state=details["status"], reason=details["reason"])
+    return {"segments": working["segments"], "phrases": phrases, "speakerReview": details}
+
+
+def usable_speaker_review(result):
+    """Only complete checks and evidence-based skips may be replayed from cache."""
+    return isinstance(result.get("speakerReview"), dict) and result["speakerReview"].get("status") not in {"failed", "partial"}
 
 
 def project_voice_index(report):
@@ -234,6 +264,7 @@ def enrich_source_speech(report, source, prepared_audio, audio_start_ms, cache, 
     """Key voice stage and private registry by identical source-clock positive/negative evidence."""
     from voice_studio.graph.media_analysis_revolver import result_fingerprint
     from voice_studio.graph.media_stage_cache import source_digest
+    from voice_studio.mod_runtime import layer_fingerprint
     from voice_studio.speech.voice_profiles import VERSION
 
     identity = source_digest(source)
@@ -244,7 +275,8 @@ def enrich_source_speech(report, source, prepared_audio, audio_start_ms, cache, 
                 'segments': _voice_input_cues(report.get('segments')), 'turns': report.get('speechTurns', []),
                 'videoProofs': evidence, 'overlaps': overlaps,
                 'overlapEvidenceValid': not _invalid_overlaps(report.get('speechOverlaps'))}
-    registry_key = result_fingerprint([VERSION, PROFILE_PIPELINE_VERSION, getattr(cache, 'revision', None), upstream])
+    registry_key = result_fingerprint([VERSION, PROFILE_PIPELINE_VERSION, getattr(cache, 'revision', None),
+                                       layer_fingerprint('voice'), upstream])
 
     def compute():
         """Avoid reusing references learned before changed overlap or static/frozen exclusions."""

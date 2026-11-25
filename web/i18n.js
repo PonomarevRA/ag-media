@@ -12,6 +12,24 @@ function initialLocale() {
 }
 
 export const uiLocale = initialLocale();
+const languageNames = typeof Intl.DisplayNames === "function"
+  ? new Intl.DisplayNames([uiLocale], {type: "language", fallback: "code"}) : null;
+const languageOrder = new Intl.Collator(uiLocale);
+
+/** Label Whisper codes in the UI locale, including its historical code for Javanese. */
+export function whisperLanguageName(code) {
+  if (code === "auto") return uiText("Автоопределение");
+  const name = languageNames?.of(code === "jw" ? "jv" : code) ?? code;
+  return name.charAt(0).toLocaleUpperCase(uiLocale) + name.slice(1);
+}
+
+/** Keep automatic recognition first and alphabetize the remaining choices. */
+export function whisperLanguageChoices(codes) {
+  return [...codes].sort((left, right) => {
+    if (left === "auto" || right === "auto") return Number(right === "auto") - Number(left === "auto");
+    return languageOrder.compare(whisperLanguageName(left), whisperLanguageName(right));
+  });
+}
 
 /** Translate an interface message without treating data as a translation key. */
 export function textFor(locale, key, ...values) {

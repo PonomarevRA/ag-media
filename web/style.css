@@ -1802,6 +1802,11 @@ button.editor-icon {
 .mcp-tool-list code { color: var(--muted); overflow-wrap: anywhere; }
 
 .editor-band-objects { min-height: 2rem; }
+.editor-timeline[data-ui-only] :is(.editor-band:not(.editor-band-ruler, [data-interface-lane]),
+                                   .editor-clip-objects:not([data-interface-kind]), .editor-layer-control),
+.editor-timeline[data-ui-only] :is(#media-editor-expressions, #media-editor-gaze, #media-editor-motion) {
+  display: none;
+}
 .editor-clip-objects {
   --clip-text: #e3f5e9;
   --clip-fill: #293a30;
@@ -1847,6 +1852,7 @@ button.editor-icon {
 .media-frame-details :is([data-frame-kind="body"], [data-frame-kind="body-count"]) { --frame-accent: var(--frame-body); }
 .media-frame-details [data-frame-kind="interface"] { --frame-accent: var(--frame-interface); }
 .media-frame-details [data-frame-kind="change"] { --frame-accent: var(--frame-change); }
+.media-frame-details [data-frame-kind="graphic"] { --frame-accent: var(--frame-graphic); }
 .media-frame-details [data-frame-kind="object"] { --frame-accent: var(--frame-object); }
 .media-frame-details [data-frame-kind="text"] { --frame-accent: var(--frame-text); }
 .media-frame-details [data-frame-kind="speech"][data-confirmed="true"] { --frame-accent: var(--frame-speech); }

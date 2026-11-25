@@ -1,6 +1,6 @@
 """Index local media on its playback clock using bounded transcription windows."""
 
-from voice_studio.mod_runtime import analysis_run
+from voice_studio.mod_runtime import analysis_run, layer_fingerprint
 
 from decimal import Decimal, InvalidOperation
 from copy import deepcopy
@@ -24,6 +24,7 @@ from voice_studio.graph.media_analysis_revolver import AnalysisRevolver, result_
 from voice_studio.graph.media_stage_selection import StageSelection
 from voice_studio.core.media_resources import run_batch_stage
 from voice_studio.core.voice_registry_lock import serialize_voice_windows
+from voice_studio.mods.errors import ModError
 from voice_studio.speech.media_transcript import (
     FORMATS, analyze_visual_track, attach_person_evidence,
     render_srt, transcribe_media, transcribe_wav,
@@ -268,7 +269,7 @@ def apply_visual_evidence(result, visual, start, end, id_base, speech_start):
 def offset_screen_panel(panel, offset):
     """Preserve document boxes and shift only their references to the window clock."""
     shifted = dict(panel)
-    for field in ("readingTimeMs", "lastObservedMs", "previousStateMs"):
+    for field in ("readingTimeMs", "lastObservedMs", "previousStateMs", "screenStateEndMs"):
         if type(panel.get(field)) is int:
             shifted[field] += offset
     if "elements" in panel:
@@ -320,6 +321,8 @@ def apply_scene_evidence(result, scene, start, end):
     if scene.get("frameChanges"):
         changes = result["sceneEvidence"].setdefault("frameChanges", {"rows": []})
         changes["rows"].extend(shift_change_rows(scene, start, end))
+        if graphic_rows := list(shift_change_rows(scene, start, end, "graphicRows")):
+            changes.setdefault("graphicRows", []).extend(graphic_rows)
     base = (start // SPEECH_WINDOW_MS) * ID_BLOCK
     result["sceneEvidence"].setdefault("moodbook", []).extend(
         {**row, "representativeMs": row["representativeMs"] + start,
@@ -667,9 +670,10 @@ def analyze_windows(studio_root, source, metadata, language, visual, scene, spea
         registry_group = registry_group / cache_revision
     registry_reused = bool(registry_group and registry_group.is_dir())
     speakers = speakers or (selection.selective and registry_reused)
-    voice_prefix = result_fingerprint([source_id, cache_revision])
+    voice_prefix = result_fingerprint([source_id, cache_revision, layer_fingerprint("voice")]) if speakers else None
     registry = None
     registry_unavailable = False
+    voice_prefix_complete = True
     if is_video:
         result["videoEvidence"] = {"timeline": {"stepMs": FPS_STEP_MS,
                                                "frames": [()] * ((duration + FPS_STEP_MS - 1) // FPS_STEP_MS) if visual else []},
@@ -785,13 +789,13 @@ def analyze_windows(studio_root, source, metadata, language, visual, scene, spea
                 registry_path = registry_group / voice_prefix / (VOICE_VERSION + '.json') if registry_group is not None else None
                 voice_stage = window.child_for_input('voice-profiles-' + VOICE_VERSION, {'prefix': voice_prefix})
                 saved_voice = voice_stage.load('complete', required=('segments', 'voiceProfiles')) if (
-                    registry_path and registry_path.is_file() and 'voice' not in selection.forced) else None
+                    voice_prefix_complete and registry_path and registry_path.is_file() and 'voice' not in selection.forced) else None
                 try:
                     if saved_voice:
                         registry = VoiceProfileRegistry.load(registry_path, source_id)
                     elif registry is None and selection.runs('voice'):
                         registry = VoiceProfileRegistry(source_id)
-                except (OSError, ValueError, ImportError):
+                except (OSError, ValueError, ImportError, ModError):
                     registry_unavailable = True
                     result['voiceProfileWarning'] = 'Голосовые профили недоступны; исходные метки сохранены.'
                     selection.mark('voice', 'failed')
@@ -819,11 +823,17 @@ def analyze_windows(studio_root, source, metadata, language, visual, scene, spea
                                                    window_id=start, visual_scope=f'{source_id}:window:{start}', emit=emit)
                     cues = layer['segments']
                     selection.mark('voice', 'done' if public is not None else 'failed')
-                    if public is not None:
+                    if public is None:
+                        # Later windows may still deliver profiles, but their snapshots
+                        # would otherwise hide the missing window on the next run.
+                        voice_prefix_complete = False
+                        result['voiceProfileWarning'] = layer['voiceProfileWarning']
+                    else:
                         result['voiceProfiles'] = public
-                        if registry_path:
-                            registry.save(registry_path)
-                        voice_stage.save('complete', {'segments': cues, 'voiceProfiles': public})
+                        if voice_prefix_complete:
+                            if registry_path:
+                                registry.save(registry_path)
+                            voice_stage.save('complete', {'segments': cues, 'voiceProfiles': public})
                 elif not registry_unavailable:
                     selection.mark('voice', 'invalidated')
             if len(parts) > 1:

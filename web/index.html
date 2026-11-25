@@ -183,6 +183,21 @@
       <section id="media-preparation" class="media-preparation" aria-label="Подготовка материала" data-ag-width="fill">
         <div class="media-import-row" data-ag-width="fill">
           <label class="file primary media-import" data-ag-width="content" data-ag-width-min-em="6">Открыть файл<input id="media-upload" type="file" accept="video/*,audio/*,image/png,image/jpeg,.png,.jpg,.jpeg" aria-label="Открыть видео, аудио или картинку"></label>
+          <label class="select-field media-import-language" for="media-speech-language" data-ag-width="content" data-ag-width-min-em="7">Язык Whisper
+            <select id="media-speech-language">
+              <option value="default">Из настроек Whisper</option>
+              <option value="auto">Автоопределение</option>
+              <option value="ru" lang="ru" data-endonym>Русский</option>
+              <option value="en" lang="en" data-endonym>English</option>
+              <optgroup label="Другие языки">
+                <option value="ar">Арабский</option>
+                <option value="ur">Урду</option>
+                <option value="bn">Бенгальский</option>
+                <option value="hi">Хинди</option>
+                <option value="ps">Пушту</option>
+              </optgroup>
+            </select>
+          </label>
           <p class="muted">Видео и аудио — до 2 ГиБ и 2 часов. Картинки PNG/JPEG — до 24 МиБ и 24 Мп.</p>
         </div>
         <div class="media-preparation-options" data-ag-width="fill">
@@ -243,21 +258,6 @@
             <div class="media-analysis-grid" data-ag-width="fill">
               <fieldset class="media-analysis-group" data-ag-width="content" data-ag-width-min-em="7">
                 <legend>Речь</legend>
-                <label class="select-field" for="media-speech-language">Язык транскрипции
-                  <select id="media-speech-language">
-                    <option value="default">Из настроек Whisper</option>
-                    <option value="auto">Автоопределение</option>
-                    <option value="ru" lang="ru" data-endonym>Русский</option>
-                    <option value="en" lang="en" data-endonym>English</option>
-                    <optgroup label="Языки роликов · тест">
-                      <option value="ar">Арабский</option>
-                      <option value="ur">Урду</option>
-                      <option value="bn">Бенгальский</option>
-                      <option value="hi">Хинди</option>
-                      <option value="ps">Пушту</option>
-                    </optgroup>
-                  </select>
-                </label>
                 <label class="inline-check"><input id="media-quality" type="checkbox" checked> Whisper Small</label>
                 <label class="inline-check"><input id="media-speakers" type="checkbox" checked> Различать говорящих</label>
                 <label class="select-field">Число говорящих
@@ -459,6 +459,8 @@
               <label id="media-editor-objects-control" class="inline-check editor-layer-control" hidden>
                 <input id="media-editor-objects" type="checkbox" checked> Предметы
               </label>
+              <button id="media-editor-ui-only" class="editor-gaze-toggle" type="button" aria-label="Только UI"
+                      aria-pressed="false" aria-controls="media-editor-sheet">Только UI</button>
               <label id="media-editor-music-control" class="inline-check editor-layer-control" hidden>
                 <input id="media-editor-music" type="checkbox" checked> Музыка
               </label>
@@ -479,55 +481,8 @@
           <div id="media-editor-scroll" class="editor-scroll" tabindex="0" aria-label="Шкала реплик и склеек" aria-keyshortcuts="Space ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight Home End">
             <div id="media-editor-sheet" class="editor-sheet"></div>
           </div>
+          <p id="media-editor-ui-empty" class="editor-selection" role="status" hidden>Интерфейсы не найдены</p>
           <p id="media-editor-selection" class="editor-selection" hidden></p>
-          <section id="media-object-preview" class="editor-object-preview" aria-labelledby="media-object-name" hidden>
-            <div class="editor-object-image">
-              <button id="media-object-open" class="editor-object-photo" type="button"
-                      aria-label="Открыть фото предмета" aria-haspopup="dialog" aria-controls="media-object-dialog" hidden>
-                <canvas id="media-object-image" aria-hidden="true"></canvas>
-              </button>
-              <span id="media-object-image-status" class="muted" role="status"></span>
-            </div>
-            <div class="editor-object-details">
-              <h4 id="media-object-name"></h4>
-              <p id="media-object-interface" class="editor-object-kind" hidden></p>
-              <p id="media-object-time" class="muted"></p>
-              <p id="media-object-frame-label" class="muted" hidden></p>
-              <dl>
-                <dt>Уверенность исходной метки</dt>
-                <dd id="media-object-score"></dd>
-              </dl>
-              <div id="media-object-text" class="editor-object-text" hidden>
-                <h5>Текст на предмете</h5>
-                <ul id="media-object-text-lines"></ul>
-              </div>
-              <details id="media-object-scroll" class="editor-object-scroll" hidden>
-                <summary>Склейка прокрутки</summary>
-                <div id="media-object-scroll-pages"></div>
-              </details>
-              <details id="media-object-profile" class="editor-object-profile" hidden>
-                <summary>Профиль предмета</summary>
-                <ul id="media-object-profile-labels"></ul>
-                <div id="media-object-appearance" class="editor-object-appearance"></div>
-                <div id="media-object-views" class="editor-object-views" hidden>
-                  <h5 id="media-object-views-title">Появления предмета</h5>
-                  <div id="media-object-visit-track" class="editor-object-visit-track" role="group" aria-labelledby="media-object-views-title">
-                    <button id="media-object-previous-visit" class="editor-object-visit-step" type="button"
-                            aria-label="Предыдущее появление" title="Предыдущее появление"><span aria-hidden="true">‹</span></button>
-                    <div id="media-object-view-buttons" class="editor-object-visit-rail"></div>
-                    <button id="media-object-next-visit" class="editor-object-visit-step" type="button"
-                            aria-label="Следующее появление" title="Следующее появление"><span aria-hidden="true">›</span></button>
-                    <div id="media-object-visit-tooltip" class="editor-object-visit-tooltip" aria-hidden="true" hidden></div>
-                    <span id="media-object-visit-status" class="editor-object-visit-status" role="status"></span>
-                  </div>
-                  <details id="media-object-extra-views" hidden>
-                    <summary id="media-object-extra-views-title">Кадры предмета</summary>
-                    <ul id="media-object-extra-view-buttons" aria-labelledby="media-object-extra-views-title"></ul>
-                  </details>
-                </div>
-              </details>
-            </div>
-          </section>
           <p class="editor-shortcuts muted">Пробел · воспроизведение и пауза. ← / → · шаг по сетке анализа. Shift + ← / → · одна секунда.</p>
         </section>
       </div>
@@ -574,6 +529,126 @@
           <a href="https://support.apple.com/en-us/118570" target="_blank" rel="noopener noreferrer">Как распознать музыку через Shazam</a>
         </div>
       </details>
+      <section id="media-object-preview" class="editor-object-window" role="dialog" aria-labelledby="media-object-name"
+               data-ag-width="content" data-ag-width-min-em="7" hidden>
+        <header class="editor-object-window-heading">
+          <h3 id="media-object-name" tabindex="-1"></h3>
+          <div class="editor-object-window-actions">
+            <button id="media-object-minimize" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Свернуть окно предмета" data-icon="minimize" data-hint></button>
+            <button id="media-object-expand" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Развернуть окно предмета" aria-pressed="false" data-icon="expand-window" data-hint></button>
+            <button id="media-object-close" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Закрыть окно предмета" data-icon="close" data-hint></button>
+          </div>
+        </header>
+        <div class="editor-object-preview" data-ag-width="fill">
+          <div class="editor-object-image">
+            <button id="media-object-open" class="editor-object-photo" type="button"
+                    aria-label="Открыть фото предмета" aria-haspopup="dialog" aria-controls="media-object-dialog" hidden>
+              <canvas id="media-object-image" aria-hidden="true"></canvas>
+            </button>
+            <span id="media-object-image-status" class="muted" role="status"></span>
+          </div>
+          <div class="editor-object-details" data-ag-width="content" data-ag-width-min-em="6">
+            <p id="media-object-interface" class="editor-object-kind" hidden></p>
+            <p id="media-object-time" class="muted"></p>
+            <button id="media-object-back" type="button">К предмету</button>
+            <ul id="media-object-screen-report" class="editor-screen-report"></ul>
+            <section id="media-object-screens" class="editor-screen-states" hidden>
+              <h4>Экраны интерфейса</h4>
+              <div id="media-object-screen-list" class="editor-screen-list"></div>
+            </section>
+            <p id="media-object-frame-label" class="muted" hidden></p>
+            <dl>
+              <dt>Уверенность исходной метки</dt>
+              <dd id="media-object-score"></dd>
+            </dl>
+            <div id="media-object-text" class="editor-object-text" hidden>
+              <h5>Текст на предмете</h5>
+              <ul id="media-object-text-lines"></ul>
+            </div>
+            <details id="media-object-scroll" class="editor-object-scroll" hidden>
+              <summary>Склейка прокрутки</summary>
+              <div id="media-object-scroll-pages"></div>
+            </details>
+            <details id="media-object-profile" class="editor-object-profile" hidden>
+              <summary>Профиль предмета</summary>
+              <ul id="media-object-profile-labels"></ul>
+              <div id="media-object-appearance" class="editor-object-appearance"></div>
+              <div id="media-object-views" class="editor-object-views" hidden>
+                <h5 id="media-object-views-title">Появления предмета</h5>
+                <div id="media-object-visit-track" class="editor-object-visit-track" role="group" aria-labelledby="media-object-views-title">
+                  <button id="media-object-previous-visit" class="editor-object-visit-step" type="button"
+                          aria-label="Предыдущее появление" title="Предыдущее появление"><span aria-hidden="true">‹</span></button>
+                  <div id="media-object-view-buttons" class="editor-object-visit-rail"></div>
+                  <button id="media-object-next-visit" class="editor-object-visit-step" type="button"
+                          aria-label="Следующее появление" title="Следующее появление"><span aria-hidden="true">›</span></button>
+                  <div id="media-object-visit-tooltip" class="editor-object-visit-tooltip" aria-hidden="true" hidden></div>
+                  <span id="media-object-visit-status" class="editor-object-visit-status" role="status"></span>
+                </div>
+                <details id="media-object-extra-views" hidden>
+                  <summary id="media-object-extra-views-title">Кадры предмета</summary>
+                  <ul id="media-object-extra-view-buttons" aria-labelledby="media-object-extra-views-title"></ul>
+                </details>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+      <section id="speaker-profile-dialog" class="editor-object-window" role="dialog" aria-labelledby="speaker-profile-title" hidden>
+        <header class="editor-object-window-heading">
+          <h3 id="speaker-profile-title" tabindex="-1"></h3>
+          <div class="editor-object-window-actions">
+            <button id="speaker-profile-minimize" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Свернуть окно" data-icon="minimize" data-hint></button>
+            <button id="speaker-profile-expand" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Развернуть окно" aria-pressed="false" data-icon="expand-window" data-hint></button>
+            <button id="speaker-profile-close" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Закрыть окно" data-icon="close" data-hint></button>
+          </div>
+        </header>
+        <div class="editor-detail-body">
+          <div class="speaker-profile-switch" role="group" aria-label="Формат профиля">
+            <button id="speaker-profile-view" type="button" aria-pressed="true">Профиль</button>
+            <button id="speaker-profile-json" type="button" aria-pressed="false">JSON</button>
+          </div>
+          <div id="speaker-profile-info" class="speaker-profile-info"></div>
+          <textarea id="speaker-profile-technical" aria-label="Технический JSON профиля" readonly hidden spellcheck="false"></textarea>
+        </div>
+      </section>
+      <section id="media-frame-inspection" class="editor-object-window" role="dialog" aria-labelledby="media-frame-inspection-title" hidden>
+        <header class="editor-object-window-heading">
+          <h3 id="media-frame-inspection-title" tabindex="-1"></h3>
+          <div class="editor-object-window-actions">
+            <button id="media-frame-inspection-minimize" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Свернуть окно" data-icon="minimize" data-hint></button>
+            <button id="media-frame-inspection-expand" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Развернуть окно" aria-pressed="false" data-icon="expand-window" data-hint></button>
+            <button id="media-frame-inspection-close" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Закрыть окно" data-icon="close" data-hint></button>
+          </div>
+        </header>
+        <div class="editor-detail-body">
+          <p id="media-frame-inspection-time" class="muted"></p>
+          <canvas id="media-frame-inspection-image" aria-label="Кадр с разметкой" role="img"></canvas>
+          <div id="media-frame-inspection-items" class="editor-screen-list"></div>
+        </div>
+      </section>
+      <div class="editor-detail-shelves">
+        <div id="media-object-shelf" class="editor-object-shelf" role="group" aria-label="Свёрнутые окна" hidden>
+          <button id="media-object-restore" class="studio-icon" type="button" aria-controls="media-object-preview"
+                  data-icon="cube"><span id="media-object-restore-label"></span></button>
+        </div>
+        <div id="speaker-profile-shelf" class="editor-object-shelf" role="group" aria-label="Свёрнутые окна" hidden>
+          <button id="speaker-profile-restore" class="studio-icon" type="button" aria-controls="speaker-profile-dialog"
+                  data-icon="face"><span id="speaker-profile-restore-label"></span></button>
+        </div>
+        <div id="media-frame-inspection-shelf" class="editor-object-shelf" role="group" aria-label="Свёрнутые окна" hidden>
+          <button id="media-frame-inspection-restore" class="studio-icon" type="button" aria-controls="media-frame-inspection"
+                  data-icon="film"><span id="media-frame-inspection-restore-label"></span></button>
+        </div>
+      </div>
     </section>
     <section class="panel" id="prosody-pilot" aria-labelledby="prosody-pilot-title" hidden>
       <h2 id="prosody-pilot-title" tabindex="-1">Пилот ударения · A/B</h2>
@@ -773,6 +848,10 @@
       </div>
       <p id="storage-free" class="muted"></p>
       <dl id="storage-groups" class="storage-groups"></dl>
+      <div id="storage-cleanup" class="storage-cleanup storage-toolbar" data-ag-width="fill">
+        <p id="storage-cleanup-summary" class="muted"></p>
+        <button id="storage-clean" type="button" disabled>Очистить кэш проекта</button>
+      </div>
     </section>
     <section class="panel" aria-labelledby="storage-items-title" data-ag-width="fill">
       <div class="storage-toolbar">
@@ -788,7 +867,8 @@
     <dialog id="storage-dialog" aria-labelledby="storage-confirm-title">
       <h2 id="storage-confirm-title">Удалить файл или папку?</h2>
       <p id="storage-confirm-detail"></p>
-      <p class="muted">Удаление освободит место. Восстановить данные из студии будет нельзя.</p>
+      <ul id="storage-confirm-groups" hidden></ul>
+      <p id="storage-confirm-note" class="muted">Удаление освободит место. Восстановить данные из студии будет нельзя.</p>
       <form method="dialog" class="actions">
         <button id="storage-cancel" autofocus>Отмена</button>
         <button id="storage-confirm" type="button">Удалить</button>
@@ -914,7 +994,7 @@
           <label>Язык материала
             <select id="settings-material-language">
               <option value="ru">Русский</option><option value="en">Английский</option>
-              <optgroup label="Языки роликов · тест">
+              <optgroup label="Другие языки">
                 <option value="ar">Арабский</option>
                 <option value="ur">Урду</option>
                 <option value="bn">Бенгальский</option>
@@ -1003,18 +1083,6 @@
     </header>
     <label class="inline-check"><input type="checkbox" id="media-object-technical" checked> Разметка видео</label>
     <canvas id="media-object-detail-frame" role="img"></canvas>
-  </dialog>
-  <dialog id="speaker-profile-dialog" class="speaker-profile-dialog" aria-labelledby="speaker-profile-title">
-    <header class="speaker-profile-header">
-      <h3 id="speaker-profile-title">Цифровой профиль</h3>
-      <button id="speaker-profile-close" class="studio-icon" data-icon="close" data-hint type="button" aria-label="Закрыть профиль"></button>
-    </header>
-    <div class="speaker-profile-switch" role="group" aria-label="Формат профиля">
-      <button id="speaker-profile-view" type="button" aria-pressed="true">Профиль</button>
-      <button id="speaker-profile-json" type="button" aria-pressed="false">JSON</button>
-    </div>
-    <div id="speaker-profile-info" class="speaker-profile-info"></div>
-    <textarea id="speaker-profile-technical" aria-label="Технический JSON профиля" readonly hidden spellcheck="false"></textarea>
   </dialog>
   <template id="audio-player-template">
     <div class="studio-player" data-design-component="player" data-ag-width="fill" role="group">

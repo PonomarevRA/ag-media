@@ -2,6 +2,7 @@
 
 from voice_studio.core.process_usage import process_usage
 from voice_studio.mod_runtime import current_snapshot, model_provider, is_replacement
+from voice_studio.mods.errors import ModError
 
 from bisect import bisect_left
 import json
@@ -53,11 +54,13 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             cuts = merge_shot_cuts(frames, native_cuts, supplied_cuts)
             plan = sample_plan(frames, cuts, object_sampling)
             if changes and changes["status"] == "ok":
-                from voice_studio.vision.frame_changes import augment_plan
+                from voice_studio.vision.frame_changes import augment_plan, constrain_graphics
                 cuts_by_ordinal = {frames[index][0] for index in cuts if 0 <= index < len(frames)}
                 kept = [row for row in changes["rows"] if row["sourceFrame"] not in cuts_by_ordinal]
                 changes["cutCandidatesRemoved"] = len(changes["rows"]) - len(kept)
                 changes["rows"] = kept
+                boundaries_ms = sorted(frames[index][1] for index in cuts if 0 < index < len(frames))
+                changes["graphicRows"] = list(constrain_graphics(changes.get("graphicRows", ()), boundaries_ms))
                 augment_plan(plan, frames, cuts, changes)
                 changes.pop("objectRows", None)
             if not plan:
@@ -443,6 +446,7 @@ def analyze_frames(folder):
     from voice_studio.vision.scene_objects import ObjectDetector, calibrate_tiles, confirm_objects, refine_drinkware
     from voice_studio.vision.scene_ocr import recognize
     from voice_studio.vision.screen_analysis import ScreenAnalysis, merge_scroll_layouts, merge_readings
+    from voice_studio.vision.screen_states import read_screen_states
     from voice_studio.vision.small_object_pass import SmallObjectPass
     from voice_studio.vision.ui_activity import UIActivity
 
@@ -548,6 +552,14 @@ def analyze_frames(folder):
     merge_scroll_layouts(interfaces, mosaics)
     screens.retain_panels(interfaces, scrolls, supplemental)
     screen_details = detail_screen_states(folder, request, screens, interfaces)
+    state_samples = {(shot, stamp): (shot, stamp, path, region)
+                     for shot, stamp, path, region, *_ in [*supplemental, *screens.scroll_candidates]}
+    try:
+        screen_state_count, state_statuses = read_screen_states(folder, state_samples.values(), interfaces)
+    except (OSError, ValueError, cv2.error, ModError, subprocess.SubprocessError):
+        logging.getLogger(__name__).exception("Screen state analysis failed; preserving scene evidence")
+        screen_state_count, state_statuses = 0, {"screen-state": "failed"}
+    screen_statuses.update({f"states-{key}": value for key, value in state_statuses.items()})
     assisted = any("changeBands" in sample for sample in request["samples"])
     change_objects = review_change_objects(detector, request["samples"], frames, folder,
                                            interfaces=interfaces if assisted else None)
@@ -571,9 +583,9 @@ def analyze_frames(folder):
                             if row["basis"] == "scroll-mosaic" and row.get("text")]
             if scroll_lines:
                 frame["text"] = merge_readings(scroll_lines, frame["text"])
-    screen_complete = all(
+    screen_complete = state_statuses.get("screen-state") != "failed" and all(
         screen_statuses.get(f"{prefix}tesseract", screen_statuses.get(f"{prefix}apple-vision", "ok")) == "ok"
-        for prefix in ("", "controls-", "scroll-")
+        for prefix in ("", "controls-", "scroll-", "states-")
     )
     cpu_ms, peak_mib = process_usage()
     return {"status": "ok", "stages": {**stages, **ocr_stages}, "sampling": request["sampling"],
@@ -582,6 +594,7 @@ def analyze_frames(folder):
             "objectSampling": request["objectSampling"], "objectChecksByShot": list(checks_by_shot.values()),
             "interfaceFrames": len(interfaces), "interfaceOcrCrops": screen_crops,
             "interfaceDetail": screen_details,
+            "interfaceStateOcrCrops": screen_state_count,
             "interfaceScrolls": scrolls, "interfaceScrollMs": scroll_ms, "interfaceScrollFrames": len(supplemental),
             "interfaceStatus": "ok" if screen_complete else "partial", "interfaceOcrStatuses": screen_statuses, "interfaceMs": round(1000 * (perf_counter() - started_interface)),
             "ocrPasses": len(jobs), "ocrMs": ocr_ms, "objectMs": round(object_seconds * 1000),

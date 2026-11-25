@@ -22,6 +22,7 @@ OPERATIONS = {}
 LAYER_CAPABILITIES = {
     'speech': ('speech.asr', 'speech.diarization', 'speech.embedding-resource'),
     'voice': ('speech.embedding', 'speech.embedding-resource'),
+    'speaker-review': ('speech.embedding', 'speech.embedding-resource', 'speech.diarization'),
     'audio': ('audio.classification',),
     'visual': ('vision.visual-batch', 'vision.faces', 'vision.face-embedding', 'vision.active-speaker', 'vision.expressions', 'vision.objects', 'vision.appearance', 'vision.frame-changes'),
     'people': ('vision.person-batch', 'vision.objects', 'vision.gaze', 'vision.segmentation'),

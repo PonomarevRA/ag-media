@@ -1,4 +1,4 @@
-/** Bind an inner-edge splitter without moving the panel to another side; pointer and keyboard share clamped sizing. */
+/** Report one clamped inner-edge width for pointer and keyboard, leaving geometry to the host grid. */
 export function bindResizablePanel({
   panel,
   edge = "right",
@@ -65,7 +65,6 @@ export function bindResizablePanel({
       ),
     );
     width = Math.round(Math.max(minWidth, Math.min(upper, value)));
-    panel.style.width = width + "px";
     handle.setAttribute("aria-valuemin", String(minWidth));
     handle.setAttribute("aria-valuemax", String(upper));
     handle.setAttribute("aria-valuenow", String(width));

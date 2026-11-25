@@ -28,6 +28,17 @@ KEY = re.compile(r"[a-f0-9]{64}")
 TEMP_NAME = re.compile(r"upload-[a-z0-9_]{8}")
 CACHE_GROUPS = (("analysis-checkpoints", "analysis-cache", KEY, CACHE_DAYS),
                 ("temporary-media", "temporary-media", TEMP_NAME, TEMP_DAYS))
+BULK_KINDS = frozenset(("analysis-cache", "temporary-media"))
+ANALYSIS_CACHE_LAYOUTS = ("short-v1", "bounded-v2")
+AUDIT_NAME = re.compile(r"dialogue-audit-[a-f0-9]{64}")
+
+
+def registered_directories(group, names):
+    """Enumerate only recognized directories without following links."""
+    if regular_entry(group) and group.is_dir():
+        for path in group.iterdir():
+            if names.fullmatch(path.name) and regular_entry(path) and path.is_dir():
+                yield path
 
 
 @dataclass(frozen=True)
@@ -81,10 +92,16 @@ class StudioStorage:
         for root, prefix in ((external, ""), (self.workspace, "legacy-")):
             for directory, kind, names, days in CACHE_GROUPS:
                 group = root / directory
-                if regular_entry(group) and group.is_dir():
-                    for path in group.iterdir():
-                        if names.fullmatch(path.name) and regular_entry(path) and path.is_dir():
-                            yield Entry(f"{prefix}{kind}/{path.name}", path, group, kind, days, True)
+                for path in registered_directories(group, names):
+                    yield Entry(f"{prefix}{kind}/{path.name}", path, group, kind, days, True)
+            group = root / "analysis-checkpoints"
+            for layout in ANALYSIS_CACHE_LAYOUTS:
+                for path in registered_directories(group / layout, KEY):
+                    # Both layouts use the lock of analysis-checkpoints, including MCP readers.
+                    yield Entry(f"{prefix}analysis-cache/{layout}/{path.name}", path, group,
+                                "analysis-cache", CACHE_DAYS, True)
+            for path in registered_directories(group, AUDIT_NAME):
+                yield Entry(f"{prefix}analysis-cache/{path.name}", path, group, "analysis-cache", CACHE_DAYS, True)
         runtimes = [(self.project_data / "runtime", "legacy-")]
         if self.project_data == PROJECT_DATA:
             runtimes.insert(0, (RUNTIME_DIR, ""))
@@ -168,17 +185,21 @@ class StudioStorage:
         """Return workspace usage and candidates ordered by measured activity."""
         now = time()
         items = []
+        caches = []
         sources = self.export_references()
         for entry in self.entries():
             try:
                 row = self.describe(entry, now, sources)
                 if row["bytes"]:
                     items.append(row)
+                    if entry.kind in BULK_KINDS:
+                        caches.append((entry, row))
             except OSError:
                 continue
         items.sort(key=lambda row: (not row["candidate"], row["lastUsed"], row["id"]))
         return {"groups": self.usage_groups(),
                 "items": items[:MAX_VISIBLE], "totalItems": len(items),
+                "cleanup": self.cleanup_summary(caches),
                 "freeBytes": shutil.disk_usage(self.workspace).free,
                 "policy": {"cacheDays": CACHE_DAYS, "temporaryDays": TEMP_DAYS, "exportDays": EXPORT_DAYS}}
 
@@ -191,8 +212,49 @@ class StudioStorage:
             raise ValueError("Элемент исчез. Обновите список хранилища.")
         return self.remove_entry(entry, revision)
 
-    def remove_entry(self, entry, revision):
-        """Recheck age and activity under an exclusive lease before removing data."""
+    @staticmethod
+    def cleanup_summary(caches):
+        """Describe the full inspected cache set, even when the item list is paginated."""
+        revision = sha256()
+        groups = {}
+        for _, row in sorted(caches, key=lambda pair: pair[1]["id"]):
+            revision.update(f'{row["id"]}:{row["revision"]}\n'.encode())
+            group = groups.setdefault(row["kind"], {"kind": row["kind"], "bytes": 0, "count": 0})
+            group["bytes"] += row["bytes"]
+            group["count"] += 1
+        return {"revision": revision.hexdigest(), "count": len(caches),
+                "bytes": sum(group["bytes"] for group in groups.values()), "groups": list(groups.values())}
+
+    def clean_caches(self, revision):
+        """Remove inspected regenerable data of any age, skipping changed or leased entries."""
+        if not isinstance(revision, str) or not KEY.fullmatch(revision):
+            raise ValueError("Сначала обновите список хранилища.")
+        caches = []
+        now = time()
+        for entry in self.cache_entries():
+            if entry.kind not in BULK_KINDS:
+                continue
+            try:
+                row = self.describe(entry, now)
+            except OSError:
+                continue
+            if row["bytes"]:
+                caches.append((entry, row))
+        if self.cleanup_summary(caches)["revision"] != revision:
+            raise ValueError("Состав кэша изменился. Проверьте новый объём и повторите очистку.")
+        removed = skipped = size = 0
+        for entry, row in caches:
+            try:
+                result = self.remove_entry(entry, row["revision"], include_recent=True)
+            except (OSError, ValueError):
+                skipped += 1
+            else:
+                removed += 1
+                size += result["bytes"]
+        return {"bytes": size, "removed": removed, "skipped": skipped}
+
+    def remove_entry(self, entry, revision, *, include_recent=False):
+        """Recheck the inspected generation under its exclusive lease before deletion."""
         with cache_lock(entry.group, exclusive=True) as acquired:
             if not acquired:
                 raise ValueError("Файлы сейчас используются. Повторите позже.")
@@ -202,7 +264,7 @@ class StudioStorage:
             current = self.describe(entry, time(), sources)
             if current["referenced"] or current["referenceUnknown"]:
                 raise ValueError("Экспорт используется сохранённым графом или его связь не удалось проверить.")
-            if current["revision"] != revision or not current["candidate"]:
+            if current["revision"] != revision or not (current["candidate"] or (include_recent and entry.kind in BULK_KINDS)):
                 raise ValueError("Данные изменились. Обновите список хранилища.")
             if entry.path.is_dir():
                 shutil.rmtree(entry.path)

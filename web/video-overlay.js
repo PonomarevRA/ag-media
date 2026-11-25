@@ -1,9 +1,11 @@
 import {uiText} from "./i18n.js";
 import {effectiveSpeaker, mixedSpeakerLabel} from "./speaker-label.js";
 import {packMedia} from "./person-layer.js";
+import {timelineIntervalLookup} from "./timeline-intervals.js";
 
 export const FRAME_COLORS = Object.freeze({
-  face: "#f5f1e8", speech: "#ffb34e", body: "#70dddb", object: "#99e198", text: "#c7adfb", interface: "#98bfff", change: "#ffdf66",
+  face: "#f5f1e8", speech: "#ffb34e", body: "#70dddb", object: "#99e198", text: "#c7adfb",
+  interface: "#98bfff", change: "#ffdf66", graphic: "#ff9ddc",
 });
 const {face: FACE, speech: SPEAKING, body: BODY} = FRAME_COLORS;
 const OBJECT_LIMIT = 3;
@@ -17,6 +19,13 @@ const PANEL_RADIUS_MS = 750;
 const CHANGE_PREVIEW_MS = 700;
 const CHANGE_VERIFICATION_LIMIT_MS = 2400;
 const intervalStart = row => row.startMs;
+const isGraphic = region => region.basis === "overlay-persistence";
+
+/** Resolve all rectangles covering the timestamp, including independently appearing graphics. */
+function regionLookup(rows = []) {
+  const at = timelineIntervalLookup(rows.map(row => [row.startMs, row.endMs, row.regions]));
+  return stamp => at(stamp).flat();
+}
 
 /** Keep the same color in the browser and the serialized MP4 drawing instructions. */
 function outlineColor(hex, alpha) {
@@ -371,7 +380,7 @@ function objectMarksAt(tracks, cuts, timeMs, nearbyFrame) {
     const sample = isolated ? clip.boxSamples[0] : clip.boxSamples[after(clip.boxSamples, timeMs, sampleTime) - 1];
     if (isolated && sample[0] !== nearbyFrame?.timeMs) continue;
     if (!sample || sample[0] < shotStart) continue;
-    marks.push({label: clip.label, box: sample[1], score: sample[2]});
+    marks.push({label: clip.label, box: sample[1], score: sample[2], trackId: clip.id, timeMs: sample[0]});
   }
   return marks;
 }
@@ -432,13 +441,13 @@ function drawTextRegions(ctx, text, width, height) {
   ctx.restore();
 }
 
-/** Draw measured pixel changes as dashed outlines beneath faces and captions. */
-function drawChanges(ctx, changes, width, height) {
+/** Draw measured changes or sustained graphic candidates as a separate technical layer. */
+function drawChanges(ctx, changes, width, height, style) {
   if (!changes?.length) return;
   ctx.save();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = FRAME_COLORS.change;
-  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = style === "graphic" ? 2 : 1.5;
+  ctx.strokeStyle = FRAME_COLORS[style];
+  ctx.setLineDash(style === "graphic" ? [7, 4] : [3, 3]);
   for (const {box: [x, y, w, h], recognition} of changes) {
     ctx.strokeRect(x * width, y * height, w * width, h * height);
     const label = recognition?.text?.[0]?.text ?? recognition?.objects?.[0]?.label;
@@ -450,7 +459,7 @@ function drawChanges(ctx, changes, width, height) {
       const top = Math.max(0, y * height - 18);
       ctx.fillStyle = "rgba(16, 13, 10, .94)";
       ctx.fillRect(left, top, size, 18);
-      ctx.fillStyle = FRAME_COLORS.change;
+      ctx.fillStyle = FRAME_COLORS[style];
       ctx.fillText(caption, left + 4, top + 13);
     }
   }
@@ -498,7 +507,10 @@ export function paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, cuts, t
     drawObjects(ctx, objects, width, height);
     drawTextRegions(ctx, text, width, height);
   }
-  drawChanges(ctx, changes, width, height);
+  const graphics = changes.filter(isGraphic);
+  const frameChanges = changes.filter(region => !isGraphic(region));
+  drawChanges(ctx, frameChanges, width, height, "change");
+  drawChanges(ctx, graphics, width, height, "graphic");
   drawPanels(ctx, panels, width, height);
   const marks = personMarks(evidence?.personLayer, faces, timeMs);
   for (const hit of faces) {
@@ -519,7 +531,8 @@ export function paintTechnicalFrame(ctx, evidence, phrases, sceneFrames, cuts, t
     timeMs, faces, marks, speakingFaces, phrase, speechLabel,
     personCount: personCountAt(evidence?.editorTimeline?.personPilot?.samples ?? [], cuts, timeMs, lookups?.personCuts),
     shot: cuts.length ? Math.max(1, after(cuts, timeMs, value => value) + (cuts[0] > 0 ? 1 : 0)) : null,
-    objects, text, panels, changes,
+    objects, text, panels, changes: frameChanges, graphics,
+    panelTimeMs: panelFrame?.timeMs, objectTimeMs: nearbyFrame?.timeMs,
   });
 }
 
@@ -552,7 +565,7 @@ function recordDrawing(measure, target) {
 export function previewExportPlan(measure, evidence, phrases, sceneFrames, cuts, width, height, durationMs, textFrames = [], panelFrames = [], objectClips, changes = []) {
   const boundaries = new Set([0, durationMs]);
   const objectTracks = indexObjectTracks(objectClips);
-  const changesAt = intervalLookup(changes);
+  const changesAt = regionLookup(changes);
   for (const row of changes) {
     for (const edge of [row.startMs, row.endMs]) {
       if (0 < edge && edge < durationMs) boundaries.add(edge);
@@ -598,7 +611,7 @@ export function previewExportPlan(measure, evidence, phrases, sceneFrames, cuts,
     const start = times[index], end = times[index + 1];
     const commands = [];
     paintTechnicalFrame(recordDrawing(measure, commands), evidence, phrases, sceneFrames, cuts, start, width, height,
-                        null, textFrames, lookups, undefined, panelFrames, objectTracks, changesAt(start)?.regions);
+                        null, textFrames, lookups, undefined, panelFrames, objectTracks, changesAt(start));
     const key = JSON.stringify(commands);
     const previous = samples.at(-1);
     if (commands.length && previous && previous[1] === start && lastKey === key) previous[1] = end;
@@ -628,16 +641,21 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame, chang
   let inferredCuts = [];
   let changeRows = [];
   let inspectedChangeRows = [];
+  let graphicRows = [];
   let changesAt = intervalLookup();
+  let graphicsAt = regionLookup();
   let pending;
 
   /** Keep instant measurements and give reviewed crops a short, shot-local preview. */
   function visibleChanges(at) {
     // FFmpeg timestamps are rounded to milliseconds, while the player uses fractional seconds.
-    if (!changeToggle?.checked || !toggle.checked) return undefined;
+    if (!toggle.checked) return [];
     const time = Math.round(at);
-    return previewChangeRegions(changesAt(time)?.regions, inspectedChangeRows,
-                                sceneCuts ?? (cuts.length ? cuts : inferredCuts), time);
+    const graphics = graphicsAt(time);
+    if (!changeToggle?.checked) return graphics;
+    const changes = previewChangeRegions(changesAt(time)?.regions, inspectedChangeRows,
+                                         sceneCuts ?? (cuts.length ? cuts : inferredCuts), time);
+    return graphics.concat(changes ?? []);
   }
 
   function paint(time = video.currentTime) {
@@ -684,7 +702,8 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame, chang
   }
 
   function update() {
-    const hasVisualData = evidence?.timeline?.frames?.length || sceneFrame || sceneFrames.length || objectTracks?.rows.length || textFrames.length || panelFrames.length || changeRows.length;
+    const hasVisualData = evidence?.timeline?.frames?.length || sceneFrame || sceneFrames.length || objectTracks?.rows.length ||
+      textFrames.length || panelFrames.length || changeRows.length || graphicRows.length;
     const available = Boolean(ctx && hasVisualData && video.videoWidth);
     options.hidden = !available;
     if (changeToggle) {
@@ -724,7 +743,7 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame, chang
       const duration = Math.max(lastCue, Math.round(video.duration * 1000));
       const plan = previewExportPlan(ctx, evidence, phrases, sceneFrames, sceneCuts ?? (cuts.length ? cuts : inferredCuts),
                                      Math.round(width), Math.round(height), duration, textFrames, panelFrames, objectClips,
-                                     changeToggle?.checked && toggle.checked ? changeRows : []);
+                                     toggle.checked ? graphicRows.concat(changeToggle?.checked ? changeRows : []) : []);
       return packMedia(source, plan);
     },
     /** Use the monitor renderer on a frozen source frame and return its nearby UI geometry. */
@@ -752,6 +771,8 @@ export function mountVideoOverlay(video, canvas, options, toggle, onFrame, chang
                         endMs: region.recognition.verifiedUntilMs, regions: [region]})))
         .sort((first, second) => first.startMs - second.startMs);
       changesAt = intervalLookup(changeRows);
+      graphicRows = (data?.frameChanges?.graphicRows ?? []).filter(row => Array.isArray(row?.regions) && row.regions.length);
+      graphicsAt = regionLookup(graphicRows);
       sceneFrames = samples.filter(frame => frame.objectChecked !== false);
       textFrames = samples.filter(frame => frame.text?.length);
       interfaceFrames = samples.filter(frame => frame.interfaces?.length);

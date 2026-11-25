@@ -1,4 +1,4 @@
-import {apiText, installInterfaceLocale, uiLocale, uiText} from "./i18n.js";
+import {apiText, installInterfaceLocale, uiLocale, uiText, whisperLanguageChoices, whisperLanguageName} from "./i18n.js";
 import {monitorTape, TrackDeck} from "./deck.js";
 import {ProcessingPanel} from "./processing.js";
 import {mountPlayer} from "./player.js";
@@ -41,6 +41,7 @@ const settings = mountStudioSettings(byId, request, {
   materialUrl, openMaterial: openSavedMaterial, dismissMaterial: mediaTools.dismissMaterial,
 });
 const storage = mountStudioStorage(byId, request);
+const transcriptionLanguages = loadTranscriptionLanguages();
 const engineDescriptions = {qwen: uiText("Первая выбранная запись с текстом"),
   chatterbox: uiText("Первая выбранная запись"), f5: uiText("Первая выбранная запись"), fish: uiText("Первые пять записей с текстом"), coqui: uiText("Первые пять выбранных записей")};
 
@@ -48,6 +49,24 @@ function element(tag, text, properties = {}) {
   const node = Object.assign(document.createElement(tag), properties);
   if (text) node.textContent = text;
   return node;
+}
+
+/** Populate both file-language pickers from the same catalogue the server validates. */
+async function loadTranscriptionLanguages() {
+  try {
+    const {languages} = await request("transcription-languages");
+    if (!Array.isArray(languages)) return;
+    const other = whisperLanguageChoices(languages.filter(code => /^[a-z]{2,3}$/.test(code) && !["ru", "en"].includes(code)));
+    for (const id of ["media-speech-language", "settings-material-language"]) {
+      const select = byId(id);
+      const selected = select.value;
+      const group = select.querySelector("optgroup");
+      group.replaceChildren(...other.map(code => element("option", whisperLanguageName(code), {value: code})));
+      if ([...select.options].some(option => option.value === selected)) select.value = selected;
+    }
+  } catch {
+    // The initial Russian, English and frequently tested choices are still available.
+  }
 }
 
 function notice(message, error = false) {
@@ -1148,6 +1167,8 @@ async function loadRouteMaterial() {
   const query = new URLSearchParams(location.search);
   const id = query.get("transcript");
   if (!id) return;
+  await transcriptionLanguages;
+  if (location.pathname !== "/tools" || new URLSearchParams(location.search).toString() !== query.toString()) return;
   const tag = query.get("material_lang");
   const known = [...byId("settings-material-language").options].some(option => option.value === tag);
   const language = known ? tag : state.language;

@@ -189,7 +189,8 @@ export function mountObjectFrameDialog(find, paintSnapshot) {
     ctx.save();
     const interfaces = paintSnapshot?.(ctx, canvas.width, canvas.height, sample.timeMs) ?? [];
     ctx.restore();
-    for (const region of interfaces) {
+    const readings = Array.isArray(sample.elements) ? [sample] : interfaces;
+    for (const region of readings) {
       for (const element of region.elements?.slice(0, 20) ?? []) {
         if (element.role === "text_line" || !Array.isArray(element.box) || element.box.length !== 4 ||
             !element.box.every(Number.isFinite)) continue;

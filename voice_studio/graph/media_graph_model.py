@@ -8,7 +8,7 @@ import re
 
 from voice_studio.audio.audio_scene import LABELS as AUDIO_LABELS, clean_audio_layers
 from voice_studio.audio.dialogue_pauses import clean_dialogue_pauses
-from voice_studio.graph.object_screens import VerifiedPanels, panel_scroll_previews, screen_evidence
+from voice_studio.graph.object_screens import VerifiedPanels, panel_screen_states, panel_scroll_previews, screen_evidence
 from voice_studio.graph.media_graph_interfaces import PANEL_TYPES, add_interface_observations
 from voice_studio.graph.frame_change_graph import add_frame_changes, change_coverage
 from voice_studio.graph.media_graph_expressions import add_facial_expressions
@@ -30,11 +30,13 @@ KIND_NAMES = {
     "ru": {"audio_track": "Звуковая дорожка", "video_track": "Видеодорожка", "shot": "План",
            "speaker": "Спикер", "face": "Лицо", "frame": "Кадр", "overlap": "Пересечение голосов",
            "object": "Предметы", "text": "Надписи", "speech": "Реплики", "faces": "Лица",
-           "frame_change": "Изменение в кадре", "camera_motion": "Движение камеры", "person_motion": "Движение персонажа"},
+           "frame_change": "Изменение в кадре", "graphic_change": "Возможная графическая вставка",
+           "camera_motion": "Движение камеры", "person_motion": "Движение персонажа"},
     "en": {"audio_track": "Audio track", "video_track": "Video track", "shot": "Shot",
            "speaker": "Speaker", "face": "Face", "frame": "Frame", "overlap": "Overlapping speech",
            "object": "Objects", "text": "Screen text", "speech": "Utterances", "faces": "Faces",
-           "frame_change": "Frame change", "camera_motion": "Camera motion", "person_motion": "Character motion"},
+           "frame_change": "Frame change", "graphic_change": "Possible graphic overlay",
+           "camera_motion": "Camera motion", "person_motion": "Character motion"},
 }
 MAX_TEXT = 4096
 COLOR_HEX = re.compile(r"#[0-9a-fA-F]{6}")
@@ -844,6 +846,7 @@ def object_layers(report):
     tracks = add_object_tracks(graph, object_reconciliation=review)
     profiles = add_object_profiles(graph, tracks, object_reconciliation=review)
     previews = panel_scroll_previews(graph, tracks, scene.get("interfaceScrolls", ()), box_coordinates)
+    screens = panel_screen_states(graph, tracks, scene.get("frames", []), box_coordinates)
     clips = []
     for key, shot, samples in tracks:
         node = graph.nodes[key]
@@ -854,7 +857,8 @@ def object_layers(report):
                                        for sample in samples]})
     return {"objectTimeline": sorted(clips, key=lambda clip: (clip["startMs"], clip["endMs"], clip["id"])),
             "objectProfiles": [{"id": node["id"], "label": node["label"], **node["data"],
-                                **({"scrollPreviews": previews[node["id"]]} if node["id"] in previews else {})}
+                                **({"scrollPreviews": previews[node["id"]]} if node["id"] in previews else {}),
+                                **({"uiScreens": screens[node["id"]]} if node["id"] in screens else {})}
                                for node in profiles]}
 
 

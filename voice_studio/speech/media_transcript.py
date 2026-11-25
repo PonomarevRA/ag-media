@@ -32,7 +32,7 @@ from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_L
 from voice_studio.speech.recognition import SMALL_MODEL, ready, recognize_file, recognize_result, resolve_whisper_language
 from voice_studio.vision.scene_transcript import reconcile_names
 from voice_studio.speech.speaker_diarization import detect_turns, label_phrases, label_words
-from voice_studio.speech.speaker_review import REVIEW_VERSION, review_speakers
+from voice_studio.speech.speaker_review import review_speakers
 from voice_studio.speech.speech_overlap import audio_overlaps, clip_overlaps, mixed_label, visual_overlaps
 from voice_studio.vision.video_revolver import review_video
 from voice_studio.vision.scene_sampling import DEFAULT_OBJECT_SAMPLING
@@ -178,38 +178,38 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
             if publish is not None:
                 publish("audio", detail)
         if visual or body or gaze:
+            from voice_studio.speech.speaker_pipeline import measure_speaker_review, usable_speaker_review
+            from voice_studio.speech.speaker_review import REVIEW_VERSION as SPEAKER_REVIEW_VERSION
+
             def measure_visual():
-                """Apply the existing face/review/binding stages to raw speech, independent of sound tags."""
+                """Checkpoint measured faces and activity before the independent identity check."""
                 visual_result = deepcopy(speech_input)
                 run_batch_stage(analyze_visual_track, source, prepared_audio(), audio_start_ms, visual_result,
                                 emit=emit, publish=publish, people_count=people_count)
-                if speakers and speaker_count is None:
-                    with stage(emit, "speaker-review") as progress:
-                        try:
-                            if run_batch_stage(review_speakers, visual_result, prepared_audio(), audio_start_ms, alternate=not merge_similar) is None:
-                                progress["state"] = "skipped"
-                                if reason := (visual_result.get("speakerReview") or {}).get("reason"):
-                                    progress["reason"] = reason
-                        except (OSError, ValueError, ImportError, subprocess.SubprocessError) as error:
-                            from voice_studio.speech.speaker_pipeline import voice_profile_failure
-
-                            reason = voice_profile_failure(error)
-                            progress["state"] = "failed"
-                            progress["reason"] = reason
-                            visual_result["speakerReview"] = {"status": "failed", "reason": reason}
-                bind_faces(visual_result)
-                visual_result["srt"] = render_srt(visual_result["segments"], visual_result["language"])
-                if publish is not None:
-                    fields = ("videoEvidence", "segments", "speakerReview", "srt")
-                    publish("visual", {key: visual_result[key] for key in fields if key in visual_result})
                 return visual_result
 
             visual_result = cache.run("visual", {"peopleCount": people_count, "speakers": speakers,
-                                                   "speakerCount": speaker_count, "mergeSimilar": merge_similar,
-                                                   "speakerReview": REVIEW_VERSION},
-                                      speech_input, measure_visual, usable_visual,
-                                      publish=(lambda report: publish("visual", report)) if publish else None, emit=emit)
-            result.update(visual_result)
+                                                 "speakerCount": speaker_count, "mergeSimilar": merge_similar,
+                                                 "separateSpeakerReview": True},
+                                      speech_input, measure_visual, usable_visual, emit=emit)
+            if visual_result:
+                result.update(visual_result)
+                if speakers and speaker_count is None:
+                    visual_hash = cache.revolver.counts["layers"]["visual"]["resultHash"]
+                    review = cache.run("speaker-review", {"version": SPEAKER_REVIEW_VERSION}, visual_hash,
+                                       lambda: measure_speaker_review(visual_result, prepared_audio, audio_start_ms,
+                                                                      review_speakers, alternate=not merge_similar, emit=emit),
+                                       usable_speaker_review, emit=emit, selection_layer="visual")
+                    if review:
+                        result["speakerReview"] = review["speakerReview"]
+                    if review and "segments" in review:
+                        result["segments"] = review["segments"]
+                        result["videoEvidence"] = {**result["videoEvidence"], "phrases": review["phrases"]}
+                bind_faces(result)
+                result["srt"] = render_srt(result["segments"], result["language"])
+                if publish is not None:
+                    fields = ("videoEvidence", "segments", "speakerReview", "srt")
+                    publish("visual", {key: result[key] for key in fields if key in result})
         scene_data = run_batch_stage(analyze_detail_layers, source, work, result.get("videoEvidence"), body=body, gaze=gaze,
                                            scene=scene, object_sampling=object_sampling, emit=emit, publish=publish,
                                            publish_mosaic=publish_mosaic, cache=cache)

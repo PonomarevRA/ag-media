@@ -1,3 +1,4 @@
+import {mountEditorWindow} from "./editor-object-window.js";
 import {createMomentTimeline, momentTimecode} from "./profile-moment-timeline.js";
 import {mountExpressionFramePreview} from "./expression-frame-preview.js";
 import {uiLocale, uiText} from "./i18n.js";
@@ -120,7 +121,7 @@ function gazeSummary(gaze, seek) {
   return {element: section, dispose: release};
 }
 
-/** Open one reusable native dialog with view state and explicit focus return. */
+/** Inspect faces and speakers in the shared floating window. */
 export function mountSpeakerProfileDialog(find, video) {
   const dialog = find("speaker-profile-dialog");
   const title = find("speaker-profile-title");
@@ -128,7 +129,8 @@ export function mountSpeakerProfileDialog(find, video) {
   const technical = find("speaker-profile-technical");
   const uiButton = find("speaker-profile-view");
   const jsonButton = find("speaker-profile-json");
-  const closeButton = find("speaker-profile-close");
+  const window = mountEditorWindow(find, {prefix: "speaker-profile", panel: dialog, heading: title,
+    onClose: () => close(true)});
   let opener;
   let currentProfile;
   let contentDisposers = [];
@@ -148,13 +150,15 @@ export function mountSpeakerProfileDialog(find, video) {
   }
   uiButton.onclick = () => setView(false);
   jsonButton.onclick = () => setView(true);
-  closeButton.onclick = () => dialog.close();
-  dialog.addEventListener("close", () => {
+  /** Release profile contents and optionally restore the initiating control. */
+  function close(restoreFocus = false) {
     clearContent();
-    if (opener?.isConnected) opener.focus({preventScroll: true});
+    expressionPreview.clear();
+    window.clear();
+    if (restoreFocus && opener?.isConnected) opener.focus({preventScroll: true});
     opener = currentProfile = undefined;
     technical.value = "";
-  });
+  }
 
   return {
     open(profile, button, evidence) {
@@ -168,7 +172,7 @@ export function mountSpeakerProfileDialog(find, video) {
         if (!video.hidden && video.readyState > 0) {
           video.pause();
           video.currentTime = time / 1000;
-          dialog.close();
+
         }
       };
       const facts = document.createElement("div");
@@ -187,13 +191,9 @@ export function mountSpeakerProfileDialog(find, video) {
       contentDisposers = [gaze.dispose, expressions.dispose];
       info.replaceChildren(facts, gaze.element, expressions.element);
       setView(false);
-      if (!dialog.open) dialog.showModal();
-      closeButton.focus();
+      window.setLabel(title.textContent);
+      window.show();
     },
-    reset() {
-      expressionPreview.clear();
-      clearContent();
-      if (dialog.open) dialog.close();
-    },
+    reset: close,
   };
 }

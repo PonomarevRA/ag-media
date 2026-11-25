@@ -26,12 +26,13 @@ function textNode(tag, text, className = "") {
   return node;
 }
 
-/** Load workspace usage on demand and remove only a confirmed, inspected row. */
+/** Load workspace usage and confirm individual removals or a batch of regenerable caches. */
 export function mountStudioStorage(find, request) {
   const usage = find("storage-groups");
   const list = find("storage-list");
   const status = find("storage-status");
   const refresh = find("storage-refresh");
+  const clean = find("storage-clean");
   const candidates = find("storage-candidates");
   const dialog = find("storage-dialog");
   const confirm = find("storage-confirm");
@@ -40,6 +41,20 @@ export function mountStudioStorage(find, request) {
   let selected;
   let loading = false;
   let deleting = false;
+
+  /** Bind confirmation to the exact inventory revision behind the selected action. */
+  function prepare(action, title, detail, note, groups = []) {
+    selected = action;
+    find("storage-confirm-title").textContent = uiText(title);
+    find("storage-confirm-detail").textContent = detail;
+    find("storage-confirm-note").textContent = uiText(note);
+    const groupList = find("storage-confirm-groups");
+    groupList.replaceChildren(...groups.map(group => textNode("li",
+      `${uiText(LABELS[group.kind])} · ${formatBytes(group.bytes)}`)));
+    groupList.hidden = !groups.length;
+    confirm.textContent = uiText(action.route === "storage-clean" ? "Очистить кэш" : "Удалить");
+    dialog.showModal();
+  }
 
   function render() {
     const shown = candidates.checked ? data.items.filter(row => row.candidate) : data.items;
@@ -71,9 +86,9 @@ export function mountStudioStorage(find, request) {
         button.setAttribute("aria-label", uiText`Удалить ${row.label}`);
         attachStudioIcon(button);
         button.onclick = () => {
-          selected = row;
-          find("storage-confirm-detail").textContent = `${row.label} · ${formatBytes(row.bytes)}`;
-          dialog.showModal();
+          const {id, revision} = row;
+          prepare({route: "storage-delete", body: {id, revision}}, "Удалить файл или папку?",
+            `${row.label} · ${formatBytes(row.bytes)}`, "Удаление освободит место. Восстановить данные из студии будет нельзя.");
         };
         item.append(detail, button);
       } else {
@@ -86,7 +101,7 @@ export function mountStudioStorage(find, request) {
 
   async function load(message = "") {
     if (loading) return;
-    loading = refresh.disabled = true;
+    loading = refresh.disabled = clean.disabled = true;
     status.textContent = uiText("Считаем объём данных…");
     try {
       data = await request("storage");
@@ -99,7 +114,11 @@ export function mountStudioStorage(find, request) {
       const {cacheDays, temporaryDays, exportDays} = data.policy;
       find("storage-policy").textContent = uiText`Автоочистка: временные загрузки через ${temporaryDays} дн., кэши через ${cacheDays} дн. без использования. Экспорты старше ${exportDays} дн. доступны для ручной проверки.`;
       find("storage-limit").hidden = data.totalItems <= data.items.length;
+      const bytes = data.cleanup?.bytes ?? 0;
+      find("storage-cleanup-summary").textContent = bytes ? uiText`Пересоздаваемый кэш: ${formatBytes(bytes)}`
+        : uiText("Пересоздаваемый кэш пуст.");
       render();
+      clean.disabled = bytes === 0;
       status.textContent = message;
     } catch (error) {
       status.textContent = error.message;
@@ -109,23 +128,32 @@ export function mountStudioStorage(find, request) {
   }
 
   refresh.onclick = () => load();
+  clean.onclick = () => {
+    const {bytes, groups, revision} = data.cleanup;
+    prepare({route: "storage-clean", body: {revision}}, "Очистить кэш проекта?",
+      uiText`Объём кэша: ${formatBytes(bytes)}`,
+      "Записи, материалы, графы, модели и экспорты сохранятся. Студия пропустит используемый кэш и пересоздаст удалённые данные по мере необходимости.",
+      groups);
+  };
   candidates.onchange = () => { if (data) render(); };
   dialog.addEventListener("cancel", event => { if (deleting) event.preventDefault(); });
   confirm.onclick = async () => {
     if (!selected || deleting) return;
     deleting = confirm.disabled = cancel.disabled = true;
+    const {route, body} = selected;
     try {
-      const {id, revision} = selected;
-      const result = await request("storage-delete", {id, revision});
+      const result = await request(route, body);
       dialog.close();
-      await load(uiText`Удалено: ${formatBytes(result.bytes)}`);
-      refresh.focus();
+      const message = result.skipped
+        ? uiText`Удалено: ${formatBytes(result.bytes)}. Пропущено элементов: ${number.format(result.skipped)}.`
+        : uiText`Удалено: ${formatBytes(result.bytes)}`;
+      await load(message);
     } catch (error) {
       dialog.close();
       await load(error.message);
-      refresh.focus();
     } finally {
       deleting = confirm.disabled = cancel.disabled = false;
+      (route === "storage-clean" && !clean.disabled ? clean : refresh).focus();
     }
   };
 

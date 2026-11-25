@@ -1,15 +1,18 @@
 """Expose geometric change witnesses as first-class source-clock graph nodes."""
 
-def change_rows(scene):
+from voice_studio.vision.frame_changes import BASIS, GRAPHIC_BASIS
+
+
+def change_rows(scene, key="rows"):
     """Read one short-video scan or the list of already aligned partition witnesses."""
     layer = scene.get("frameChanges") or {}
-    rows = layer.get("rows") if isinstance(layer, dict) else None
+    rows = layer.get(key) if isinstance(layer, dict) else None
     return rows if isinstance(rows, list) else []
 
 
-def shift_change_rows(scene, start, end):
+def shift_change_rows(scene, start, end, key="rows"):
     """Move a window's measurements to source time without altering cached inputs."""
-    for row in change_rows(scene):
+    for row in change_rows(scene, key):
         left = start + row["startMs"]
         right = min(end, start + row["endMs"])
         if start <= left < right:
@@ -32,6 +35,8 @@ def change_coverage(scene):
         return {}
     allowed = ("status", "mode", "basis", "framesCompared", "globalFrames", "omittedFrames", "cutCandidatesRemoved", "elapsedMs")
     fields = {key: report[key] for key in allowed if type(report.get(key)) in (str, int)}
+    if "graphicRows" in report:
+        fields["graphicCandidates"] = len(change_rows(scene, "graphicRows"))
     if isinstance(objects := scene.get("frameChangeObjects", report.get("objectChecks")), dict):
         fields["objectChecks"] = {key: objects[key] for key in ("status", "frames", "added", "modelRuns", "elapsedMs", "skippedFrames")
                                   if type(objects.get(key)) in (str, int)}
@@ -62,14 +67,14 @@ def recognition_rows(value, label_key, box_coordinates):
     return rows
 
 
-def valid_region(region, box_coordinates):
+def valid_region(region, box_coordinates, basis):
     """Accept only a normalized box with a positive count measured on the analysis raster."""
     if not isinstance(region, dict) or not (box := box_coordinates(region.get("box"))):
         return None
     count = region.get("changedPixels")
     if type(count) is not int or not 0 < count <= 320 * 320:
         return None
-    result = {"box": box, "changedPixels": count, "basis": "tile-difference"}
+    result = {"box": box, "changedPixels": count, "basis": basis}
     if isinstance(reading := region.get("recognition"), dict):
         objects = recognition_rows(reading.get("objects"), "label", box_coordinates)
         text = recognition_rows(reading.get("text"), "text", box_coordinates)
@@ -80,7 +85,13 @@ def valid_region(region, box_coordinates):
 
 def add_frame_changes(graph, scene, track, box_coordinates):
     """Add timed region witnesses with links to their measured frame, shot and track."""
-    for row in change_rows(scene):
+    add_change_rows(graph, change_rows(scene), track, box_coordinates, BASIS)
+    add_change_rows(graph, change_rows(scene, "graphicRows"), track, box_coordinates, GRAPHIC_BASIS)
+
+
+def add_change_rows(graph, rows, track, box_coordinates, basis):
+    """Attach candidates with independent IDs even when multiple graphics begin in one frame."""
+    for ordinal, row in enumerate(rows):
         if not isinstance(row, dict):
             continue
         start, end = row.get("startMs"), row.get("endMs")
@@ -93,10 +104,12 @@ def add_frame_changes(graph, scene, track, box_coordinates):
         if len(shots) > 1:
             continue
         for index, region in enumerate(regions[:4]):
-            evidence = valid_region(region, box_coordinates)
+            evidence = valid_region(region, box_coordinates, basis)
             if evidence is None:
                 continue
-            node = f"frame_change:{start}:{index}"
+            node = (f"frame_change:graphic:{start}:{ordinal}:{index}" if basis == GRAPHIC_BASIS
+                    else f"frame_change:{start}:{index}")
+            label = graph.names["graphic_change" if basis == GRAPHIC_BASIS else "frame_change"]
             sample_frame = None
             if recognition := evidence.get("recognition"):
                 raw = region["recognition"]
@@ -104,10 +117,10 @@ def add_frame_changes(graph, scene, track, box_coordinates):
                 if type(sample) is int and type(verified) is int and start <= sample < verified <= graph.duration:
                     recognition.update(sampleTimeMs=sample, verifiedUntilMs=verified)
                     sample_frame = graph.frame(sample, "frame-change-crop")
-            graph.node(node, "frame_change", graph.names["frame_change"], (start, end), evidence)
+            graph.node(node, "frame_change", label, (start, end), evidence)
             if sample_frame:
                 graph.connect(node, "recognition_from_frame", sample_frame)
-            graph.connect(node, "at_frame", graph.frame(start, "tile-difference"))
+            graph.connect(node, "at_frame", graph.frame(start, basis))
             if track:
                 graph.connect(node, "on_track", track)
             if shots:

@@ -9,7 +9,9 @@ from voice_studio.mod_runtime import model_resource
 from voice_studio.core.voice_registry_lock import serialize_voice_file
 from array import array
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from hashlib import sha256
+import logging
 import json
 from math import isfinite, sqrt
 import os
@@ -20,9 +22,11 @@ from uuid import uuid4
 import wave
 
 from voice_studio.speech.voice_profile_evidence import audio_interval, overlaps_audio, speaking_evidence
+from voice_studio.speech.embedding_protocol import MAX_CLUSTERS, file_signature
 from voice_studio.speech.voice_profile_public import ID as PUBLIC_PROFILE_ID
 
 VERSION = "source-voice-profiles-1"
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -61,11 +65,19 @@ def _fingerprint(value):
 def local_encoder_id():
     """Identify existing weights by content; never fetch a model."""
     from voice_studio.speech.speaker_diarization import MODEL_PATH
-    path = model_resource('speech.embedding-resource', 'builtin.sherpa-embedding', MODEL_PATH / 'embedding.onnx')
+    path = model_resource('speech.embedding-resource', 'builtin.sherpa-embedding', MODEL_PATH / 'embedding.onnx').resolve()
+    return _encoder_id(path, tuple(file_signature(path)))
+
+
+@lru_cache(maxsize=8)
+def _encoder_id(path, signature):
+    """Hash a specific immutable file revision once across windows and requests."""
     digest = sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
+    if tuple(file_signature(path)) != signature:
+        raise ValueError("Voice model changed while computing its identity")
     return f"sherpa-3d-speaker:{digest.hexdigest()}"
 
 
@@ -323,10 +335,10 @@ def _pcm_quality(pcm, config):
     return {"accepted": not reasons, "reasons": reasons, "rms": round(rms, 6), "clippedFraction": round(clipped, 6)}
 
 
-def _profile_sample(audio, start, end, config):
-    """Read and qualify one sample against the actual decoded audio boundaries."""
+def _read_sample(audio, start, end, config):
+    """Read and qualify one bounded window before asking the encoder to run."""
     rate = audio.getframerate()
-    first, last = round(start * rate / 1000), round(end * rate / 1000)
+    first, last = start * rate // 1000, end * rate // 1000
     if first < 0 or last > audio.getnframes():
         return None, {"accepted": False, "reasons": ["outside-audio-window"]}
     audio.setpos(first)
@@ -334,52 +346,59 @@ def _profile_sample(audio, start, end, config):
     if sys.byteorder != "little":
         pcm.byteswap()
     quality = _pcm_quality(pcm, config)
-    return pcm, quality
+    return (pcm if quality["accepted"] else None), quality
 
 
-def _local_vector(extractor, rate, pcm):
-    """Support callers supplying a local extractor with the same quality gate."""
+def _infer_sample(pcm, rate, extractor):
+    """Embed an already qualified sample when a caller supplies a local extractor."""
     stream = extractor.create_stream()
     stream.accept_waveform(rate, array("f", (value / 32768 for value in pcm)))
     stream.input_finished()
-    if not extractor.is_ready(stream):
-        return None
-    return [float(value) for value in extractor.compute(stream)]
+    return [float(value) for value in extractor.compute(stream)] if extractor.is_ready(stream) else None
 
 
-def measure_profile_samples(wav, windows, config, extractor=None):
-    """Keep the PCM gate in the host and batch approved samples in the managed Sherpa runtime."""
-    from voice_studio.speech.embedding_protocol import MAX_CLUSTERS
+def _sample_embeddings(wav, windows, selected, offset, config, extractor):
+    """Batch qualified samples through the managed encoder before changing the registry."""
     from voice_studio.speech.speaker_review import extract_embeddings
 
-    qualities, vectors, approved = {}, {}, {}
+    qualities, vectors, spans = {}, {}, {}
     with wave.open(str(wav)) as audio:
         if audio.getnchannels() != 1 or audio.getsampwidth() != 2:
             raise ValueError("Voice profiling requires mono 16-bit PCM WAV")
-        for index, (start, end) in windows.items():
-            pcm, quality = _profile_sample(audio, start, end, config)
-            qualities[index] = quality
-            if quality["accepted"]:
-                if extractor is None:
-                    approved[index] = [[start, end]]
-                else:
-                    vectors[index] = _local_vector(extractor, audio.getframerate(), pcm)
-    indexes = list(approved)
-    for offset in range(0, len(indexes), MAX_CLUSTERS):
-        spans = {index: approved[index] for index in indexes[offset:offset + MAX_CLUSTERS]}
-        measured = extract_embeddings(wav, spans)
-        for index in spans:
-            samples = measured.get(index) or []
-            vectors[index] = samples[0] if samples else None
-    results = {}
+        for index in selected:
+            start, end, _ = windows[index]
+            start, end = start - offset, end - offset
+            pcm, qualities[index] = _read_sample(audio, start, end, config)
+            if pcm is None:
+                continue
+            if extractor is None:
+                spans[index] = [[start, end]]
+            else:
+                vectors[index] = _infer_sample(pcm, audio.getframerate(), extractor)
+    entries = list(spans.items())
+    # A label holds one window so an empty feature cannot shift later samples.
+    for start in range(0, len(entries), MAX_CLUSTERS):
+        for index, rows in extract_embeddings(wav, dict(entries[start:start + MAX_CLUSTERS])).items():
+            vectors[index] = rows[0] if rows else None
     for index, quality in qualities.items():
         vector = vectors.get(index)
         if quality["accepted"] and _unit(vector) is None:
-            quality = {**quality, "accepted": False,
-                       "reasons": ["encoder-not-ready" if vector is None else "invalid-embedding"]}
-            vector = None
-        results[index] = (vector, quality)
-    return results
+            reason = "encoder-not-ready" if vector is None else "invalid-embedding"
+            quality.update(accepted=False, reasons=[reason])
+            vectors.pop(index, None)
+    return vectors, qualities
+
+
+def _short_source_registry(cache_path, source_id):
+    """Recover a disposable whole-file registry only when its saved state is invalid."""
+    if cache_path:
+        try:
+            return VoiceProfileRegistry.load(cache_path, source_id)
+        except FileNotFoundError:
+            pass
+        except ValueError:
+            LOGGER.warning("Rebuilding an invalid whole-file voice profile cache")
+    return VoiceProfileRegistry(source_id)
 
 
 @serialize_voice_file
@@ -392,45 +411,41 @@ def apply_voice_profiles(result, wav, audio_start_ms, *, source_id, registry=Non
     subject scope. Errors remain visible to the caller; no weights are downloaded.
     """
     if registry is None:
-        if cache_path and Path(cache_path).is_file():
-            registry = VoiceProfileRegistry.load(cache_path, source_id)
-        else:
-            registry = VoiceProfileRegistry(source_id)
+        registry = _short_source_registry(cache_path, source_id)
     if registry.source_id != str(source_id):
         raise ValueError("Cannot reuse a voice registry across sources")
     cues = result.get("segments", [])
-    candidates = []
+    config = registry.config
+    windows, candidates = [], []
     for index, cue in enumerate(cues):
         start, end = audio_interval(cue)
-        if not overlaps_audio(cue, result) and end - start >= registry.config.min_duration_ms:
+        end = min(end, start + config.max_duration_ms)
+        overlap = overlaps_audio(cue, result)
+        windows.append((start, end, overlap))
+        if not overlap and end - start >= config.min_duration_ms:
             candidates.append(index)
     # Sampling across the whole window avoids exhausting the budget on its first speaker.
-    budget = registry.config.max_windows
+    budget = config.max_windows
     if len(candidates) > budget:
         candidates = [candidates[i * len(candidates) // budget] for i in range(budget)]
-    windows = {}
-    for index in candidates:
-        start, end = audio_interval(cues[index])
-        windows[index] = (start - audio_start_ms, min(end, start + registry.config.max_duration_ms) - audio_start_ms)
-    measured = measure_profile_samples(wav, windows, registry.config, extractor)
+    vectors, qualities = _sample_embeddings(wav, windows, candidates, audio_start_ms, config, extractor)
+    expected_dimensions = {len(vector) for vector in vectors.values()}
+    if registry.dimension is not None:
+        expected_dimensions.add(registry.dimension)
+    if len(expected_dimensions) > 1:
+        raise ValueError("Voice encoder dimension changed")
     decisions = []
-    for index, cue in enumerate(cues):
-        start, end = audio_interval(cue)
-        end = min(end, start + registry.config.max_duration_ms)
+    for index, (cue, (start, end, overlap)) in enumerate(zip(cues, windows, strict=True)):
         provenance = {"key": _fingerprint([source_id, start, end]), "sourceId": str(source_id),
                       "windowId": window_id, "startMs": start, "endMs": end, "rawSpeaker": cue.get("speaker")}
-        video = speaking_evidence(cue, result, visual_scope)
-        if overlaps_audio(cue, result):
+        if overlap:
             decision = {"profileId": None, "state": "abstained", "basis": "overlap", "learned": False,
                         "reasons": ["overlap"], "quality": {"accepted": False, "reasons": ["overlap"]}, **provenance}
         else:
-            if index in measured:
-                vector, quality = measured[index]
-            else:
-                vector = None
-                excluded_reason = "short-audio" if end - start < registry.config.min_duration_ms else "sample-budget"
-                quality = {"accepted": False, "reasons": [excluded_reason]}
-            decision = registry.observe(vector, provenance, video=video, quality=quality)
+            reason = "short-audio" if end - start < config.min_duration_ms else "sample-budget"
+            quality = qualities.get(index, {"accepted": False, "reasons": [reason]})
+            decision = registry.observe(vectors.get(index), provenance,
+                                        video=speaking_evidence(cue, result, visual_scope), quality=quality)
         cue.pop("voiceProfileId", None)
         if decision["profileId"]:
             cue["voiceProfileId"] = decision["profileId"]

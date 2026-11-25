@@ -1,3 +1,4 @@
+import {mountEditorWindow} from "./editor-object-window.js";
 import {mountExpressionFramePreview} from "./expression-frame-preview.js";
 import {expressionLanes, expressionGroupKey, unboundExpressionGroups} from "./facial-expressions.js";
 import {gazeIcon, gazeLabel} from "./speaker-gaze.js";
@@ -8,6 +9,8 @@ import {
 } from "./video-object-profile.js";
 import {mountObjectAppearanceTimeline} from "./video-object-appearance-timeline.js";
 import {attachStudioIcon} from "./studio-icons.js";
+import {timelineIntervalLookup} from "./timeline-intervals.js";
+export {timelineIntervalLookup} from "./timeline-intervals.js";
 
 const LEVELS = [.035, .065, .11, .19, .32];
 
@@ -15,34 +18,6 @@ const LEVELS = [.035, .065, .11, .19, .32];
 export function fitTimelineScale(durationMs, availableWidth) {
   if (!Number.isFinite(durationMs) || durationMs <= 0 || !Number.isFinite(availableWidth) || availableWidth <= 0) return .11;
   return Math.max(.00001, Math.min(.64, availableWidth * .76 / durationMs));
-}
-
-/** Index overlapping intervals and return their clips in display order on the half-open timeline. */
-export function timelineIntervalLookup(ranges) {
-  const sorted = ranges.map(([start, end, item], order) => ({start: Number(start), end: Number(end), item, order}))
-    .filter(({start, end}) => start < end)
-    .sort((left, right) => left.start - right.start);
-  const size = 2 ** Math.ceil(Math.log2(Math.max(1, sorted.length)));
-  const maxEnd = new Float64Array(size * 2).fill(-Infinity);
-  sorted.forEach(({end}, index) => { maxEnd[size + index] = end; });
-  for (let index = size - 1; index > 0; index--) {
-    maxEnd[index] = Math.max(maxEnd[2 * index], maxEnd[2 * index + 1]);
-  }
-  return time => {
-    const matches = [];
-    function visit(index, start, length) {
-      if (maxEnd[index] <= time || sorted[start].start > time) return;
-      if (length === 1) {
-        matches.push(sorted[start]);
-        return;
-      }
-      const half = length / 2;
-      visit(index * 2, start, half);
-      visit(index * 2 + 1, start + half, half);
-    }
-    if (sorted.length && Number.isFinite(time)) visit(1, 0, size);
-    return matches.sort((left, right) => left.order - right.order).map(({item}) => item);
-  };
 }
 
 /** Find the center of the visible part of a marker, in coordinates inside its one-pixel border. */
@@ -117,7 +92,7 @@ function objectLanes(data, duration) {
     const screen = representative?.interfaceEvidence ?? profile?.interfaceEvidence;
     const label = screen?.displayLabel ?? profile?.label ?? clip.label;
     let description = label === clip.label ? count : `${count} · ${uiText`Метка кадра: ${clip.label}`}`;
-    if (screen) description += ` · ${screen.type}`;
+    if (screen && screen.type !== label && screen.type !== clip.label) description += ` · ${screen.type}`;
     const item = {...clip, endMs, text: uiText(label === "monitor" ? "Монитор" : label), description, representative, profile, screen};
     row.clips.push(item);
     if (profile) {
@@ -139,6 +114,12 @@ function legacyObjectSample(clip, frames) {
   if (!match || Number(match[1]) !== clip.startMs) return undefined;
   const object = frames?.get(clip.startMs)?.[Number(match[2])];
   if (object?.label === clip.label) return {timeMs: clip.startMs, box: object.box, score: object.score};
+}
+
+/** Limit the UI filter to measured viewports or explicit UI labels in older reports. */
+function timelineInterface(clip) {
+  const kind = clip.screen?.type ?? clip.label;
+  return kind === "ui" || kind === "mobile-ui" ? kind : null;
 }
 
 const AUDIO_LANES = {
@@ -333,6 +314,7 @@ const ICON_PATHS = {
   intonation: "M3 15c3 0 3-8 6-8s3 10 6 10 3-5 6-5M3 21h18",
   background: "M3 9v6m4-9v12m5-15v18m5-15v12m4-9v6",
   objects: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm-9 5 9 5 9-5m-9 5v8",
+  uiOnly: "M3 7h18v12H3zM3 10h18m-13 0v9m6-6h4m-4 3h4",
   fit: "M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 12h8m-6-2-2 2 2 2m4-4 2 2-2 2",
   density: "M3 5h18M3 9h18M3 13h18M3 17h18M3 21h18",
   more: "M12 5h.01M12 12h.01M12 19h.01",
@@ -452,9 +434,18 @@ function hasObjectBox(box) {
     box[0] >= 0 && box[1] >= 0 && box[0] < 1 && box[1] < 1 && box[2] > 0 && box[3] > 0;
 }
 
+/** Compare normalized viewport boxes for selection, independent of their detector confidence. */
+function objectBoxOverlap(left, right) {
+  if (!hasObjectBox(left) || !hasObjectBox(right)) return 0;
+  const [x, y, w, h] = left;
+  const [a, b, u, v] = right;
+  const common = Math.max(0, Math.min(x + w, a + u) - Math.max(x, a))
+    * Math.max(0, Math.min(y + h, b + v) - Math.max(y, b));
+  return common / (w * h + u * v - common);
+}
+
 /** Keep the crop pinned to the clicked observation while playback continues. */
 function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) {
-  const panel = find("media-object-preview");
   const canvas = find("media-object-image");
   const openPhoto = find("media-object-open");
   const screenBadge = find("media-object-interface");
@@ -483,6 +474,68 @@ function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) 
   let renderedAppearances;
   let pending;
   const appearanceTimeline = mountObjectAppearanceTimeline(find, timecode, openView);
+  const panel = find("media-object-preview");
+  const screens = find("media-object-screens");
+  const screenList = find("media-object-screen-list");
+  const screenReport = find("media-object-screen-report");
+  const back = find("media-object-back");
+  let activeClip;
+  let screenOpener;
+  const inspector = mountEditorWindow(find, {prefix: "media-object", panel, heading: name,
+    onClose: () => clear(true), onVisibility: visible => selectedButton?.setAttribute("aria-expanded", String(visible))});
+
+  /** Render each independent OCR result from its measured frame, with a return to the parent profile. */
+  function showScreen(screen, number, button) {
+    screenOpener = button;
+    panel.dataset.screenOpen = "true";
+    const title = uiText`Экран ${number}`;
+    name.textContent = title;
+    inspector.setLabel(title);
+    const content = document.createDocumentFragment();
+    for (const element of screen.elements ?? []) {
+      const text = document.createElement("li");
+      text.textContent = element.text || element.role;
+      content.append(text);
+    }
+    screenReport.replaceChildren(content);
+    if (!screenReport.childElementCount) {
+      const unavailable = document.createElement("li");
+      unavailable.textContent = uiText("Элементы экрана не распознаны");
+      screenReport.append(unavailable);
+    }
+    selectSample(screen, title);
+    seek(screen.timeMs);
+    capture();
+    back.focus({preventScroll: true});
+  }
+
+  /** Restore the parent card and its representative sample. */
+  back.onclick = () => {
+    delete panel.dataset.screenOpen;
+    if (!activeClip) return;
+    updateLabel(activeClip);
+    selectSample(activeClip.representative, activeClip.label, activeClip.startMs);
+    seek(activeClip.representative?.timeMs ?? activeClip.startMs);
+    capture();
+    if (screenOpener?.isConnected) screenOpener.focus({preventScroll: true});
+    else name.focus({preventScroll: true});
+    screenOpener = undefined;
+  };
+
+  /** List observed states chronologically, using an OCR line as a preview when available. */
+  function renderScreens(states) {
+    screenList.replaceChildren();
+    for (const [index, state] of (states ?? []).entries()) {
+      if (!hasObjectBox(state?.box) || !Number.isFinite(state?.timeMs)) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      const preview = state.elements?.find(element => element.text)?.text;
+      button.textContent = [uiText`Экран ${index + 1}`, timecode(state.timeMs), preview].filter(Boolean).join(" · ");
+      button.onclick = () => showScreen(state, index + 1, button);
+      screenList.append(button);
+    }
+    screens.hidden = !screenList.childElementCount;
+  }
 
   function displayScore(value) {
     return Number.isFinite(value) && 0 <= value && value <= 1 ? percent.format(value) : uiText("Нет данных");
@@ -507,6 +560,7 @@ function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) 
     renderAppearance();
     renderScrollPreviews(data?.scrollPreviews, preserveDisclosure);
     renderViews(appearances, objectProfileViews(data));
+    if (!panel.dataset.screenOpen) renderScreens(data?.uiScreens);
     const visible = labels.childElementCount || appearance.childElementCount || !views.hidden;
     if (!preserveDisclosure || profile.hidden) {
       profile.open = labels.childElementCount > 1 || Boolean(appearance.childElementCount) || !views.hidden;
@@ -658,11 +712,13 @@ function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) 
     textBlock.hidden = !textLines.childElementCount;
   }
 
-  function clear() {
-    if (selectedButton) selectedButton.setAttribute("aria-expanded", "false");
+  /** Discard selected evidence and optionally return focus to its timeline clip. */
+  function clear(restoreFocus = false) {
+    if (restoreFocus) selectedButton?.focus({preventScroll: true});
+    inspector.clear();
     highlightProfile();
-    selectedButton = selectedSample = selectedLabel = pending = undefined;
-    panel.hidden = true;
+    selectedButton = selectedSample = selectedLabel = pending = activeClip = screenOpener = undefined;
+    delete panel.dataset.screenOpen;
     photoDialog.clear();
   }
 
@@ -709,7 +765,8 @@ function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) 
   /** Refresh inferred names and kinds when new evidence reaches an open card. */
   function updateLabel(clip) {
     name.textContent = clip.text;
-    screenBadge.hidden = !clip.screen;
+    inspector.setLabel(clip.text);
+    screenBadge.hidden = !clip.screen || clip.screen.type === clip.text;
     screenBadge.textContent = clip.screen?.type ?? "";
     score.closest("dl").hidden = clip.screen?.basis === "verified-panel";
     if (clip.screen) {
@@ -730,25 +787,27 @@ function mountObjectPreview(find, video, seek, paintSnapshot, highlightProfile) 
         return;
       }
       selectedButton = button;
-      button.setAttribute("aria-expanded", "true");
-      updateLabel(clip);
+      button.setAttribute("aria-expanded", String(inspector.visible()));
+      activeClip = clip;
+      if (!panel.dataset.screenOpen) updateLabel(clip);
       highlightProfile(clip.profile?.id);
       renderProfile(clip.profile, clip.appearances, true);
       renderObjectText(clip.profile);
     },
     show(button, clip) {
-      const alreadySelected = selectedButton === button;
+      if (selectedButton === button && activeClip === clip && !panel.dataset.screenOpen) {
+        inspector.show();
+        return;
+      }
       clear();
-      if (alreadySelected) return;
       selectedButton = button;
-      button.setAttribute("aria-expanded", "true");
+      activeClip = clip;
       updateLabel(clip);
       highlightProfile(clip.profile?.id);
       selectSample(clip.representative, clip.label, clip.startMs);
       renderProfile(clip.profile, clip.appearances);
       renderObjectText(clip.profile);
-      panel.hidden = false;
-      panel.scrollIntoView({block: "nearest", inline: "nearest"});
+      inspector.show();
     },
   };
 }
@@ -799,12 +858,15 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
   const allMotionButton = find("media-editor-motion");
   const objectsControl = find("media-editor-objects-control");
   const objectsCheckbox = find("media-editor-objects");
+  const uiOnlyButton = find("media-editor-ui-only");
+  const uiEmpty = find("media-editor-ui-empty");
   const objectPreview = mountObjectPreview(find, video, drive, paintSnapshot, highlightObjectProfile);
   const expressionPreview = mountExpressionFramePreview(video);
   let expressionEvidence;
   const objectButtonsByProfile = new Map();
   let highlightedObjects = [];
   let objectRows = [];
+  let uiOnly = false;
   const audioControls = new Map(Object.keys(AUDIO_LANES).map(kind => [kind, {
     control: find(`media-editor-${kind}-control`), toggle: find(`media-editor-${kind}`), row: null,
   }]));
@@ -817,8 +879,15 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
     };
   }
   installTimelineLayerIcon(objectsControl, objectsCheckbox, "objects", uiText("Предметы"));
+  installTimelineIcon(uiOnlyButton, "uiOnly", uiText("Только UI"));
+  uiOnlyButton.onclick = () => {
+    uiOnly = !uiOnly;
+    updateUiFilter();
+    if (uiOnly ? !timelineInterface(selectedItem?.clip ?? {}) : !objectsCheckbox.checked) objectPreview.clear();
+    paint(position, false);
+  };
   objectsCheckbox.onchange = () => {
-    for (const row of objectRows) row.hidden = !objectsCheckbox.checked;
+    updateUiFilter();
     if (!objectsCheckbox.checked) objectPreview.clear();
     paint(position, false);
   };
@@ -996,8 +1065,9 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
       expectedScroll = offset;
     }
     alignViewport(offset);
-    const current = new Set(clipsAt(position).filter(({lane}) =>
-      (lane.kind !== "gaze" || !gazeRows.get(lane.number)?.hidden)
+    const current = new Set(clipsAt(position).filter(({lane, clip}) => uiOnly
+      ? lane.kind === "objects" && timelineInterface(clip)
+      : (lane.kind !== "gaze" || !gazeRows.get(lane.number)?.hidden)
       && (lane.kind !== "expression" || showExpressions && !hiddenExpressions.has(expressionGroupKey(lane)))
       && (lane.kind !== "person-motion" || showMotion && !hiddenMotion.has(expressionGroupKey(lane)))
       && (lane.kind !== "objects" || objectsCheckbox.checked)
@@ -1006,7 +1076,8 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
     for (const item of current) if (!active.has(item)) item.button.dataset.active = "true";
     active = current;
     // Some seek targets land just before an exact sample on the browser's media clock.
-    const objectSelection = selectedItem?.lane.kind === "objects" && objectsCheckbox.checked && video.paused &&
+    const objectSelection = selectedItem?.lane.kind === "objects" &&
+      (uiOnly ? timelineInterface(selectedItem.clip) : objectsCheckbox.checked) && video.paused &&
       Math.abs(position - (selectedItem.clip.representative?.timeMs ?? selectedItem.clip.startMs)) < 8;
     if (!current.has(selectedItem) && !objectSelection) {
       selectedItem = [...current].find(item => !["shots", "gaze", "expression", "pause", "objects"].includes(item.lane.kind)
@@ -1102,6 +1173,14 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
     band.append(label, track);
     sheet.append(band);
     return {band, label, track};
+  }
+
+  /** Preserve other track preferences and the playhead while showing only interface clips. */
+  function updateUiFilter() {
+    root.toggleAttribute("data-ui-only", uiOnly);
+    uiOnlyButton.setAttribute("aria-pressed", String(uiOnly));
+    for (const row of objectRows) row.hidden = !uiOnly && !objectsCheckbox.checked;
+    uiEmpty.hidden = !uiOnly || objectRows.some(row => row.hasAttribute("data-interface-lane"));
   }
 
   function render(model) {
@@ -1238,7 +1317,7 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
       }
       if (lane.kind === "objects") {
         objectRows.push(band.band);
-        band.band.hidden = !objectsCheckbox.checked;
+        band.band.toggleAttribute("data-interface-lane", lane.clips.some(timelineInterface));
       }
       const audioLayer = audioControls.get(lane.kind);
       if (audioLayer) {
@@ -1274,8 +1353,9 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
             if (!objectButtonsByProfile.has(id)) objectButtonsByProfile.set(id, []);
             objectButtonsByProfile.get(id).push(button);
           }
-          if (clip.screen) {
-            button.dataset.interfaceKind = clip.screen.type;
+          const interfaceKind = timelineInterface(clip);
+          if (interfaceKind) button.dataset.interfaceKind = interfaceKind;
+          if (clip.screen && clip.screen.type !== clip.text) {
             const badge = document.createElement("small");
             badge.className = "editor-object-kind";
             badge.dataset.kind = clip.screen.type;
@@ -1284,6 +1364,7 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
           }
           const accent = objectAccent(clip.representative?.palette ?? clip.profile?.appearance?.palette);
           if (accent) button.style.setProperty("--object-color", accent);
+          button.setAttribute("aria-haspopup", "dialog");
           button.setAttribute("aria-controls", "media-object-preview");
           button.setAttribute("aria-expanded", "false");
         }
@@ -1317,6 +1398,7 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
       }
     }
     objectsControl.hidden = !objectRows.length;
+    updateUiFilter();
     for (const layer of audioControls.values()) layer.control.hidden = !layer.row;
     needle = document.createElement("div");
     needle.className = "editor-needle";
@@ -1418,7 +1500,38 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
   for (const event of ["loadedmetadata", "seeked", "pause", "ended"]) video.addEventListener(event, sync);
   new ResizeObserver(layout).observe(scroll);
 
+  /** Open an observed object or viewport from the monitor without rebuilding the timeline. */
+  function inspectFrameObject(target, kind, frame, trigger) {
+    const timeMs = target.timeMs ?? (kind === "interface" ? frame.panelTimeMs : frame.objectTimeMs) ?? frame.timeMs;
+    const label = target.panelType ?? target.label;
+    const preferred = clips.find(item => target.trackId && item.clip.id === target.trackId);
+    let nearest = preferred;
+    let best = 0;
+    if (!preferred) {
+      for (const item of clips) {
+        if (item.lane.kind !== "objects" || timeMs < item.clip.startMs - 50 || timeMs >= item.clip.endMs + 50) continue;
+        if (kind === "interface" ? item.clip.screen?.type !== label : item.clip.label !== label && item.clip.text !== label) continue;
+        const sample = item.clip.boxSamples?.find(([stamp]) => stamp === timeMs)?.[1] ?? item.clip.representative?.box;
+        const fit = objectBoxOverlap(target.box, sample);
+        if (fit > .45 && fit > best) {
+          nearest = item;
+          best = fit;
+        }
+      }
+    }
+    const representative = {...target, timeMs};
+    const clip = nearest ? {...nearest.clip, representative} : {
+      label, text: uiText(label), startMs: timeMs, representative,
+      screen: kind === "interface" ? {type: label, basis: "verified-panel"} : undefined,
+      profile: kind === "interface" ? {visibleText: (target.elements ?? []).filter(item => item.text)} : undefined,
+    };
+    objectPreview.show(trigger, clip);
+    drive(timeMs);
+    objectPreview.capture();
+  }
+
   return {
+    inspectFrameObject,
     setData(data, evidence, gazes = new Map(), preserveInteraction = false) {
       video.dataset.editorFrameStepMs = String(evidence?.timeline?.stepMs ?? data?.videoEvidence?.timeline?.stepMs ?? 40);
       expressionEvidence = evidence ?? data?.videoEvidence;
@@ -1433,6 +1546,9 @@ export function mountVideoTimeline(find, video, openProfile, paintSnapshot) {
         showExpressions = true;
         hiddenExpressions.clear();
         objectsCheckbox.checked = true;
+        uiOnly = false;
+        objectRows = [];
+        updateUiFilter();
         for (const layer of audioControls.values()) {
           layer.toggle.checked = true;
           layer.row = null;

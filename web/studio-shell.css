@@ -80,6 +80,8 @@
 .media-preparation { min-inline-size: 0; padding-block-end: 12px; margin-block-end: 12px; border-block-end: 1px solid var(--shell-rule, var(--line)); }
 .media-import-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-inline-size: 0; }
 .media-import-row .media-import { max-inline-size: 100%; overflow-wrap: anywhere; text-align: start; }
+.media-import-language { flex: 0 1 13rem; min-inline-size: 0; max-inline-size: 100%; }
+.media-import-language select { min-inline-size: 0; inline-size: 100%; }
 .media-import-row > .muted { flex: 1 1 12rem; font-size: .82rem; }
 .media-preparation-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 6px 10px; min-inline-size: 0; margin-block-start: 10px; }
 .media-preparation-options > .capture-options { min-inline-size: 0; margin: 0; padding-inline: 10px; border: 1px solid var(--shell-rule, var(--line)); border-radius: var(--profile-radius); }
@@ -109,6 +111,7 @@
   :root[data-studio-shell="true"] .work > .panel,
   :root[data-studio-shell="true"] .settings-grid > .panel { padding: 12px; }
   .media-import-row .media-import { inline-size: 100%; }
+  .media-import-language { flex: 1 1 100%; }
   .media-preparation-options { grid-template-columns: minmax(0, 1fr); }
 }
 @media (forced-colors: active) {

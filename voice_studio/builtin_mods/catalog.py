@@ -10,7 +10,7 @@ import shutil
 import sys
 
 from voice_paths import PROJECT_ROOT, model_path, dependency_path
-from voice_studio.speech.transcription_languages import LANGUAGE_LABELS
+from voice_studio.speech.transcription_languages import WHISPER_LANGUAGES
 
 # Keep each checkpoint a separate mod even when several share a runtime.
 MODELS = (
@@ -111,10 +111,11 @@ def manifests():
             })
         if key.startswith('builtin.whisper-'):
             maximum = min(32, max(1, os.cpu_count() or 1))
+            languages = ('ru', 'en') if key == 'builtin.whisper-live' else WHISPER_LANGUAGES
             item['settings']['language'] = 'auto'
             item['settingsSchema']['required'] = ['language']
             item['settingsSchema']['properties']['language'] = {
-                'type': 'string', 'enum': list(LANGUAGE_LABELS), 'enumLabels': list(LANGUAGE_LABELS.values()),
+                'type': 'string', 'enum': ['auto', *languages],
                 'title': 'Язык распознавания',
                 'description': 'Применяется, когда язык не задан для отдельной транскрипции.'}
             item['settingsSchema']['properties']['threads'] = {

@@ -186,7 +186,6 @@ export function mountEditorWorkspace(document) {
   const preview = workbench.querySelector(".editor-preview");
   if (!video || !inspector || !timeline || !preview) return;
   let storage;
-  const originalInspectorWidth = inspector.style.width;
   try { storage = view.localStorage; } catch {}
   let dimensions = workspaceDimensions({
     inspectorWidth: storedDimension(storage, WIDTH_KEY, 320),
@@ -371,7 +370,6 @@ export function mountEditorWorkspace(document) {
     secondary.replaceWith(...secondary.childNodes);
     monitorActions.dispose();
     transport.dispose();
-    inspector.style.width = originalInspectorWidth;
     for (const key of ["workspace", "bounded", "focused", "timelineOpen", "inspectorOpen"]) delete workbench.dataset[key];
     for (const key of ["--editor-inspector-width", "--editor-timeline-height", "--editor-workspace-height", "--editor-focus-top", "--editor-focus-left"]) {
       workbench.style.removeProperty(key);

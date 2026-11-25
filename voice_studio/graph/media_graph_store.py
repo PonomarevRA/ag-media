@@ -17,6 +17,7 @@ import zlib
 from voice_studio.graph.media_graph_interfaces import INTERFACE_KINDS, PANEL_TYPES, restore_interface_observation, restore_verified_panel
 from voice_studio.graph.media_graph_health import data_health
 from voice_studio.graph.media_graph_mod_extensions import snapshot_mod_provenance
+from voice_studio.vision.frame_changes import GRAPHIC_BASIS
 
 MAX_WINDOW_MS = 5 * 60 * 1000
 MAX_PAGE = 60
@@ -420,11 +421,13 @@ class MediaGraphStore:
                 for row in db.execute("SELECT start_ms, end_ms, data FROM nodes "
                                       "WHERE kind='camera_motion' ORDER BY start_ms, seq")
             ]
-            changes = {}
+            changes = {"rows": {}, "graphicRows": {}}
             for row in db.execute("SELECT start_ms, end_ms, data FROM nodes WHERE kind='frame_change' ORDER BY start_ms, seq"):
-                start = row["start_ms"]
-                witness = changes.setdefault(start, {"startMs": start, "endMs": row["end_ms"], "regions": []})
-                witness["regions"].append(json.loads(row["data"]))
+                region = json.loads(row["data"])
+                key = "graphicRows" if region.get("basis") == GRAPHIC_BASIS else "rows"
+                start, end = row["start_ms"], row["end_ms"]
+                witness = changes[key].setdefault((start, end), {"startMs": start, "endMs": end, "regions": []})
+                witness["regions"].append(region)
             ui_activity = {**(metadata.get('uiActivity') or {}),
                            "version": (metadata.get('uiActivity') or {}).get('version', 1),
                            "truncated": (metadata.get("uiActivity") or {}).get("truncated") is True,
@@ -434,9 +437,10 @@ class MediaGraphStore:
                 facts = json.loads(row["data"])
                 ui_activity["truncated"] = ui_activity["truncated"] or facts.get("truncated") is True
                 ui_activity[key].append(facts)
+        frame_changes = {key: list(rows.values()) for key, rows in changes.items() if rows}
         return {"status": "ok", "uiActivity": ui_activity, "frames": list(frames.values()), "shotColors": shot_colors, "moodbook": moodbook,
                 "cameraMotion": camera_motion,
-                **({"frameChanges": {"rows": list(changes.values())}} if changes else {})}, coverage
+                **({"frameChanges": frame_changes} if frame_changes else {})}, coverage
 
     def frame_context(self, identity, at_ms=None, node_id=None):
         """Resolve a timestamp and fetch only evidence valid at that time."""
@@ -685,7 +689,10 @@ def context_at(db, metadata, stamp):
     """, (stamp, stamp))
     for row in changes:
         detail = json.loads(row["data"])
-        boxes.append({"box": detail["box"], "kind": "change", "changedPixels": detail["changedPixels"]})
+        mark = {"box": detail["box"], "kind": "change", "changedPixels": detail["changedPixels"]}
+        if detail.get("basis") == GRAPHIC_BASIS:
+            mark["basis"] = GRAPHIC_BASIS
+        boxes.append(mark)
     shot = db.execute("""
         SELECT label, data FROM nodes WHERE kind='shot' AND start_ms <= ? AND end_ms > ?
         ORDER BY start_ms DESC, seq DESC LIMIT 1

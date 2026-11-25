@@ -1,6 +1,6 @@
 """Measure bounded pixel-change candidates before selecting OCR and object frames."""
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from functools import partial
 import json
@@ -14,6 +14,8 @@ from time import perf_counter
 MOD_ID = "builtin.frame-changes"
 CAPABILITY = "vision.frame-changes"
 BASIS = "tile-difference"
+GRAPHIC_BASIS = "overlay-persistence"
+MIN_GRAPHIC_MS = 420
 SIDE = 320
 TILE = 16
 MAX_REGIONS = 4
@@ -85,7 +87,7 @@ def changed_regions(previous, current, threshold):
     return regions[:MAX_REGIONS]
 
 
-def scan_pixels(process, threshold):
+def scan_pixels(process, threshold, graphics):
     """Compare consecutive frames and retain a small, time-distributed set per source second.
 
     Read FFmpeg's clock in a separate pass after decoding; the worker retains no
@@ -103,6 +105,7 @@ def scan_pixels(process, threshold):
         if len(raw) != stride:
             raise ValueError("Incomplete video pixel frame")
         current = np.frombuffer(raw, dtype="uint8").reshape(SIDE, SIDE, 3)
+        graphics.observe(current, frame_count)
         if previous is not None:
             regions = changed_regions(previous, current, threshold)
             if regions is None:
@@ -159,6 +162,7 @@ def bound_samples(samples, frames, cuts, *, for_objects=False):
 def measure(request):
     """Decode one shared clock and RGB stream, timing out the owned FFmpeg subprocess."""
     import cv2
+    from voice_studio.vision.frame_graphics import GraphicTracker
     from voice_studio.vision.video_scene import read_frame_clock
 
     cv2.setNumThreads(1)
@@ -172,12 +176,13 @@ def measure(request):
                "-map", "[clock]", "-an", "-sn", "-f", "null", "-",
                "-map", "[pixels]", "-an", "-sn", "-pix_fmt", "rgb24", "-threads:v", "1",
                "-fps_mode", "passthrough", "-f", "rawvideo", "pipe:1"]
+    graphics = GraphicTracker()
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=folder) as process:
         timer = Timer(TIMEOUT, process.kill)
         timer.daemon = True
         timer.start()
         try:
-            samples, wide, count, dropped = scan_pixels(process, options["threshold"])
+            samples, wide, count, dropped = scan_pixels(process, options["threshold"], graphics)
             if process.wait() != 0:
                 raise ValueError("FFmpeg frame change decode failed")
         finally:
@@ -191,7 +196,19 @@ def measure(request):
     object_rows, _ = bound_samples(samples, frames, cuts, for_objects=True) if options["mode"] in ("objects", "assist") else ([], 0)
     return {"status": "ok", "basis": BASIS, "objectRows": object_rows, "framesCompared": max(0, count - 1),
             "globalFrames": wide, "omittedFrames": omitted + dropped, "rows": rows,
+            "graphicRows": graphics.report(frames, SIDE, MIN_GRAPHIC_MS, GRAPHIC_BASIS),
             "elapsedMs": round((perf_counter() - started) * 1000)}
+
+
+def constrain_graphics(rows, boundaries):
+    """Keep persistent graphics on both sides of a cut as separate graph witnesses."""
+    for row in rows:
+        start, end = row["startMs"], row["endMs"]
+        cuts = boundaries[bisect_right(boundaries, start):bisect_left(boundaries, end)]
+        for stop in (*cuts, end):
+            if stop - start >= MIN_GRAPHIC_MS:
+                yield {**row, "startMs": start, "endMs": stop}
+            start = stop
 
 
 def augment_plan(plan, frames, cuts, report):

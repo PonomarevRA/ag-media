@@ -25,6 +25,8 @@ const paths = {
   settings: "M4 7h3m4 0h9M4 12h9m4 0h3M4 17h3m4 0h9M7 5v4m6 1v4m-6 1v4",
   menu: "M4 6h16M4 12h16M4 18h16",
   close: "m6 6 12 12M18 6 6 18",
+  minimize: "M5 17h14",
+  "expand-window": "M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4",
   inspector: "M4 5h16v14H4zM14 5v14m2-10h2m-2 4h2",
   film: "M3 5h18v14H3zM7 5v14m10-14v14M3 10h4m10 0h4M3 14h4m10 0h4",
   face: "M9 10h.01M15 10h.01M9 15q3 3 6 0M3 8V3h5m8 0h5v5m0 8v5h-5m-8 0H3v-5",

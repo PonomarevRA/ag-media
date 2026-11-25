@@ -4,7 +4,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import combinations
 from statistics import median
-import subprocess
 
 from voice_studio.vision.face_reid import cosine
 from voice_studio.vision.face_speakers import active_face
@@ -118,10 +117,7 @@ def review_short_replies(cues, replies, wav, audio_start_ms, extract_embeddings)
     for index, reply in enumerate(replies):
         windows[index * 2] = [source_span(reply.cue, audio_start_ms)]
         windows[index * 2 + 1] = reply.references
-    try:
-        embeddings = extract_embeddings(wav, windows)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return []
+    embeddings = extract_embeddings(wav, windows)
     used = {cue.get(field) for cue in cues for field in ("speaker", "speakerNumber", "profileSpeakerNumber")}
     next_number = max((number for number in used if type(number) is int), default=0) + 1
     decisions, promoted = [], set()

@@ -144,3 +144,37 @@ def panel_scroll_previews(graph, tracks, pages, coordinates):
     for matches in output.values():
         matches.sort(key=lambda row: (-row.get("addedPixels", 0), row["startMs"]))
     return output
+
+
+def panel_screen_states(graph, tracks, frames, coordinates):
+    """Attach each measured state only to the best matching concurrent panel profile."""
+    output = defaultdict(list)
+    panels = []
+    for track_id, shot, samples in tracks:
+        measured = [(sample["startMs"], sample["data"]["box"]) for sample in samples
+                    if sample["data"].get("source") == "interface-layout"]
+        if measured:
+            panels.append((graph.nodes[track_id]["data"]["profileId"], graph.nodes.get(shot), measured))
+    for frame in frames:
+        stamp = frame["timeMs"]
+        for panel in frame.get("interfaces") or ():
+            if not isinstance(panel, dict) or panel.get("panelType") not in PANEL_TYPES:
+                continue
+            end = panel.get("screenStateEndMs")
+            box = coordinates(panel.get("box"))
+            if type(end) is not int or not stamp < end <= graph.duration or not box:
+                continue
+            scores = {}
+            for profile_id, shot, measured in panels:
+                if shot and not shot["startMs"] <= stamp < shot["endMs"]:
+                    continue
+                best = max((overlap(box, bounds) for at, bounds in measured if abs(stamp - at) <= PANEL_MATCH_RADIUS_MS),
+                           default=0)
+                if best >= .6:
+                    scores[profile_id] = max(scores.get(profile_id, 0), best)
+            ranked = sorted(scores, key=scores.get, reverse=True)
+            if not ranked or (len(ranked) > 1 and scores[ranked[0]] <= 1.12 * scores[ranked[1]]):
+                continue
+            output[ranked[0]].append({"startMs": stamp, "timeMs": stamp, "endMs": end, "box": box,
+                                      "type": panel["panelType"], "elements": panel.get("screenStateElements") or []})
+    return output

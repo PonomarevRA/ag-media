@@ -22,7 +22,7 @@ const STATE = {queued: uiText("Ожидает"), running: uiText("В работ�
 const CACHE_LAYERS = {
   speech: ["diarization", "whisper", "whisper-recovery", "dialogue-pauses"],
   audio: ["audio-layers"], visual: ["light-asd", "yunet", "speaker-review"],
-  people: ["person-layer"], scene: ["scene"],
+  "speaker-review": ["speaker-review"], people: ["person-layer"], scene: ["scene"],
   voice: ["voice-profiles"], object_review: ["object-review"],
 };
 

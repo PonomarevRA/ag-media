@@ -1,4 +1,4 @@
-import {uiText} from "./i18n.js";
+import {uiText, whisperLanguageChoices, whisperLanguageName} from "./i18n.js";
 
 /** Parse one native settings field without coercing empty values or non-finite numbers. */
 export function modSettingValue(raw, schema) {
@@ -61,10 +61,12 @@ export function modSettingsForm(item, save) {
         unset.textContent = uiText("Не задано");
         input.append(unset);
       }
-      for (const [index, choice] of definition.enum.entries()) {
+      const whisperLanguage = key === "language" && item.id.startsWith("builtin.whisper-");
+      const choices = whisperLanguage ? whisperLanguageChoices(definition.enum) : definition.enum;
+      for (const [index, choice] of choices.entries()) {
         const option = document.createElement("option");
         option.value = JSON.stringify(choice);
-        option.textContent = uiText(definition.enumLabels?.[index] ?? String(choice));
+        option.textContent = whisperLanguage ? whisperLanguageName(choice) : uiText(definition.enumLabels?.[index] ?? String(choice));
         input.append(option);
       }
       input.value = value === undefined ? "" : JSON.stringify(value);

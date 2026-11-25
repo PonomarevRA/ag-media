@@ -60,7 +60,6 @@
   .editor-resizing, .editor-workbench:has(.ag-panel-resizing) { user-select: none; }
 }
 @media (max-width: 64.99rem) {
-  .editor-workbench[data-workspace="editor"] > .editor-inspector { inline-size: auto !important; width: auto !important; }
   .editor-workbench[data-workspace="editor"] .editor-inspector-body { max-block-size: min(70dvh, 34rem); }
   .editor-workbench[data-workspace="editor"] .editor-toolbar, .editor-workbench[data-workspace="editor"] .editor-controls { align-items: flex-start; }
   .editor-workbench[data-workspace="editor"] .editor-heading, .editor-workbench[data-workspace="editor"] .editor-controls { max-inline-size: 100%; }
@@ -168,7 +167,6 @@ body.editor-workspace-focused { overflow: hidden; }
   .editor-workbench[data-workspace="editor"][data-timeline-open="false"][data-bounded="true"] { grid-template-rows: minmax(0, 1fr); }
   .editor-workbench[data-workspace="editor"][data-focused="true"][data-bounded="false"] { display: block; overflow: auto; }
   .editor-workbench[data-focused="true"][data-bounded="false"] > * + * { margin-block-start: .5rem; }
-  .editor-workbench[data-workspace="editor"] .editor-object-preview { max-block-size: 10rem; overflow: auto; flex: none; }
 }
 .editor-workbench[data-workspace="editor"] > .editor-timeline > .editor-selection { margin: 0; padding: 3px 8px; }
 
@@ -260,4 +258,173 @@ body.editor-workspace-focused { overflow: hidden; }
 }
 @media (min-width: 65rem) and (pointer: coarse) {
   .editor-workbench[data-bounded="true"] .editor-timeline-resizer::before { inset-block: -19px; }
+}
+
+/* A floating inspector uses viewport space. The timeline keeps its own scrollport. */
+.editor-object-window {
+  --object-window-margin: .75rem;
+  position: fixed;
+  inset: auto var(--object-window-margin) auto auto;
+  inset-block-start: clamp(1rem, 8dvh, 4.5rem);
+  z-index: 20;
+  inline-size: min(39rem, calc(100% - 2 * var(--object-window-margin)));
+  max-block-size: calc(100dvh - 5.5rem);
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--control);
+  border-block-start: 2px solid var(--frame-object, var(--accent));
+  border-radius: var(--profile-radius, 8px);
+  background: var(--surface);
+  box-shadow: 0 .75rem 2.25rem #0006;
+}
+.editor-object-window[data-expanded="true"] {
+  inset: var(--object-window-margin);
+  inline-size: auto;
+  max-block-size: none;
+}
+.editor-object-window[hidden], .editor-object-shelf[hidden] { display: none; }
+.editor-object-window-heading {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .25rem .75rem;
+  padding: .4rem .7rem;
+  border-block-end: 1px solid var(--line);
+  background: var(--surface-alt);
+}
+.editor-object-window-heading h3 {
+  flex: 1 1 6rem;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.editor-object-window-actions { display: flex; flex-wrap: wrap; gap: .25rem; margin-inline-start: auto; }
+.editor-object-window-actions .studio-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  min-inline-size: 2rem;
+  block-size: 2rem;
+  padding: .25rem;
+}
+.editor-object-window-actions svg, .editor-object-shelf svg { inline-size: 1.1rem; block-size: 1.1rem; flex: none; }
+.editor-object-window .editor-object-preview {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-block-start: 0;
+  align-items: start;
+}
+.editor-object-window .editor-object-image {
+  inline-size: min(100%, 14rem);
+  block-size: clamp(8rem, 30dvh, 17rem);
+}
+.editor-object-window[data-expanded="true"] .editor-object-image {
+  inline-size: min(100%, 42%);
+  block-size: clamp(8rem, 45dvh, 26rem);
+}
+.editor-object-shelf {
+  position: fixed;
+  inset: auto .75rem .75rem auto;
+  z-index: 19;
+  max-inline-size: calc(100% - 1.5rem);
+}
+.editor-object-shelf button { display: flex; align-items: center; gap: .5rem; max-inline-size: 100%; }
+.editor-object-shelf button span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 40rem) {
+  .editor-object-window {
+    inset: auto var(--object-window-margin) var(--object-window-margin);
+    inline-size: auto;
+    max-block-size: min(76dvh, calc(100dvh - 2 * var(--object-window-margin)));
+  }
+  .editor-object-window-actions [data-hint]::after { max-inline-size: 34vw; overflow-wrap: anywhere; }
+  .editor-object-window .editor-object-image,
+  .editor-object-window[data-expanded="true"] .editor-object-image {
+    inline-size: 100%;
+    block-size: clamp(7rem, 28dvh, 15rem);
+  }
+}
+@media (pointer: coarse) {
+  .editor-object-window-actions .studio-icon, .editor-object-shelf button { min-inline-size: 44px; min-block-size: 44px; }
+}
+@media (min-width: 40.01rem) {
+  .editor-object-window:not([data-expanded="true"]) {
+    inset-block-start: var(--object-window-y, clamp(1rem, 8dvh, 4.5rem));
+    left: var(--object-window-x, var(--object-window-default-x, auto));
+    max-block-size: calc(100dvh - var(--object-window-y, 4.5rem) - var(--object-window-margin));
+  }
+  .editor-object-window:not([data-expanded="true"]) .editor-object-window-heading {
+    cursor: grab;
+    touch-action: none;
+  }
+  .editor-object-window:not([data-expanded="true"]) .editor-object-window-heading:active { cursor: grabbing; }
+}
+
+.editor-object-window[data-front] { z-index: 22; }
+.editor-detail-body {
+  padding: .7rem;
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.editor-detail-shelves {
+  position: fixed;
+  inset: auto .75rem .75rem auto;
+  z-index: 23;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .35rem;
+  max-inline-size: calc(100% - 1.5rem);
+  pointer-events: none;
+}
+.editor-detail-shelves > .editor-object-shelf { position: static; min-inline-size: 0; pointer-events: auto; }
+.editor-screen-states { margin-block-start: .6rem; }
+.editor-screen-list { display: grid; gap: .35rem; min-inline-size: 0; }
+.editor-screen-list button { text-align: start; white-space: normal; overflow-wrap: anywhere; }
+.editor-screen-report { margin: 0; padding-inline-start: 1.1rem; overflow-wrap: anywhere; }
+.editor-object-window:not([data-screen-open]) :is(#media-object-back, #media-object-screen-report),
+.editor-object-window[data-screen-open] .editor-object-details >
+  :not(#media-object-time, #media-object-back, #media-object-screen-report) { display: none; }
+#media-object-back { margin-block: .35rem; }
+#media-frame-inspection-image {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  max-block-size: 42dvh;
+  object-fit: contain;
+  margin-block: .5rem;
+}
+.media-frame-details .frame-detail-button {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 24px;
+  padding: .12rem .25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: inherit;
+}
+.media-frame-details dt, .media-frame-details .frame-detail-button { cursor: pointer; }
+.media-frame-details dl > div:hover .frame-detail-button { background: #ffffff14; text-decoration: underline; }
+.media-frame-details .frame-detail-button:focus-visible { outline-offset: -2px; }
+.media-frame-details :is([data-frame-kind="speech"], [data-frame-kind="text"]) .frame-detail-button {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  .media-frame-details .frame-detail-button { min-block-size: 44px; }
 }

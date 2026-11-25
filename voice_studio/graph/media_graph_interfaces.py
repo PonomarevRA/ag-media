@@ -147,6 +147,12 @@ def add_interface_observations(graph, stamp, rows, box_coordinates):
         if normalized is None:
             continue
         region, elements, connections = normalized
+        end = candidate.get("screenStateEndMs")
+        if region.get("panelType") and type(end) is int and stamp < end <= graph.duration:
+            region["screenStateEndMs"] = end
+            state_region = clean_region({**candidate, "connections": (),
+                                         "elements": candidate.get("screenStateElements")}, box_coordinates)
+            region["screenStateElements"] = state_region[1] if state_region else []
         reading = region.get("readingTimeMs")
         if reading is not None and not 0 <= reading < stamp:
             region.pop("readingTimeMs")
@@ -193,8 +199,9 @@ def add_screen_child(graph, node_id, kind, label, stamp, data, region_id, frame_
 def restore_interface_observation(frame, regions, node_id, kind, data):
     """Rebuild the source report contract from a published graph's ordered scene rows."""
     if kind == "screen_region":
-        region = {field: data[field] for field in ("box", "basis", "deviceLabel", "panelType", "changeAssisted", "readingTimeMs",
-                                                     "regionKind", "detailBasis", "previousStateMs", "lastObservedMs")
+        region = {field: data[field] for field in (
+            "box", "basis", "deviceLabel", "panelType", "changeAssisted", "readingTimeMs",
+            "regionKind", "detailBasis", "previousStateMs", "lastObservedMs", "screenStateEndMs", "screenStateElements")
                   if field in data}
         region.update(elements=[], connections=[])
         frame.setdefault("interfaces", []).append(region)

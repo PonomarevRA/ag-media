@@ -728,6 +728,8 @@ button.studio-icon.studio-quiet-action:hover:not(:disabled) {
 .storage-groups div { padding: .55rem .7rem; background: var(--surface-alt); min-inline-size: 0; }
 .storage-groups dt, .storage-item strong, #storage-confirm-detail { overflow-wrap: anywhere; }
 .storage-groups dd { margin: .2rem 0 0; font-weight: 650; font-variant-numeric: tabular-nums; }
+.storage-cleanup { margin-block-start: .75rem; }
+.storage-cleanup p { margin: 0; }
 .storage-list { margin: 0; padding: 0; list-style: none; }
 .storage-item {
   border-block-start: 1px solid var(--line);
@@ -742,7 +744,7 @@ button.studio-icon.studio-quiet-action:hover:not(:disabled) {
 .storage-item span { display: block; }
 .storage-item[data-candidate="true"] { padding-inline-start: .55rem; border-inline-start: 3px solid var(--accent); }
 .storage-item-hint { font-weight: 650; }
-#storage-dialog { max-inline-size: min(28rem, calc(100vw - 1rem)); min-inline-size: 0; }
+#storage-dialog { box-sizing: border-box; max-inline-size: min(28rem, calc(100vw - 1rem)); min-inline-size: 0; }
 .storage-page :is(h1, h2, p, label, button) { overflow-wrap: anywhere; }
 .storage-toolbar :is(h2, label, button) { min-inline-size: 0; max-inline-size: 100%; }
 

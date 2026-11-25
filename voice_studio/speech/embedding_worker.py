@@ -24,7 +24,7 @@ class EmbeddingWorkerError(subprocess.SubprocessError):
 
 
 class EmbeddingWorkerDisconnected(EmbeddingWorkerError):
-    """The native transport closed before returning the requested result."""
+    """The process or pipe closed before a correlated reply was available."""
 
 
 @dataclass
@@ -49,7 +49,8 @@ def _stdout_reader(child):
             child.responses.put_nowait(line)
     except (OSError, ValueError, Full) as error:
         try:
-            child.responses.put_nowait(EmbeddingWorkerError(str(error)))
+            failure = EmbeddingWorkerError if isinstance(error, Full) else EmbeddingWorkerDisconnected
+            child.responses.put_nowait(failure(str(error)))
         except Full:
             pass
 
@@ -246,8 +247,7 @@ class EmbeddingWorker:
             child.process.stdin.flush()
         except (OSError, ValueError) as error:
             try:
-                failure = EmbeddingWorkerDisconnected if isinstance(error, BrokenPipeError) else EmbeddingWorkerError
-                child.responses.put_nowait(failure(str(error)))
+                child.responses.put_nowait(EmbeddingWorkerDisconnected(str(error)))
             except Full:
                 pass
 

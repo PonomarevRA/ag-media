@@ -8,6 +8,7 @@ from array import array
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 import json
+from math import isfinite
 import os
 from pathlib import Path
 import subprocess
@@ -64,11 +65,14 @@ def extract_embeddings(wav, spans):
         identity = {'signature': file_signature(weights), 'threads': 2,
                     'configuration': current_snapshot().fingerprint(['speech.embedding', 'speech.embedding-resource'])}
         timeout = float(os.environ.get('VOICE_SPEAKER_EMBEDDING_TIMEOUT_SECONDS', '35'))
+        if not isfinite(timeout) or timeout <= 0:
+            raise ValueError('Embedding timeout must be finite and positive')
         worker = get_worker()
         deadline = monotonic() + timeout
         try:
             return worker.extract(wav, spans, weights, identity, timeout=timeout)
         except EmbeddingWorkerDisconnected:
+            # One replacement after a lost process, within the original budget.
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise
@@ -236,23 +240,24 @@ def review_speakers(result, wav, audio_start_ms, *, alternate=True):
     known_faces = [profile.face for profile in profiles.values() if profile.face is not None]
     needs_alternate = alternate and len(set(known_faces)) < len(known_faces)
     reviewed = []
+    warning = None
     if needs_alternate:
         try:
             turns = detect_turns(wav, None, merge_similar=True)
             reviewed = review_visible_cues(result["segments"], profiles, turns, audio_start_ms, aliases)
-        except ValueError:
+        except (ValueError, subprocess.SubprocessError):
             needs_alternate = False
+            warning = "Повторная диаризация недоступна. Остальные проверки выполнены."
     restored = review_short_replies(cues, replies, wav, audio_start_ms, extract_embeddings)
-    try:
-        voiced = review_voiced_windows(cues, timeline, result.get("speechOverlaps", []),
-                                      wav, audio_start_ms, extract_embeddings)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        voiced = []
-    if not any(embeddings.values()) and not restored and not voiced:
+    voiced = review_voiced_windows(cues, timeline, result.get("speechOverlaps", []),
+                                  wav, audio_start_ms, extract_embeddings)
+    if not warning and not any(embeddings.values()) and not restored and not voiced:
         return skip_review(result, "Дополнительная проверка не подтвердила смену говорящего")
     report = {"version": REVIEW_VERSION, "analyzedClusters": len(profiles),
               "voiceSamples": sum(len(profile.samples) for profile in profiles.values()), "merges": merges,
               "secondClustering": needs_alternate, "cueDecisions": reviewed, "shortReplyDecisions": restored, "voicedWindowDecisions": voiced}
+    if warning:
+        report.update(status="partial", reason=warning)
     result["speakerReview"] = report
     return report
 

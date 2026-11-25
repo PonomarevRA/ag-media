@@ -22,7 +22,8 @@ from voice_studio.graph.media_stage_selection import StageSelection
 
 LAYER_ENV = {
     "object_review": (),
-    "voice": (),
+    "voice": ("VOICE_SPEAKER_EMBEDDING_MODE", "VOICE_SPEAKER_EMBEDDING_TIMEOUT_SECONDS"),
+    "speaker-review": ("VOICE_SPEAKER_EMBEDDING_MODE", "VOICE_SPEAKER_EMBEDDING_TIMEOUT_SECONDS"),
     "speech": ("VOICE_ASR_PARALLEL",),
     "audio": ("VOICE_AUDIO_CLASSIFIER", "VOICE_PITCH_BACKEND", "VOICE_SOUND_STREAM_CHUNK_MS"),
     "visual": ("VOICE_YUNET_SAMPLING", "VOICE_PERSON_FACE_PILOT", "VOICE_CLOTHING_PROFILE"),
@@ -53,11 +54,13 @@ class IncrementalStages:
             revolver.counts["reused"] -= 1
         self.manifest = manifest if manifest and isinstance(manifest.get("layers"), dict) else {"layers": {}}
 
-    def run(self, name, settings, upstream, operation, valid, *, publish=None, emit=None, fallback=None):
+    def run(self, name, settings, upstream, operation, valid, *, publish=None, emit=None, fallback=None,
+            selection_layer=None):
         """Load a validated completed result or run the identical production operation.
 
         The upstream value must contain every measured input consumed by this stage.
         Failed or unavailable results stay usable by callers but never become cache hits.
+        An internal stage may share another layer's selection and force policy.
         """
         started = perf_counter()
         environment = {key: os.environ.get(key) for key in LAYER_ENV[name]}
@@ -74,14 +77,15 @@ class IncrementalStages:
         pointer = self.manifest["layers"].get(name)
         if not isinstance(pointer, dict) or not isinstance(pointer.get("key"), str) or len(pointer["key"]) != 64 or any(character not in "0123456789abcdef" for character in pointer["key"]):
             pointer = None
-        active = self.selection.runs(name)
+        layer = selection_layer or name
+        active = self.selection.runs(layer)
         input_hash = result_fingerprint([self.revision, environment, upstream])
-        dependency_only = self.selection.requested is not None and name not in self.selection.requested
+        dependency_only = self.selection.requested is not None and layer not in self.selection.requested
         if (not active or dependency_only) and pointer and pointer.get("inputHash") == input_hash:
             key = pointer["key"]
             settings = pointer.get("settings", settings)
         checkpoint = self.revolver.child(name).child(key)
-        forced = name in self.selection.forced
+        forced = layer in self.selection.forced
         saved = None if forced else checkpoint.load("complete", required=("result", "digest"))
         reused = False
         if saved and isinstance(saved["result"], dict):
@@ -94,9 +98,11 @@ class IncrementalStages:
         if reused:
             result = saved["result"]
         elif not active:
-            self.selection.mark(name, "invalidated" if pointer else "pending")
+            state = "invalidated" if pointer else "pending"
+            if layer == name:
+                self.selection.mark(name, state)
             if emit is not None:
-                emit({"cacheLayer": name, "state": self.selection.states[name]["state"], "selected": False})
+                emit({"cacheLayer": name, "state": state, "selected": False})
             return deepcopy(fallback) if fallback is not None else {}
         else:
             # A dependency pointer can be corrupt: its old settings describe only
@@ -110,7 +116,8 @@ class IncrementalStages:
             if valid(result):
                 checkpoint.save("complete", {"result": result, "digest": result_fingerprint(result)})
         complete = valid(result)
-        self.selection.mark(name, "reused" if reused else ("done" if complete else "failed"))
+        if layer == name:
+            self.selection.mark(name, "reused" if reused else ("done" if complete else "failed"))
         if complete:
             self.manifest["layers"][name] = {"key": key, "inputHash": input_hash, "settings": settings}
             self.revolver.save("layer-pointers", self.manifest)
@@ -237,7 +244,8 @@ def scene_inputs(evidence):
 def replay_progress(name, settings, result, emit, elapsed):
     """Replay actual UI stage IDs; a cache read never pretends FFmpeg decoded PCM."""
     names = {"object_review": ["object-review"], "audio": ["audio-layers"], "scene": ["scene"], "people": ["person-layer"], "voice": ["voice-profiles"],
-             "visual": ["light-asd", "yunet", "speaker-review"],
+             "speaker-review": ["speaker-review"],
+             "visual": ["light-asd", "yunet"],
              "speech": ["whisper", "dialogue-pauses"]}[name]
     if name == "speech":
         emit({"durationMs": result.get("durationMs", 0)})
@@ -245,10 +253,12 @@ def replay_progress(name, settings, result, emit, elapsed):
             names.append("diarization")
         if result.get("recognitionRecovery"):
             names.append("whisper-recovery")
+    if name == "visual" and not settings.get("separateSpeakerReview"):
+        names.append("speaker-review")
     for stage_name in names:
         state = "done"
         reason = None
-        if name == "visual":
+        if name in ("visual", "speaker-review"):
             measured = (result.get("videoEvidence") or {}).get("stages", {})
             if stage_name == "speaker-review":
                 review = result.get("speakerReview") or {}

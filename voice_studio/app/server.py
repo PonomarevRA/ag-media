@@ -21,7 +21,7 @@ from voice_studio.synthesis.engines import MAX_AUDIO, ROOT
 from voice_studio.audio.audio_processing import process_wave
 from voice_studio.speech.asr_context_graph import VERSION as ASR_CONTEXT_VERSION, corrections
 from voice_studio.speech.recognition import recognize
-from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_LANGUAGES
+from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_LANGUAGES, WHISPER_LANGUAGES
 from voice_studio.speech.media_transcript import FORMATS, MAX_MEDIA_BYTES, compatibility_preview, transcribe_media, transcribe_stream
 from voice_studio.app.http_transport import LoopbackRequestHandler
 from voice_studio.app.media_pipeline import transcribe_uploaded_media
@@ -151,6 +151,8 @@ class Handler(LoopbackRequestHandler):
                 self.reply(200, mod_operation("list"))
             elif url.path == "/api/storage":
                 self.reply(200, self.server.storage.inventory())
+            elif url.path == "/api/transcription-languages":
+                self.reply(200, {"languages": WHISPER_LANGUAGES})
             elif url.path == "/api/state":
                 self.reply(200, self.server.studio.state(self.language(parse_qs(url.query))))
             elif url.path in {"/api/transcript-materials", "/api/transcript-material"}:
@@ -512,6 +514,8 @@ class Handler(LoopbackRequestHandler):
                 raise ValueError("Ожидался JSON-объект.")
             if url.path == "/api/storage-delete":
                 self.reply(200, self.server.storage.remove(data.get("id"), data.get("revision")))
+            elif url.path == "/api/storage-clean":
+                self.reply(200, self.server.storage.clean_caches(data.get("revision")))
             elif url.path == "/api/graph-read":
                 self.reply(200, read_graph(studio.root / "media-graphs", data))
             elif url.path == "/api/transcribe-stream":
