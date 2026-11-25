@@ -126,6 +126,11 @@ export function mountMediaAnalysis(find) {
     const active = pending.filter(row => row.state === "running");
     const current = active[0];
     if (!current) {
+      const waiting = pending.find(row => row.waitingReason);
+      if (waiting) {
+        status.textContent = [waiting.label.textContent, apiText(waiting.waitingReason)].join(" · ");
+        return;
+      }
       status.textContent = pending.length ? uiText("Подготовка следующего этапа…") : uiText("Собираем результат…");
       return;
     }
@@ -176,6 +181,8 @@ export function mountMediaAnalysis(find) {
     const row = rows.get(event.stage);
     if (row) {
       row.state = event.state;
+      row.waitingReason = event.state === "queued" ? event.reason : undefined;
+      if (event.state === "queued") row.started = undefined;
       row.warning = row.id === "person-layer" && event.state === "skipped" && Boolean(event.reason);
       row.line.dataset.state = event.state;
       row.line.dataset.cache = event.cacheHit === true ? "hit" : cacheModes.get(event.stage) || "none";

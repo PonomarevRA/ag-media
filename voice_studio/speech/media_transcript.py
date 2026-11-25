@@ -296,7 +296,7 @@ def attach_person_evidence(source, work, evidence, *, body, gaze, emit=ignore_pr
             return
         plan = layer_plan(body=body, gaze=gaze)
         try:
-            layer = preview_people(source, timeline, work, FORMATS, plan)
+            layer = preview_people(source, timeline, work, FORMATS, plan, emit=emit)
         except (BrokenPipeError, ConnectionResetError):
             raise
         except Exception:
@@ -315,7 +315,7 @@ def collect_scene(source, work, evidence, object_sampling, emit, publish_mosaic)
     """Measure one independent scene pass and report its real result status."""
     with stage(emit, "scene") as progress:
         result = review_scene(source, work, FORMATS, evidence, object_sampling=object_sampling,
-                              publish_mosaic=publish_mosaic)
+                              publish_mosaic=publish_mosaic, emit=emit)
         if result["status"] != "ok":
             progress["state"] = "failed" if result["status"] == "failed" else "skipped"
             if reason := result.get("reason"):

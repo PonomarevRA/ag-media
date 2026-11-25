@@ -24,6 +24,22 @@ def serialized_progress(emit):
 
 
 @contextmanager
+def queued_stage_slot(slot, emit, name, *, already_started=False):
+    """Wait for a bounded video worker to finish and expose contention as progress."""
+    queued = not slot.acquire(blocking=False)
+    if queued:
+        emit({"stage": name, "state": "queued",
+              "reason": "Ждём завершения другого этапа анализа видео."})
+        slot.acquire()
+    try:
+        if queued and already_started:
+            emit({"stage": name, "state": "running"})
+        yield
+    finally:
+        slot.release()
+
+
+@contextmanager
 def stage(emit, name):
     """Emit the start and outcome of one stage, including its measured wall time."""
     started = monotonic()

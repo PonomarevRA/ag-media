@@ -18,7 +18,7 @@ from voice_studio.vision.activity_worker_session import ActivityWorkerSession
 from voice_studio.vision.facial_expressions import finalize_expressions
 from voice_studio.vision.video_activity_chunks import STEP, ActivityTimeline, activity_windows
 
-from voice_studio.core.analysis_stages import MAX_ACTIVITY_CUES, ignore_progress, stage
+from voice_studio.core.analysis_stages import MAX_ACTIVITY_CUES, ignore_progress, queued_stage_slot, stage
 from voice_studio.synthesis.engines import ROOT, ffmpeg
 from voice_paths import dependency_path, model_path, temporary_directory
 
@@ -53,15 +53,10 @@ def review_video(source, wav, phrases, audio_start_ms, formats, *, emit=ignore_p
         result["stages"]["yunet"] = "unavailable"
         return result
 
-    if not VISUAL_SLOT.acquire(blocking=False):
-        result["stages"]["yunet"] = "busy"
-        return result
-    try:
+    with queued_stage_slot(VISUAL_SLOT, emit, "light-asd"):
         return collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit,
                                 duration_ms=duration_ms, video_end_ms=video_end_ms, publish=publish,
                                 people_count=people_count, people_origin=people_origin)
-    finally:
-        VISUAL_SLOT.release()
 
 
 def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit, *, duration_ms=None,

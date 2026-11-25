@@ -1,5 +1,6 @@
 """Plan local scene OCR and object recognition without re-running face detection."""
 
+from voice_studio.core.analysis_stages import ignore_progress, queued_stage_slot
 from voice_studio.core.process_usage import process_usage
 from voice_studio.mod_runtime import current_snapshot, model_provider, is_replacement
 from voice_studio.mods.errors import ModError
@@ -32,16 +33,14 @@ SCENE_FRAME = re.compile(r"^frame:(\d+)\s+pts:\S+\s+pts_time:(\S+)")
 
 @model_provider('vision.scene-batch', 'builtin.scene-batch')
 def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAULT_OBJECT_SAMPLING, window=None, colors_only=False,
-                 publish_mosaic=None):
+                 publish_mosaic=None, emit=ignore_progress):
     """Analyze the source or a graph partition, with a thumbnail-only path for shot colors."""
     source = Path(source).resolve()
     if probe_video(source, formats) is False:
         return {"status": "no-video"}
-    if not VISUAL_SLOT.acquire(blocking=False):
-        return {"status": "busy"}
-    started = perf_counter()
     try:
-        with temporary_directory() as folder:
+        with queued_stage_slot(VISUAL_SLOT, emit, "scene", already_started=True), temporary_directory() as folder:
+            started = perf_counter()
             root = Path(folder)
             evidence = evidence or {}
             inputs = ["-protocol_whitelist", "file,pipe", "-format_whitelist", formats]
@@ -99,11 +98,11 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             result["decodeMs"] = round((decoded - started) * 1000)
             result["elapsedMs"] = round((perf_counter() - started) * 1000)
             return result
+    except (BrokenPipeError, ConnectionResetError):
+        raise
     except (OSError, ValueError, subprocess.SubprocessError):
         logging.getLogger(__name__).exception("Scene analysis failed")
         return {"status": "failed", "reason": "Не удалось обработать сцену. Пересчитайте «Надписи, предметы и камера»."}
-    finally:
-        VISUAL_SLOT.release()
 
 
 def mosaic_markdown(page):

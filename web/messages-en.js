@@ -1095,6 +1095,7 @@ export default {
   "Анализ завершён за {0} с": "Analysis finished in {0} s",
   "Анализ завершён с замечаниями за {0} с": "Analysis finished with warnings in {0} s",
   "Подготовка следующего этапа…": "Preparing the next stage…",
+  "Ждём завершения другого этапа анализа видео.": "Waiting for another video analysis stage to finish.",
   "Собираем результат…": "Assembling results…",
   "Установите MediaPipe в разделе «Моды и модели».": "Install MediaPipe in Mods and models.",
   "Не удалось измерить фигуру и взгляд. Остальные этапы продолжатся.": "Body and gaze measurements failed. The remaining stages will continue.",

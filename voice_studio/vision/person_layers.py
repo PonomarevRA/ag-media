@@ -14,6 +14,7 @@ import sys
 from threading import BoundedSemaphore
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from voice_studio.core.analysis_stages import ignore_progress, queued_stage_slot
 from voice_studio.core.optional_runtime import runtime_environment, runtime_ready
 from voice_studio.core.worker_process import worker_command
 from voice_studio.synthesis.engines import ROOT, ffmpeg
@@ -115,9 +116,9 @@ def person_slot():
         SLOT.release()
 
 
-def preview_people(source, timeline, work, formats, plan):
+def preview_people(source, timeline, work, formats, plan, *, emit=ignore_progress):
     """Sample figure geometry and gaze up to the end of the available face timeline."""
-    with person_slot(), temporary_directory() as folder:
+    with queued_stage_slot(SLOT, emit, "person-layer", already_started=True), temporary_directory() as folder:
         folder = Path(folder)
         end = min(MAX_PREVIEW_MS, len(timeline["frames"]) * timeline["stepMs"])
         frames = select_frames(source, folder, 0, end, formats)
