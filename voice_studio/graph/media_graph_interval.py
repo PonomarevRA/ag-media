@@ -12,7 +12,7 @@ from voice_studio.graph.media_graph_store import describe_source
 MAX_INTERVAL_MS = 60_000
 DETAILS = {"compact": (8, 160, 4000), "full": (24, 600, 16000)}
 SECTIONS = {
-    "speech": ("utterance",),
+    "speech": ("utterance", "dialogue_draft"),
     "ocr": ("text_observation",),
     "events": ("shot", "frame_change", "camera_motion", "person_motion", "audio_music", "audio_background",
                "pause", "overlap", "person_count", "dialogue_issue"),
@@ -24,9 +24,11 @@ FACT_FIELDS = ("score", "confidence", "basis", "source", "box", "horizontal", "v
                "depth", "depthBasis", "role", "text", "count", "estimate", "overlapUnresolved",
                "speakerAssignment", "speakerBasis", "visualSpeakerBasis", "asrModel", "cutMs", "position",
                "rawSpeaker", "meaning", "notConfirmedError", "priority", "active", "outlineCoverage",
-               "contentDelta", "changedPixels", "notSpeechProbability", "geometryStatus", "panelPresence")
+               "contentDelta", "changedPixels", "notSpeechProbability", "geometryStatus", "panelPresence",
+               "cropAvailable", "regionKind", "detailBasis", "lastObservedMs", "previousStateMs")
 REFERENCE_RELATIONS = ("spoken_by", "participant", "raw_participant", "sample_of", "alias_of",
-                       "in_shot", "contained_in", "in_screen", "overlap_of", "matched_voice_profile", "in_panel")
+                       "in_shot", "contained_in", "in_screen", "overlap_of", "matched_voice_profile", "in_panel",
+                       "screen_evidence", "suggestion_for")
 REVIEW_SCORE = .5
 
 
@@ -112,6 +114,8 @@ def fact_item(db, row, start_ms, end_ms, label_limit, text_budget):
         clipped = clipped or shortened
         if value is not None:
             data[key] = value
+    if isinstance(facts.get("screenEvidence"), list):
+        data["screenEvidence"] = facts["screenEvidence"][:3]
     voice = facts.get("voiceProfileEvidence")
     if isinstance(voice, dict):
         evidence, shortened = voice_evidence(voice)

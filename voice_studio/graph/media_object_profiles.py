@@ -3,12 +3,13 @@
 from collections import defaultdict
 from itertools import combinations, product
 
-from voice_studio.graph.media_graph_objects import center, overlap, representative_sample
+from voice_studio.graph.media_graph_objects import box_coverage, center, overlap, representative_sample
 from voice_studio.graph.object_reappearance import reappearance_chains
-from voice_studio.graph.object_reconciliation import reconcile_object_groups, source_gallery
+from voice_studio.graph.object_reconciliation import color_conflict, reconcile_object_groups, source_gallery
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 
 MAX_LABEL_GAP_MS = 600
+TRANSPORT_LABELS = {"car", "truck", "bus", "airplane", "boat", "train"}
 
 
 def label_match(left, right, *, simultaneous):
@@ -20,6 +21,8 @@ def label_match(left, right, *, simultaneous):
         return False
     first, second = a["box"], b["box"]
     iou = overlap(first, second)
+    if iou >= .35 and color_conflict([left], [right]):
+        return False
     if not simultaneous:
         return iou >= .72
     scores = (a.get("score"), b.get("score"))
@@ -64,6 +67,21 @@ def appearance_match(left, right):
     return False
 
 
+def nested_transport(left, right):
+    """Detect a competing transport label whose smaller box repeatedly lies inside the larger one."""
+    labels = {left["label"].casefold(), right["label"].casefold()}
+    if len(labels) != 2 or not labels <= TRANSPORT_LABELS:
+        return False
+    boxes = (left["data"]["box"], right["data"]["box"])
+    inner, outer = sorted(boxes, key=lambda box: box[2] * box[3])
+    ratio = inner[2] * inner[3] / (outer[2] * outer[3])
+    u, v = center(inner)
+    x, y = center(outer)
+    return (.18 <= ratio <= .65 and box_coverage(inner, outer) >= .9
+            and abs(x - u) <= .27 * outer[2] and abs(y - v) <= .38 * outer[3]
+            and not color_conflict([left], [right]))
+
+
 def match_candidates(tracks):
     """Find unique track partners without comparing unrelated frames or shots."""
     shots = defaultdict(lambda: defaultdict(list))
@@ -72,6 +90,7 @@ def match_candidates(tracks):
             shots[shot][sample["startMs"]].append((key, sample))
     partners = defaultdict(set)
     visual_partners = defaultdict(set)
+    nested_support = defaultdict(set)
     for frames in shots.values():
         previous_stamp, previous = -MAX_LABEL_GAP_MS - 1, []
         for stamp, current in sorted(frames.items()):
@@ -85,10 +104,16 @@ def match_candidates(tracks):
                     if label_match(left, right, simultaneous=simultaneous):
                         partners[key].add(other)
                         partners[other].add(key)
+                    elif simultaneous and nested_transport(left, right):
+                        nested_support[tuple(sorted((key, other)))].add(stamp)
                     if not simultaneous and appearance_match(left, right):
                         visual_partners[key].add(other)
                         visual_partners[other].add(key)
             previous_stamp, previous = stamp, current
+    for (key, other), stamps in nested_support.items():
+        if len(stamps) >= 3:
+            partners[key].add(other)
+            partners[other].add(key)
     # Supplemental matches must never displace a partner already backed by geometry.
     geometric_tracks = set(partners)
     for key, others in visual_partners.items():
@@ -215,6 +240,9 @@ def add_object_profiles(graph, tracks, *, object_reconciliation=False):
             }
             if not data["objectReconciliation"]["acceptedLinks"] and len(parts) > 1:
                 data["basis"] = "reappearance-preserved-baseline"
+            if any(link["basis"] == "measured-vehicle-body"
+                   for link in data["objectReconciliation"]["acceptedLinks"]):
+                data["basis"] = "reappearance-measured-vehicle-body"
             witnesses = []
             for link in data["objectReconciliation"]["acceptedLinks"]:
                 witnesses.extend((link["fromObservationId"], link["toObservationId"]))
@@ -232,12 +260,17 @@ def add_object_profiles(graph, tracks, *, object_reconciliation=False):
         end = max(node["endMs"] for node in members)
         data["labelEvidence"] = stable_label_evidence(labels, identity_evidence or samples, data.get("interfaceEvidence"))
         name = data.get("interfaceEvidence", {}).get("displayLabel", data["labelEvidence"]["selectedLabel"])
+        data["identityId"] = profile_id
+        data["displayLabel"] = name
+        data["hasLabelConflict"] = len({label["label"].casefold() for label in labels}) > 1
         profile = graph.node(profile_id, "object_profile", name, (start, end), data)
         for area in shots:
             graph.connect(profile_id, "in_shot", area)
         for member in members:
             member["data"]["profileId"] = profile_id
             graph.connect(member["id"], "part_of_profile", profile_id)
+            for sample in samples_by_track[member["id"]]:
+                sample["data"]["identityId"] = profile_id
         profiles.append(profile)
     attach_object_text(graph, tracks)
     return profiles

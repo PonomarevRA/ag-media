@@ -393,7 +393,8 @@ class MediaGraphStore:
                         panels.append((frame, data["box"], row["label"]))
                         continue
                     evidence = {name: data[name] for name in ("box", "score", "basis", "detailBasis", "objectPalette",
-                                                             "objectMatches", "objectPartMatches") if name in data}
+                                                             "objectMatches", "objectPartMatches",
+                                                             "vehicleBodyColor") if name in data}
                     item = {"label": row["label"], **evidence}
                     if row["kind"] == "object_alias":
                         aliases.append((frame, data["sourceIndex"], item))
@@ -576,7 +577,7 @@ def object_sample_at(db, node_id, stamp):
 def mark_frame_target(db, context, node_id, stamp):
     """Highlight the selected timed object or UI evidence distinctly in the source frame."""
     item = db.execute("""
-        SELECT id, label, data FROM nodes WHERE id=? AND start_ms=? AND kind IN ('object_alias', 'frame_change', ?, ?, ?)
+        SELECT id, label, data FROM nodes WHERE id=? AND start_ms=? AND kind IN ('object_alias', 'frame_change', 'text_observation', ?, ?, ?)
     """, (node_id, stamp, *INTERFACE_KINDS)).fetchone()
     if item is None:
         item = object_sample_at(db, node_id, stamp)
@@ -588,7 +589,7 @@ def mark_frame_target(db, context, node_id, stamp):
     if segment := data.get("segment"):
         target["segment"] = segment
     context["boxes"] = [target] + [
-        mark for mark in context["boxes"] if not (mark["kind"] == "object" and mark["box"] == box)]
+        mark for mark in context["boxes"] if not (mark["box"] == box and mark["label"] == item["label"])]
     context["targetObservationId"] = item["id"]
 
 

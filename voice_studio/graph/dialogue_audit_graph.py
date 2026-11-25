@@ -43,3 +43,22 @@ def add_dialogue_review(graph, report, source_interval):
         data['cueIndices'] = [value for value in evidence.get('cueIndices', [])[:128] if type(value) is int]
         graph.node(key, 'dialogue_issue', '; '.join(reasons), bounds, data)
         graph.link_shots(key, *bounds)
+
+    repairs = audit.get('repairs')
+    drafts = repairs.get('suggestions') if isinstance(repairs, dict) else None
+    for index, draft in enumerate(drafts[:1200] if isinstance(drafts, list) else ()):
+        if not isinstance(draft, dict):
+            continue
+        bounds = source_interval(draft, graph.duration)
+        text = draft.get('text')
+        issue_id = draft.get('candidateId')
+        if not bounds or not isinstance(text, str) or not isinstance(issue_id, str):
+            continue
+        issue = 'dialogue_issue:' + issue_id[:80]
+        if issue not in graph.nodes or draft.get('acceptance') != 'review-required':
+            continue
+        key = f'dialogue_draft:{bounds[0]}:{index}'
+        graph.node(key, 'dialogue_draft', text[:512], bounds,
+                   {'meaning': 'review-required-asr-draft', 'asrModel': str(draft.get('model', ''))[:24]})
+        graph.connect(key, 'suggestion_for', issue)
+        graph.link_shots(key, *bounds)

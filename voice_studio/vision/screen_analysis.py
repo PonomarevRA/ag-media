@@ -18,6 +18,7 @@ from voice_studio.vision.scene_sampling import evenly_spaced
 from voice_studio.vision.screen_layout import device_regions, outlined_text_regions
 from voice_studio.vision.screen_ui import analyze_interface
 from voice_studio.vision.screen_scroll import read_scroll_pages
+from voice_studio.vision.screen_regions import ScreenRegionStates
 from voice_paths import temporary_directory
 
 MAX_SCREEN_CROPS = 24
@@ -152,12 +153,14 @@ class ScreenAnalysis:
         self.panel_samples = defaultdict(list)
         self.history = {}
         self.split_probe = SplitPanelProbe()
+        self.detail_states = ScreenRegionStates()
 
     def sample(self, image, path, sample, objects):
         """Look for device crops and split-screen panels on already sampled frames."""
         regions = device_regions(objects)
         panel = self.split_probe.sample(image, sample) if "changeBands" in sample else None
         panel = panel or side_panel(image)
+        self.detail_states.sample(image, sample, panel)
         if panel:
             # A detected handset can appear beside a separate screen recording.
             regions = [panel, *[region for region in regions if iou(panel["box"], region["box"]) < .65]]

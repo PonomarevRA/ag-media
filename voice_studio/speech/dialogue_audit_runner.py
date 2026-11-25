@@ -9,6 +9,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from tempfile import TemporaryDirectory, TemporaryFile
@@ -20,7 +21,8 @@ from voice_studio.core.media_resources import stage_threads
 from voice_studio.speech.dialogue_audit import AuditOptions, stable_hash
 from voice_studio.speech.native_turn_bounds import audit_native_dialogue
 
-RUNNER_VERSION = '1.1.2'
+RUNNER_VERSION = '1.2.1'
+ASR_ERRORS = (ValueError, OSError, subprocess.SubprocessError, wave.Error)
 
 
 class AuditCancelled(Exception):
@@ -123,16 +125,50 @@ def crop_pcm(source, target, start, end):
     return rms
 
 
+def read_asr_json(path, output_flag):
+    """Recover timed segments in-place only when all bad bytes were in token details."""
+    data = path.read_bytes()
+    try:
+        return json.loads(data.decode('utf-8'))
+    except UnicodeDecodeError:
+        if output_flag != '-ojf':
+            raise
+        candidate = json.loads(data.decode('utf-8', errors='replace'))
+        rows = candidate.get('transcription') if isinstance(candidate, dict) else None
+        if not isinstance(rows, list) or not rows:
+            raise
+        dropped = False
+        for row in rows:
+            if not isinstance(row, dict):
+                raise
+            details = row.pop('tokens', None)
+            if details and '\ufffd' in json.dumps(details, ensure_ascii=False):
+                dropped = True
+        if not dropped or '\ufffd' in json.dumps(candidate, ensure_ascii=False):
+            raise
+        return {**candidate, 'outputFormat': 'segments-only'}
+
+
 def decode_local(wav, output, language, model, check, *, threads=None):
-    """Run installed Whisper only, killing the child promptly on timeout/cancel."""
+    """Capture timed segments, falling back to segment-only JSON after a format failure."""
+    try:
+        return decode_json(wav, output, language, model, check, threads=threads, output_flag='-ojf')
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raw = decode_json(wav, output, language, model, check, threads=threads, output_flag='-oj')
+        return {**raw, 'outputFormat': 'segments-only'}
+
+
+def decode_json(wav, output, language, model, check, *, threads, output_flag):
+    """Execute one output mode under the installed Whisper lock and shared deadline."""
     from voice_studio.speech.recognition import LOCK, current_cli
     threads = stage_threads(4) if threads is None else threads
-    command = [str(current_cli()), '-m', str(model), '-l', language, '-ojf', '-mc', '0',
+    command = [str(current_cli()), '-m', str(model), '-l', language, output_flag, '-mc', '0',
                '-bs', '1', '-bo', '1', '-nf', '-ng', '-t', str(threads), '-f', str(wav), '-of', str(output)]
     while not LOCK.acquire(timeout=.1):
         check()
     try:
         check()
+        output.with_suffix('.json').unlink(missing_ok=True)
         # A file avoids a full stderr pipe blocking an otherwise bounded child.
         with TemporaryFile() as errors, subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=errors) as process:
             try:
@@ -150,7 +186,7 @@ def decode_local(wav, output, language, model, check, *, threads=None):
                     process.kill()
                     process.communicate()
         check()
-        return read_json(output.with_suffix('.json'))
+        return read_asr_json(output.with_suffix('.json'), output_flag)
     finally:
         LOCK.release()
 
@@ -177,32 +213,102 @@ def projected_suggestions(raw, window):
     return suggestions
 
 
-def retry_inventory(inventory, source, work, model, language, max_windows, max_audio_ms, check, emit, *, threads=None):
-    """Decode budgeted single-label snippets; silence and failure remain explicit."""
+def window_quality(raw, duration_ms):
+    """Flag malformed times and repetitive output before projecting onto the source clock."""
+    rows = raw.get('transcription') if isinstance(raw, dict) else None
+    if not isinstance(rows, list):
+        return 'invalid-segments'
+    if not rows:
+        return 'empty-transcript'
+    for row in rows:
+        offsets = row.get('offsets') if isinstance(row, dict) else None
+        if not isinstance(offsets, dict):
+            return 'invalid-segment-offsets'
+        left, right = offsets.get('from'), offsets.get('to')
+        if (type(left) is not int or type(right) is not int or left < -100
+                or right <= left or left >= duration_ms or right > duration_ms + 120):
+            return 'segment-outside-window'
+        text = row.get('text')
+        if not isinstance(text, str) or '\ufffd' in text:
+            return 'invalid-segment-text'
+        words = text.casefold().split()
+        if re.search(r'(.)\1{9}', text):
+            return 'repetitive-transcript'
+        for size in range(1, min(5, len(words) // 5) + 1):
+            repeat = 0
+            for offset in range(size, len(words) - size + 1):
+                if words[offset:offset + size] == words[offset - size:offset]:
+                    repeat += 1
+                    if repeat >= 4 * size:
+                        return 'repetitive-transcript'
+                else:
+                    repeat = 0
+    return None if any(row['text'].strip() for row in rows) else 'empty-transcript'
+
+
+def review_window(wav, output, language, models, duration_ms, check, *, threads):
+    """Exhaust at most Small and Turbo for one window, retaining attempts and raw evidence."""
+    attempts = []
+    for label, model in models:
+        try:
+            raw = decode_local(wav, output, language, model, check, threads=threads)
+        except TimeoutError:
+            raise
+        except ASR_ERRORS as error:
+            attempts.append({'model': label, 'reason': 'decode-failed', 'error': str(error)[:300]})
+            continue
+        reason = window_quality(raw, duration_ms)
+        if not reason:
+            attempts.append({'model': label, 'format': raw.get('outputFormat', 'full-json')})
+            return raw, attempts
+        attempts.append({'model': label, 'reason': reason, 'format': raw.get('outputFormat', 'full-json'),
+                         'rawRejectedASR': raw})
+    return None, attempts
+
+
+def retry_inventory(inventory, source, work, models, language, max_windows, max_audio_ms, check, emit, *, threads=None):
+    """Decode independent source-clock windows and retain all completed suggestions."""
     windows = snippet_plan(inventory, max_windows, max_audio_ms)
-    repairs = {'status': 'complete', 'suggestions': [], 'windows': [],
-               'budget': {'maxWindows': max_windows, 'maxAudioMs': max_audio_ms,
-                          'plannedWindows': len(windows),
-                          'plannedAudioMs': sum(row['endMs'] - row['startMs'] for row in windows),
-                          'decodedWindows': 0, 'decodedAudioMs': 0}}
+    budget = {'maxWindows': max_windows, 'maxAudioMs': max_audio_ms,
+              'plannedWindows': len(windows), 'plannedAudioMs': sum(row['endMs'] - row['startMs'] for row in windows),
+              'decodedWindows': 0, 'decodedAudioMs': 0, 'turboWindows': 0, 'failedWindows': 0}
+    repairs = {'status': 'complete', 'suggestions': [], 'windows': [], 'budget': budget}
     inventory['repairs'] = repairs
     for index, window in enumerate(windows):
         check()
         wav, output = work / f'{index}.wav', work / f'{index}-asr'
-        rms = crop_pcm(source, wav, window['startMs'], window['endMs'])
-        evidence = {**window, 'pcmRms': round(rms, 2)}
+        duration = window['endMs'] - window['startMs']
+        evidence = dict(window)
         repairs['windows'].append(evidence)
-        if rms < 80:
-            evidence['status'] = 'silence-pruned'
-            continue
-        raw = decode_local(wav, output, language, model, check, threads=threads)
-        # Store the native result independently of editable suggestions. In
-        # particular t_dtw=-1 is retained as-is and never promoted to alignment.
-        evidence.update(status='decoded', rawASR=raw)
-        repairs['suggestions'].extend(projected_suggestions(raw, window))
-        repairs['budget']['decodedWindows'] += 1
-        repairs['budget']['decodedAudioMs'] += window['endMs'] - window['startMs']
+        try:
+            rms = crop_pcm(source, wav, window['startMs'], window['endMs'])
+            evidence['pcmRms'] = round(rms, 2)
+            if rms < 80:
+                evidence['status'] = 'silence-pruned'
+            else:
+                raw, attempts = review_window(wav, output, language, models, duration, check, threads=threads)
+                evidence['attempts'] = attempts
+                if len(attempts) > 1:
+                    budget['turboWindows'] += 1
+                if raw is None:
+                    evidence['status'] = 'failed'
+                    budget['failedWindows'] += 1
+                else:
+                    evidence.update(status='decoded', rawASR=raw, model=attempts[-1]['model'])
+                    suggestions = projected_suggestions(raw, window)
+                    for suggestion in suggestions:
+                        suggestion['model'] = evidence['model']
+                    repairs['suggestions'].extend(suggestions)
+                    budget['decodedWindows'] += 1
+                    budget['decodedAudioMs'] += duration
+        except TimeoutError:
+            raise
+        except ASR_ERRORS as error:
+            evidence.update(status='failed', error=str(error)[:300])
+            budget['failedWindows'] += 1
         emit({'stage': 'dialogue-audit-asr', 'windowsDone': index + 1, 'windowsTotal': len(windows)})
+    if budget['failedWindows']:
+        repairs['status'] = 'partial' if budget['decodedWindows'] else 'failed'
     return repairs
 
 
@@ -271,13 +377,17 @@ def run_audit(report_path, turns_path, source_path, output_dir, *, visual_path=N
     run_options = {'rerun': rerun, 'maxWindows': max_windows, 'maxAudioMs': max_audio_ms,
                    'timeoutSeconds': timeout_seconds, 'runnerVersion': RUNNER_VERSION,
                    'effectiveThreads': stage_threads(4) if rerun else None}
-    model = None
+    models = []
     if rerun:
-        from voice_studio.speech.recognition import SMALL_MODEL, current_cli, ready
+        from voice_studio.speech.recognition import RECOVERY_MODEL, SMALL_MODEL, current_cli, ready
         model = Path(model_path) if model_path else SMALL_MODEL
         if not ready(model):
             raise ValueError('installed local Whisper executable/model unavailable; no download attempted')
+        models.append(('custom' if model_path else 'small', model))
         run_options['model'] = {'path': str(model.resolve()), 'sha256': file_hash(model, check)}
+        if RECOVERY_MODEL.resolve() != model.resolve() and ready(RECOVERY_MODEL):
+            models.append(('turbo', RECOVERY_MODEL))
+            run_options['recoveryModel'] = {'path': str(RECOVERY_MODEL.resolve()), 'sha256': file_hash(RECOVERY_MODEL, check)}
         run_options['executableSha256'] = file_hash(current_cli(), check)
         run_options['decodeOptions'] = ['-ojf', '-mc', '0', '-bs', '1', '-bo', '1', '-nf', '-ng', '-t', str(run_options['effectiveThreads'])]
     run_key = stable_hash({'inventoryKey': inventory['cacheKey'], 'runOptions': run_options})
@@ -304,8 +414,9 @@ def run_audit(report_path, turns_path, source_path, output_dir, *, visual_path=N
     try:
         if rerun:
             with TemporaryDirectory(prefix='dialogue-audit-') as folder:
-                retry_inventory(inventory, source_path, Path(folder), model, report.get('language', 'auto'),
-                                max_windows, max_audio_ms, check, emit, threads=run_options['effectiveThreads'])
+                repairs = retry_inventory(inventory, source_path, Path(folder), models, report.get('language', 'auto'),
+                                          max_windows, max_audio_ms, check, emit, threads=run_options['effectiveThreads'])
+                status = repairs['status']
         check()
     except (AuditCancelled, TimeoutError, ValueError, OSError, subprocess.SubprocessError) as error:
         status = 'failed'

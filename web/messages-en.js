@@ -67,6 +67,8 @@ export default {
   "Граница фразы далеко от речи": "Cue boundary is far from measured speech",
   "Голос не привязан": "Voice is unresolved",
   "Измеренная речь без текста": "Measured speech without text",
+  "Исходная реплика": "Original utterance",
+  "Часть отрезков не удалось перепроверить. Готовые варианты доступны.": "Some windows could not be rechecked. Available drafts are shown.",
   "Варианты ASR · требуют проверки": "ASR drafts · review required",
   "Для проверки нужны измеренные голосовые интервалы.": "Measured voice intervals are required.",
   "Кандидаты требуют проверки. Исходная расшифровка сохранена.": "Candidates need review. The original transcript is preserved.",

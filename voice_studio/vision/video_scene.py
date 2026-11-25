@@ -200,17 +200,20 @@ def frame_selection(plan):
     return "+".join(terms)
 
 
-def decode_samples(inputs, folder, plan, *, thumbnails=False, timeout=900):
+def decode_samples(inputs, folder, plan, *, thumbnails=False, native=False, timeout=900):
     """Extract only the planned frames, retaining detail for small background text."""
     expression = frame_selection(plan)
     limit = 48 if thumbnails else 1920
-    filters = (f"select='{expression}',scale='min({limit},iw)':'min({limit},ih)':"
-               "force_original_aspect_ratio=decrease")
+    filters = f"select='{expression}'"
+    if not native:
+        filters += f",scale='min({limit},iw)':'min({limit},ih)':force_original_aspect_ratio=decrease"
     filter_file = folder / "frames.filter"
     filter_file.write_text(filters, encoding="utf-8")
+    encoding = ["-pix_fmt", "rgb24"] if native else ["-q:v", "3"]
+    output = "%04d.png" if native else "%04d.jpg"
     ffmpeg([*inputs, "-map", "0:V:0", "-an", "-sn", "-filter_threads", "2", "-filter_script:v", str(filter_file),
-            "-fps_mode", "passthrough", "-start_number", "0", "-q:v", "3", "-threads:v", "2",
-            "-frames:v", str(len(plan)), str(folder / "%04d.jpg")], timeout=timeout)
+            "-fps_mode", "passthrough", "-start_number", "0", *encoding, "-threads:v", "2",
+            "-frames:v", str(len(plan)), str(folder / output)], timeout=timeout)
 
 
 def scroll_clock(frames, cuts):
@@ -293,6 +296,70 @@ def dense_scroll_samples(folder, request, candidates):
         if region := region or side_panel(image):
             samples.append((sample["shot"], sample["timeMs"], path, region, sample["sourceFrame"]))
     return samples
+
+
+def detail_screen_states(folder, request, screens, interfaces):
+    """Read changed large regions from native frames using the screenshot analyzer."""
+    import cv2
+    from voice_studio.vision.scene_objects import iou
+    from voice_studio.vision.screen_analysis import screenshot_layout
+
+    started = perf_counter()
+    plan = screens.detail_states.plan()
+    if not plan or not request.get("scrollInputs"):
+        return {"status": "no-candidates", "planned": 0, "analyzed": 0}
+    native = folder / "screen-native"
+    native.mkdir()
+    # A single decode selects source ordinals; avoid one slow seek per region.
+    frames = list({row["sourceFrame"]: row for row in plan}.values())
+    try:
+        decode_samples(request["scrollInputs"], native, frames, native=True, timeout=35)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {"status": "partial", "planned": len(plan), "analyzed": 0}
+    paths = {row["sourceFrame"]: native / f"{index:04}.png" for index, row in enumerate(frames)}
+    analyzed = 0
+    failures = 0
+    ocr_jobs = 0
+    for index, state in enumerate(plan):
+        target = native / f"ocr-{index}"
+        target.mkdir()
+        path = paths[state["sourceFrame"]]
+        try:
+            reading = screenshot_layout(path, region=state["box"], work_dir=target)
+        except (cv2.error, OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+            failures += 1
+            continue
+        ocr_jobs += reading["ocrJobs"]
+        layout = reading.get("interface") or {"box": state["box"], "elements": [], "connections": []}
+        if not reading["ocr"] and not layout["elements"]:
+            continue
+        elements = list(layout["elements"])
+        for item in reading.get("controlGrid", {}).get("controls", ()):
+            if all(iou(item["box"], present["box"]) < .5 for present in elements):
+                elements.append(item)
+        detailed = {**layout, "elements": elements, "basis": "frame-layout",
+                    "regionKind": state["regionKind"], "lastObservedMs": state["lastObservedMs"],
+                    "cropAvailable": True, "detailBasis": "original-resolution"}
+        if state["regionKind"] == "panel":
+            detailed["panelType"] = state.get("panelType", "mobile-ui")
+        if "previousStateMs" in state:
+            detailed["previousStateMs"] = state["previousStateMs"]
+        for line in reading["ocr"]:
+            if all(iou(line["box"], item["box"]) < .55 for item in elements):
+                elements.append({**line, "role": "screen_text", "basis": "ocr"})
+        rows = interfaces.setdefault(state["timeMs"], [])
+        remaining = []
+        for item in rows:
+            if iou(item["box"], state["box"]) < .65:
+                remaining.append(item)
+                continue
+            for row in item["elements"]:
+                if row.get("basis") == "scroll-mosaic" and all(iou(row["box"], part["box"]) < .55 for part in elements):
+                    elements.append(row)
+        rows[:] = [detailed, *remaining]
+        analyzed += 1
+    return {"status": "partial" if failures else "ok", "planned": len(plan),
+            "analyzed": analyzed, "ocrJobs": ocr_jobs, "elapsedMs": round(1000 * (perf_counter() - started))}
 
 
 def ocr_jobs(image, path, sample, history):
@@ -476,6 +543,7 @@ def analyze_frames(folder):
     interfaces, screen_crops, screen_statuses = screens.summarize(frame_paths, readings, scrolls, supplemental=supplemental)
     merge_scroll_layouts(interfaces, mosaics)
     screens.retain_panels(interfaces, scrolls, supplemental)
+    screen_details = detail_screen_states(folder, request, screens, interfaces)
     assisted = any("changeBands" in sample for sample in request["samples"])
     change_objects = review_change_objects(detector, request["samples"], frames, folder,
                                            interfaces=interfaces if assisted else None)
@@ -506,6 +574,7 @@ def analyze_frames(folder):
             **({"smallObjectPass": small_report} if small_report is not None else {}),
             "objectSampling": request["objectSampling"], "objectChecksByShot": list(checks_by_shot.values()),
             "interfaceFrames": len(interfaces), "interfaceOcrCrops": screen_crops,
+            "interfaceDetail": screen_details,
             "interfaceScrolls": scrolls, "interfaceScrollMs": scroll_ms, "interfaceScrollFrames": len(supplemental),
             "interfaceStatus": "ok" if screen_complete else "partial", "interfaceOcrStatuses": screen_statuses, "interfaceMs": round(1000 * (perf_counter() - started_interface)),
             "ocrPasses": len(jobs), "ocrMs": ocr_ms, "objectMs": round(object_seconds * 1000),

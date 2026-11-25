@@ -33,11 +33,17 @@ def time_argument(milliseconds, nudge_us=0):
     return f"{seconds}.{microseconds:06d}"
 
 
-def extract_frame(source, folder, at_ms, max_side):
+def extract_frame(source, folder, at_ms, max_side, *, region=None):
     """Keep the last native frame at or before the requested time on the source clock."""
     output = folder / "frame.png"
     scale = (f"scale='min(iw,{max_side})':'min(ih,{max_side})':"
              "force_original_aspect_ratio=decrease,setsar=1")
+    if region is not None:
+        x, y, w, h = region
+        # Crop precedes scale, preserving small details from the oriented source.
+        scale = (f"crop=w=max(1\\,min(iw-floor(iw*{x})\\,round(iw*{w})))"
+                 f":h=max(1\\,min(ih-floor(ih*{y})\\,round(ih*{h})))"
+                 f":x=floor(iw*{x}):y=floor(ih*{y}):exact=1," + scale)
     # Accurate input seek skips old GOPs. image2 replaces the same file for each frame.
     # The microsecond on the exclusive end includes a frame exactly at the requested time.
     for lookback_ms in (200, 2000, None):
@@ -137,7 +143,7 @@ def annotate_frame(folder, context, at_ms, png):
     ).stdout
 
 
-def raw_frame(source, folder, at_ms, max_side, include_palette):
+def raw_frame(source, folder, at_ms, max_side, include_palette, region=None):
     """
     Reuse exact source pixels, leaving graph-specific decoration to the caller.
 
@@ -149,9 +155,12 @@ def raw_frame(source, folder, at_ms, max_side, include_palette):
     before = source.stat()
     identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
     key = (str(source), identity, at_ms, max_side)
+    if region is not None:
+        key += (tuple(region),)
     cached = RAW_FRAMES.get(key)
     if cached is None:
-        png = extract_frame(source, folder, at_ms, max_side)
+        png = (extract_frame(source, folder, at_ms, max_side) if region is None
+               else extract_frame(source, folder, at_ms, max_side, region=region))
         image_dimensions(png)
         palette = None
     else:
@@ -168,7 +177,7 @@ def raw_frame(source, folder, at_ms, max_side, include_palette):
 
 
 def render_frame(source: Path, at_ms: int, *, max_side: int = 1280, context: dict | None = None,
-                 include_palette: bool = False) -> bytes | tuple[bytes, dict]:
+                 include_palette: bool = False, region=None) -> bytes | tuple[bytes, dict]:
     """
     Return source PNG pixels and optional color measurements before any overlay.
 
@@ -177,6 +186,8 @@ def render_frame(source: Path, at_ms: int, *, max_side: int = 1280, context: dic
     Context is reapplied on every request. Result is bytes or (bytes, palette).
     Invalid inputs, unavailable originals, busy slots and decode failures raise ValueError.
     """
+    if region is not None and (context is not None or not pixel_box(region, 10000, 10000)):
+        raise ValueError("A crop requires normalized geometry and no full-frame overlay.")
     if type(at_ms) is not int or not 0 <= at_ms < MAX_TIME_MS:
         raise ValueError("The screenshot time must be within the first two hours.")
     if type(max_side) is not int or not 160 <= max_side <= 1920:
@@ -192,7 +203,8 @@ def render_frame(source: Path, at_ms: int, *, max_side: int = 1280, context: dic
     try:
         with temporary_directory(prefix="voice-graph-frame-") as raw:
             folder = Path(raw)
-            png, palette = raw_frame(source, folder, at_ms, max_side, include_palette)
+            png, palette = (raw_frame(source, folder, at_ms, max_side, include_palette) if region is None
+                            else raw_frame(source, folder, at_ms, max_side, include_palette, region))
             if context is not None:
                 png = annotate_frame(folder, context, at_ms, png)
             image_dimensions(png)

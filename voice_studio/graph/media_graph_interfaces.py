@@ -79,6 +79,9 @@ def clean_region(row, box_coordinates):
         data = {"role": role, "box": bounds, "basis": element_basis}
         if label := text_field(element.get("text"), 180):
             data["text"] = label
+        for field in ("column", "row"):
+            if type(element.get(field)) is int and 1 <= element[field] <= 4096:
+                data[field] = element[field]
         if mosaic := clean_mosaic(element.get("mosaic"), box_coordinates):
             data["mosaic"] = mosaic
         elements.append(data)
@@ -101,7 +104,14 @@ def clean_region(row, box_coordinates):
         seen.add(pair)
         connections.append({"from": index_map[first], "to": index_map[second], "segment": points})
 
-    region = {"box": box, "basis": basis}
+    region = {"box": box, "basis": basis, "cropAvailable": True}
+    if row.get("regionKind") in ("panel", "card-candidate", "diagram-candidate"):
+        region["regionKind"] = row["regionKind"]
+    for field in ("lastObservedMs", "previousStateMs"):
+        if type(row.get(field)) is int:
+            region[field] = row[field]
+    if row.get("detailBasis") == "original-resolution":
+        region["detailBasis"] = row["detailBasis"]
     if verified:
         region["panelType"] = row["panelType"]
         if row.get("changeAssisted") is True:
@@ -141,6 +151,12 @@ def add_interface_observations(graph, stamp, rows, box_coordinates):
         if reading is not None and not 0 <= reading < stamp:
             region.pop("readingTimeMs")
             reading = None
+        previous = region.get("previousStateMs")
+        if previous is not None and not 0 <= previous < stamp:
+            region.pop("previousStateMs")
+        last = region.get("lastObservedMs")
+        if last is not None and not stamp <= last < graph.duration:
+            region.pop("lastObservedMs")
         ending = stamp + 1
         suffix = f"{stamp}:{region_index}"
         region_id = f"screen_region:{suffix}"
@@ -155,7 +171,7 @@ def add_interface_observations(graph, stamp, rows, box_coordinates):
             element_id = f"ui_element:{suffix}:{index}"
             role = element["role"].replace("_", " ").replace("-", " ")
             label = element.get("text", role)
-            data = {**element, "screenId": region_id, "description": role}
+            data = {**element, "screenId": region_id, "description": role, "cropAvailable": True}
             add_screen_child(graph, element_id, "ui_element", label, stamp, data, region_id, frame_id)
         for index, connection in enumerate(connections):
             connection_id = f"ui_connection:{suffix}:{index}"
@@ -177,14 +193,15 @@ def add_screen_child(graph, node_id, kind, label, stamp, data, region_id, frame_
 def restore_interface_observation(frame, regions, node_id, kind, data):
     """Rebuild the source report contract from a published graph's ordered scene rows."""
     if kind == "screen_region":
-        region = {field: data[field] for field in ("box", "basis", "deviceLabel", "panelType", "changeAssisted", "readingTimeMs")
+        region = {field: data[field] for field in ("box", "basis", "deviceLabel", "panelType", "changeAssisted", "readingTimeMs",
+                                                     "regionKind", "detailBasis", "previousStateMs", "lastObservedMs")
                   if field in data}
         region.update(elements=[], connections=[])
         frame.setdefault("interfaces", []).append(region)
         regions[node_id] = region
     elif region := regions.get(data.get("screenId")):
         if kind == "ui_element":
-            fields = ("role", "box", "basis", "text", "mosaic")
+            fields = ("role", "box", "basis", "text", "mosaic", "row", "column")
             region["elements"].append({field: data[field] for field in fields if field in data})
         else:
             region["connections"].append({field: data[field] for field in ("from", "to", "segment")})

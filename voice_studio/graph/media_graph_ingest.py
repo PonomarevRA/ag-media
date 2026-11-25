@@ -268,8 +268,9 @@ def apply_visual_evidence(result, visual, start, end, id_base, speech_start):
 def offset_screen_panel(panel, offset):
     """Preserve document boxes and shift only their references to the window clock."""
     shifted = dict(panel)
-    if type(panel.get("readingTimeMs")) is int:
-        shifted["readingTimeMs"] += offset
+    for field in ("readingTimeMs", "lastObservedMs", "previousStateMs"):
+        if type(panel.get(field)) is int:
+            shifted[field] += offset
     if "elements" in panel:
         shifted["elements"] = [
             {**item, "mosaic": {**address, "pageStartMs": address["pageStartMs"] + offset}}

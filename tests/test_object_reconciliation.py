@@ -144,6 +144,19 @@ class PartMeasurementTests(TestCase):
 
 @skipIf(cv2 is None, "Requires existing vision runtime")
 class WorkerBudgetTests(TestCase):
+    def test_vehicle_body_measurement_reaches_graph_without_json_round_trip(self):
+        """Native crop evidence uses Python scalars accepted by graph validation."""
+        from voice_studio.vision.vehicle_body_color import measure_vehicle_bodies
+        from voice_studio.vision.vehicle_evidence import validated_body_color
+        image = np.full((240, 320, 3), 100, dtype=np.uint8)
+        image[108:184, 104:232] = (20, 30, 220)
+        vehicle = {'label': 'car', 'box': [.25, .25, .55, .55]}
+        measure_vehicle_bodies(image, [vehicle], [vehicle])
+        body = validated_body_color(vehicle.get('vehicleBodyColor'))
+        self.assertIsNotNone(body)
+        self.assertGreater(body['coverage'], .4)
+        self.assertLess(body['background'], .10)
+
     def test_decoder_crop_and_descriptor_budgets_and_stale_evidence(self):
         """Large reports cannot bypass frame/crop limits or retain stale pilot pairs."""
         from voice_studio.vision import object_reconciliation_parts as worker
@@ -174,6 +187,39 @@ class WorkerBudgetTests(TestCase):
 
 
 class GraphProjectionTests(TestCase):
+    def test_vehicle_cross_cut_identity_keeps_co_visible_vehicle_separate(self):
+        """A merged detector box preserves both tracks, and same-color rivals cause abstention."""
+        from voice_studio.graph.media_graph_model import build_graph
+
+        red = {'label': 'car', 'score': .8, 'box': [.10, .40, .35, .32],
+               'vehicleBodyColor': {'hue': .98, 'coverage': .5, 'saturation': .72, 'background': .03}}
+        light = {'label': 'car', 'score': .8, 'box': [.51, .40, .35, .32]}
+        merged = {'label': 'car', 'score': .6, 'box': [.09, .39, .80, .34]}
+        early = deepcopy(red)
+        early['box'] = [.51, .16, .32, .28]
+        early['vehicleBodyColor']['hue'] = .03
+        report = {'durationMs': 5000, 'videoEvidence': {'editorTimeline': {'shots': [
+            {'startMs': 0}, {'startMs': 2000}]}}, 'sceneEvidence': {'frames': [
+            {'timeMs': 100, 'objects': [early]}, {'timeMs': 300, 'objects': [early]},
+            {'timeMs': 3000, 'objects': [red, light]}, {'timeMs': 3280, 'objects': [merged]},
+            {'timeMs': 3550, 'objects': [red, light]}]}}
+
+        def observations():
+            """Index stable source samples by their exact observed box and time."""
+            graph = build_graph(report, kind='video', duration_ms=5000, object_reconciliation=True)
+            return {(node['startMs'], tuple(node['data']['box'])): node['data']
+                    for node in graph['nodes'] if node['kind'] == 'object_observation'}
+
+        rows = observations()
+        self.assertEqual(rows[100, tuple(early['box'])]['identityId'], rows[3550, tuple(red['box'])]['identityId'])
+        self.assertEqual(rows[3000, tuple(light['box'])]['identityId'], rows[3550, tuple(light['box'])]['identityId'])
+        self.assertNotEqual(rows[3550, tuple(red['box'])]['identityId'], rows[3550, tuple(light['box'])]['identityId'])
+        self.assertTrue(rows[3280, tuple(merged['box'])]['vehicleIdentityAmbiguous'])
+        light['vehicleBodyColor'] = dict(red['vehicleBodyColor'])
+        rows = observations()
+        self.assertNotEqual(rows[100, tuple(early['box'])]['identityId'], rows[3550, tuple(red['box'])]['identityId'])
+        self.assertNotEqual(rows[100, tuple(early['box'])]['identityId'], rows[3550, tuple(light['box'])]['identityId'])
+
     def test_parts_across_cut_keep_tracks_and_publish_real_gallery(self):
         """Optional measured matches cross cuts without changing default raw tracking."""
         from voice_studio.graph.media_graph_model import build_graph, object_layers

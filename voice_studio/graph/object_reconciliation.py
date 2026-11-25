@@ -8,6 +8,8 @@ from collections import defaultdict
 from colorsys import rgb_to_hsv
 from math import isfinite
 
+from voice_studio.graph.vehicle_reappearance import add_vehicle_links
+
 MAX_GAP_MS = 30_000
 MAX_CANDIDATES = 16
 MAX_GALLERY = 8
@@ -139,13 +141,15 @@ def preferred(choices):
 def reconciliation_links(groups, samples, baseline_links=None):
     """Return disjoint complete-evidence chains and bounded diagnostic counts.
 
-    At most 16 future same-class groups within 30 seconds are scored per group.
+    At most 16 future groups within 30 seconds are scored per group.
     Overflow abstains rather than concealing an unexamined competing identity.
     Every pair in a new extension needs its own positive evidence; A-B and B-C
     cannot invent A-C identity. Simultaneous intervals are always distinct.
     """
     intervals = [(min(n['startMs'] for n in group[1]), max(n['endMs'] for n in group[1])) for group in groups]
     views = [gallery(group, samples) for group in groups]
+    ambiguous = {key for key, rows in enumerate(views)
+                 if any(node["data"].get("vehicleIdentityAmbiguous") for node in rows)}
     labels = [{n['label'].casefold() for n in group[1]} for group in groups]
     index = defaultdict(list)
     for key, (start, _) in enumerate(intervals):
@@ -153,6 +157,15 @@ def reconciliation_links(groups, samples, baseline_links=None):
             index[label].append((start, key))
     for rows in index.values():
         rows.sort()
+    observed = {observation_key(node): group for group, rows in enumerate(views) for node in rows}
+    explicit_pairs = defaultdict(set)
+    for target, rows in enumerate(views):
+        for node in rows:
+            raw = node["data"].get("objectPartMatches") or ()
+            for match in raw[:3] if isinstance(raw, (list, tuple)) else ():
+                source = observed.get(source_match_key(match))
+                if source is not None and source != target and part_score(match):
+                    explicit_pairs[source].add(target)
     baseline = {}
     rejected_baseline = []
     baseline_members = {key: [key] for key in range(len(groups))}
@@ -161,7 +174,8 @@ def reconciliation_links(groups, samples, baseline_links=None):
         members = baseline_members[key]
         compatible = all(intervals[member][1] <= intervals[other][0]
                          and not color_conflict(views[member], views[other]) for member in members)
-        if compatible and intervals[key][0] < intervals[other][0] and len(members) < MAX_CLUSTER:
+        if (compatible and key not in ambiguous and other not in ambiguous
+                and intervals[key][0] < intervals[other][0] and len(members) < MAX_CLUSTER):
             baseline[key] = other
             baseline_members[other] = members + [other]
         else:
@@ -181,7 +195,9 @@ def reconciliation_links(groups, samples, baseline_links=None):
                    'maxCandidates': MAX_CANDIDATES, 'maxGallery': MAX_GALLERY, 'acceptedLinks': [],
                    'preservedBaselineLinks': len(baseline), 'rejectedBaselineLinks': rejected_baseline}
     for key, (_, end) in enumerate(intervals):
-        candidates = set()
+        if key in ambiguous:
+            continue
+        candidates = set(explicit_pairs[key])
         for label in labels[key]:
             rows = index[label]
             lo = bisect_left(rows, (end, -1))
@@ -191,7 +207,9 @@ def reconciliation_links(groups, samples, baseline_links=None):
             diagnostics['overflowGroups'] += 1
             continue
         for other in sorted(candidates):
-            if intervals[other][0] < end or intervals[other][0] <= intervals[key][0]:
+            if other in ambiguous:
+                continue
+            if not end <= intervals[other][0] <= end + MAX_GAP_MS or intervals[other][0] <= intervals[key][0]:
                 continue
             diagnostics['comparisons'] += 1
             witness = pair_evidence(views[key], views[other])
@@ -223,6 +241,7 @@ def reconciliation_links(groups, samples, baseline_links=None):
         links[key] = other
         cluster[following[-1]] = members + following
         diagnostics['acceptedLinks'].append({'fromGroup': key, 'toGroup': other, **evidence[key, other]})
+    add_vehicle_links(groups, samples, intervals, links, diagnostics, max_cluster=MAX_CLUSTER)
     return links, diagnostics
 
 

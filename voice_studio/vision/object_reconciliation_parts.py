@@ -10,8 +10,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from voice_studio.vision.vehicle_body_color import measure_vehicle_bodies
+from voice_studio.vision.vehicle_evidence import VEHICLE_LABELS
+
 MAX_FRAMES = 48
 MAX_CROPS = 96
+MAX_VEHICLE_FRAMES = 96
+MAX_VEHICLE_CROPS = 144
 MAX_GALLERY = 64
 MAX_CANDIDATES = 16
 MAX_FEATURES = 512
@@ -20,6 +25,8 @@ MAX_GAP_MS = 30_000
 
 def spread(rows, maximum):
     """Keep deterministic time-spread input rows within a fixed measurement budget."""
+    if maximum <= 1:
+        return rows[-maximum:] if maximum else []
     if len(rows) <= maximum:
         return rows
     return [rows[round(index * (len(rows) - 1) / (maximum - 1))] for index in range(maximum)]
@@ -101,13 +108,39 @@ def compare_parts(first, second):
             'sourceCells': source_cells, 'targetCells': target_cells}
 
 
+def candidate_views(previous, item, stamp):
+    """Reserve part of the fixed search budget for visually plausible label changes."""
+    named, alternatives = [], []
+    width, height = item["box"][2:]
+    for row in previous:
+        previous_time, old, _ = row
+        if not 0 < stamp - previous_time <= MAX_GAP_MS:
+            continue
+        if item["label"].casefold() == old["label"].casefold():
+            named.append(row)
+            continue
+        if {item["label"], old["label"]} & {"mobile-ui", "ui", "person"}:
+            continue
+        other_width, other_height = old["box"][2:]
+        if min(width, height, other_width, other_height) <= 0:
+            continue
+        aspect_ratio = (width / height) / (other_width / other_height)
+        area_ratio = (width * height) / (other_width * other_height)
+        if .45 <= aspect_ratio <= 2.2 and .35 <= area_ratio <= 2.85:
+            alternatives.append(row)
+    alternative_count = min(len(alternatives), MAX_CANDIDATES // 4)
+    name_count = min(len(named), MAX_CANDIDATES - alternative_count)
+    return spread(named, name_count) + spread(alternatives, min(len(alternatives), MAX_CANDIDATES - name_count))
+
+
 def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     """Return a copied report with bounded measured crop witnesses for optional reconciliation.
 
     Decode at most 48 existing source timestamps, describe at most 96 crops,
-    retain 64 predecessor descriptors, compare at most 16 same-class non-simultaneous
+    retain 64 predecessor descriptors, compare at most 16 compatible non-simultaneous
     crops within 30 seconds, and retain at most three source witnesses per crop.
-    Missing files, unreadable frames and textureless crops leave evidence empty.
+    The vehicle pass samples at most 96 timestamps and 144 vehicle crops and
+    shares decoded frames with ORB when possible. Unreadable frames leave no evidence.
     Original scene predictions, boxes, labels and scores are preserved.
     """
     result = deepcopy(report)
@@ -116,16 +149,26 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     for frame in frames:
         for item in frame.get('objects', []):
             item.pop('objectPartMatches', None)
+            item.pop('vehicleBodyColor', None)
     selected = spread([row for row in frames if row.get('objects')], MAX_FRAMES)
     rows = [(frame, item) for frame in selected for item in frame.get('objects', [])[:12]]
     selected_rows = spread(rows, MAX_CROPS)
     by_stamp = {}
     for frame, item in selected_rows:
         by_stamp.setdefault(frame['timeMs'], []).append(item)
+    vehicle_frames = [(frame, [item for item in frame.get('objects', ())[:12]
+                              if item.get('label') in VEHICLE_LABELS]) for frame in frames]
+    vehicle_rows = [(frame, item) for frame, items in spread(
+        [(frame, items) for frame, items in vehicle_frames if items], MAX_VEHICLE_FRAMES) for item in items]
+    vehicle_by_stamp = {}
+    for frame, item in spread(vehicle_rows, MAX_VEHICLE_CROPS):
+        _, items = vehicle_by_stamp.setdefault(frame["timeMs"], (frame["objects"][:12], []))
+        items.append(item)
     stats = {'basis': 'bounded-source-crop-orb-pilot', 'decodedFrames': 0, 'describedCrops': 0,
              'comparisons': 0, 'measuredPairs': 0, 'maxFrames': MAX_FRAMES,
              'maxCrops': MAX_CROPS, 'maxGallery': MAX_GALLERY,
-             'maxCandidates': MAX_CANDIDATES, 'status': 'no-evidence'}
+             'maxCandidates': MAX_CANDIDATES, 'status': 'no-evidence',
+             'vehicleColorFrames': 0, 'vehicleColorCrops': 0}
     result['objectReconciliationEvidence'] = stats
     capture = cv2.VideoCapture(str(source))
     detector = cv2.ORB_create(nfeatures=MAX_FEATURES, edgeThreshold=12, fastThreshold=12)
@@ -134,22 +177,27 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
         if not capture.isOpened():
             stats['status'] = 'source-unavailable'
             return result
-        for stamp, items in sorted(by_stamp.items()):
+        for stamp in sorted(by_stamp.keys() | vehicle_by_stamp.keys()):
             capture.set(cv2.CAP_PROP_POS_MSEC, stamp)
             ok, image = capture.read()
             if not ok:
                 continue
+            if stamp in vehicle_by_stamp:
+                siblings, vehicles = vehicle_by_stamp[stamp]
+                stats['vehicleColorFrames'] += 1
+                measure_vehicle_bodies(image, vehicles, siblings)
+                stats['vehicleColorCrops'] += sum("vehicleBodyColor" in item for item in vehicles)
+            if stamp not in by_stamp:
+                continue
             stats['decodedFrames'] += 1
             current = []
-            for item in items:
+            for item in by_stamp[stamp]:
                 features = crop_features(image, item.get('box', []), detector)
                 stats['describedCrops'] += 1
                 if features is None:
                     continue
                 matches = []
-                candidates = [row for row in previous if 0 < stamp - row[0] <= MAX_GAP_MS
-                              and item['label'].casefold() == row[1]['label'].casefold()]
-                for old_stamp, old, descriptor in spread(candidates, MAX_CANDIDATES):
+                for old_stamp, old, descriptor in candidate_views(previous, item, stamp):
                     stats['comparisons'] += 1
                     metrics = compare_parts(descriptor, features)
                     if metrics:
@@ -161,7 +209,8 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
                     stats['measuredPairs'] += len(item['objectPartMatches'])
                 current.append((stamp, item, features))
             previous = (previous + current)[-MAX_GALLERY:]
-        stats['status'] = 'measured' if stats['measuredPairs'] else 'no-evidence'
+        if stats['measuredPairs'] or stats['vehicleColorCrops']:
+            stats['status'] = 'measured'
     finally:
         capture.release()
     return result

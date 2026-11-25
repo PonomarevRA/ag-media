@@ -18,11 +18,13 @@ from voice_studio.graph.dialogue_audit_graph import add_dialogue_review
 from voice_studio.graph.media_graph_mod_extensions import add_mod_extensions
 from voice_studio.graph.media_graph_objects import DISPLAY_LABELS, add_object_tracks, add_speaker_context, box_coverage
 from voice_studio.graph.media_object_profiles import add_object_profiles
+from voice_studio.graph.speech_screen_evidence import add_speech_screen_evidence
 from voice_studio.speech.person_mentions import clean_mentions
 from voice_studio.speech.speaker_profiles import APPEARANCE_FIELDS, cue_number
 from voice_studio.vision.frame_changes import BASIS as FRAME_CHANGE_DETAIL
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 from voice_studio.vision.video_colors import hex_rgb
+from voice_studio.vision.vehicle_evidence import validated_body_color
 
 KIND_NAMES = {
     "ru": {"audio_track": "Звуковая дорожка", "video_track": "Видеодорожка", "shot": "План",
@@ -573,6 +575,8 @@ def add_scene_observation(graph, stamp, kind, source, index, label, box, item, *
     observation = f"{node_kind}:{stamp}:{index}:{source_key(label)}"
     data = {"box": box, "source": source, **compact_source_data(item, ("score", "basis", "detailBasis"))}
     if kind == "object":
+        if source == "nanodet":
+            data["rawLabel"] = label
         if screen:
             data["interfaceEvidence"] = screen
         if palette := item.get("objectPalette"):
@@ -583,6 +587,8 @@ def add_scene_observation(graph, stamp, kind, source, index, label, box, item, *
         pairs = item.get("objectPartMatches")
         if isinstance(pairs, list):
             data["objectPartMatches"] = [dict(pair) for pair in pairs[:3] if isinstance(pair, dict)]
+        if body_color := validated_body_color(item.get("vehicleBodyColor")):
+            data["vehicleBodyColor"] = body_color
     graph.node(observation, node_kind, label, (stamp, stamp + 1), data)
     graph.connect(observation, "at_frame", graph.frame(stamp, source))
     graph.connect(observation, "instance_of", entity)
@@ -834,8 +840,9 @@ def object_layers(report):
     _, video_track = stream_tracks(graph, report, "video")
     add_video_shots(graph, report, source_coverage(report, duration), video_track)
     scene_observations(graph, report)
-    tracks = add_object_tracks(graph)
-    profiles = add_object_profiles(graph, tracks, object_reconciliation=bool(report.get("objectReconciliationEnabled")))
+    review = bool(report.get("objectReconciliationEnabled"))
+    tracks = add_object_tracks(graph, object_reconciliation=review)
+    profiles = add_object_profiles(graph, tracks, object_reconciliation=review)
     previews = panel_scroll_previews(graph, tracks, scene.get("interfaceScrolls", ()), box_coordinates)
     clips = []
     for key, shot, samples in tracks:
@@ -873,14 +880,17 @@ def build_graph(report, *, kind, duration_ms, object_reconciliation=False):
         add_frame_changes(graph, report.get("sceneEvidence") or {}, video_track, box_coordinates)
         faces, step = face_samples(graph, report, cues, bindings)
         add_facial_expressions(graph, report, video_track)
-        tracks = add_object_tracks(graph)
-        add_object_profiles(graph, tracks, object_reconciliation=object_reconciliation or bool(report.get("objectReconciliationEnabled")))
+        review = object_reconciliation or bool(report.get("objectReconciliationEnabled"))
+        tracks = add_object_tracks(graph, object_reconciliation=review)
+        add_object_profiles(graph, tracks, object_reconciliation=review)
         add_scene_hierarchy(graph)
         add_speaker_context(graph, tracks, faces, step)
         graph.observations_summary()
     else:
         faces, step = [], None
     add_dialogue_review(graph, report, source_interval)
+    if video_track:
+        add_speech_screen_evidence(graph)
     extensions = add_mod_extensions(graph, report)
     activity = (report.get("sceneEvidence") or {}).get("uiActivity")
     if not isinstance(activity, dict):

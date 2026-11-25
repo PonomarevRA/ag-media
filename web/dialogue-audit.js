@@ -81,6 +81,7 @@ export function mountDialogueAudit(owner, {currentReport, currentSource, seek}) 
     const candidates = Array.isArray(inventory?.candidates) ? inventory.candidates.slice(0, 2000) : [];
     summary.textContent = uiText("Проверка диалога") + (inventory?.summary ? ` · ${candidates.length}` : "");
     list.replaceChildren();
+    const original = currentReport()?.segments ?? [];
     for (const item of candidates.slice(0, visible)) {
       if (!item || !Number.isFinite(item.startMs) || !Number.isFinite(item.endMs)) continue;
       const row = document.createElement("li");
@@ -113,9 +114,19 @@ export function mountDialogueAudit(owner, {currentReport, currentSource, seek}) 
         const label = document.createElement("summary");
         label.textContent = uiText("Варианты ASR · требуют проверки");
         drafts.append(label);
+        const cues = Array.isArray(item.evidence?.cueIndices) ? item.evidence.cueIndices : [];
+        for (const index of cues.slice(0, 8)) {
+          const cue = original[index];
+          if (typeof cue?.text !== "string") continue;
+          const text = document.createElement("p");
+          text.className = "muted";
+          text.textContent = `${uiText("Исходная реплика")} · ${cue.text}`;
+          drafts.append(text);
+        }
         for (const suggestion of suggestions.slice(0, 20)) {
           const text = document.createElement("p");
-          text.textContent = `${auditTime(suggestion.startMs)} · ${suggestion.text}`;
+          const model = suggestion.model === "turbo" ? " · Whisper Turbo" : "";
+          text.textContent = `${auditTime(suggestion.startMs)}${model} · ${suggestion.text}`;
           drafts.append(text);
         }
         row.append(drafts);
@@ -128,6 +139,7 @@ export function mountDialogueAudit(owner, {currentReport, currentSource, seek}) 
     if (!busy) {
       const failures = {timeout: "Истёк лимит проверки. Предыдущие данные сохранены.",
         failed: "Перепроверка не завершена. Исходные данные сохранены.",
+        partial: "Часть отрезков не удалось перепроверить. Готовые варианты доступны.",
         cancelled: "Перепроверка прервана. Исходные данные сохранены."};
       const state = failures[inventory?.status] ?? failures[inventory?.repairs?.status];
       if (state) {

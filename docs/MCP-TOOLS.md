@@ -14,6 +14,17 @@ recognition in still images, use Studio's image analysis with **Objects** enable
 [local-first skill workflow](../skills/ag-media-ui-review/SKILL.md#local-image-recognition-first)
 for scrolling captures and when to ask a vision model to interpret remaining details.
 
+## Speech and screen evidence
+
+`media_graph_interval` returns `screenEvidence` on timed speech when visible text
+matches a nearby utterance or a reviewable ASR draft. Each match has the UI time,
+text, normalized source box and node ID. `actionCandidate` requires both spoken
+click wording and a measured screen state change. It remains a review cue.
+
+Call `media_graph_frame(snapshot_id=..., node_id=..., crop=true)` for the evidence
+PNG. This crops the checked original at the node's time before scaling. A detailed
+`screen_region` can also provide `regionKind`, `previousStateMs` and `lastObservedMs`.
+
 ## Ordinary MCP measurements
 
 1. `ui_windows()` lists connected native/browser pages.

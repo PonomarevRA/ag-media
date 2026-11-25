@@ -4,8 +4,10 @@ from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from math import hypot, isfinite
 
+from voice_studio.graph.object_reconciliation import color_conflict
 from voice_studio.vision.frame_changes import BASIS as FRAME_CHANGE_DETAIL
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
+from voice_studio.vision.vehicle_evidence import VEHICLE_LABELS
 
 MAX_GAP_MS = 1800
 MIN_IOU = .44
@@ -137,9 +139,50 @@ def measured_motion_match(previous, current, overlap_score, *, with_anchor=False
     return False
 
 
-def split_tracks(frames, *, displays=False, panel_checks=()):
+def predicted_overlap(track, node):
+    """Bridge a short constant-velocity continuation through a gap in box overlap."""
+    if len(track) < 2:
+        return 0
+    first, last = track[-2:]
+    span = last["startMs"] - first["startMs"]
+    gap = node["startMs"] - last["startMs"]
+    if not 0 < span <= 700 or not 0 < gap <= min(700, 2 * span):
+        return 0
+    before, current = first["data"]["box"], last["data"]["box"]
+    x, y = center(current)
+    u, v = center(before)
+    vx, vy = (x - u) * gap / span, (y - v) * gap / span
+    if hypot(vx, vy) > .16:
+        return 0
+    shifted = [current[0] + vx, current[1] + vy, *current[2:]]
+    return overlap(shifted, node["data"]["box"])
+
+
+def merged_vehicle_boxes(frames):
+    """Find one box temporarily covering two independently visible vehicles."""
+    pairs = sorted(stamp for stamp, rows in frames.items() if len(rows) == 2
+                   and overlap(rows[0]["data"]["box"], rows[1]["data"]["box"]) < .35)
+    merged = set()
+    for stamp, rows in frames.items():
+        if len(rows) != 1:
+            continue
+        next_pair = bisect_left(pairs, stamp)
+        if not 0 < next_pair < len(pairs):
+            continue
+        before, after = pairs[next_pair - 1], pairs[next_pair]
+        if max(stamp - before, after - stamp) > 800:
+            continue
+        box = rows[0]["data"]["box"]
+        if all(box_coverage(node["data"]["box"], box) >= .68
+               for pair in (before, after) for node in frames[pair]):
+            merged.add(stamp)
+    return merged
+
+
+def split_tracks(frames, *, displays=False, panel_checks=(), vehicle_review=False):
     """Join mutually unique same-class geometry or measured-appearance candidates."""
     active, completed = [], []
+    merged = merged_vehicle_boxes(frames) if vehicle_review else set()
     for stamp, observations in sorted(frames.items()):
         remaining = []
         for track in active:
@@ -150,6 +193,10 @@ def split_tracks(frames, *, displays=False, panel_checks=()):
             else:
                 completed.append(track)
         active = remaining
+        if stamp in merged:
+            observations[0]["data"]["vehicleIdentityAmbiguous"] = True
+            completed.append(observations)
+            continue
         incoming, outgoing = defaultdict(list), defaultdict(list)
         for i, track in enumerate(active):
             last = track[-1]
@@ -162,6 +209,8 @@ def split_tracks(frames, *, displays=False, panel_checks=()):
                     matches = centered_display_box(previous, bounds)
                 if not matches:
                     matches = measured_motion_match(last, node, overlap_score)
+                if not matches and not displays:
+                    matches = predicted_overlap(track, node) >= .65 and not color_conflict([last], [node])
                 if matches and not crosses_panel(panel_checks, last["startMs"], stamp, bounds):
                     incoming[j].append(i)
                     outgoing[i].append(j)
@@ -216,17 +265,18 @@ def append_detail_tracks(baseline, detail, *, panel_checks=()):
     return groups
 
 
-def confirmed_tracks(frames, fragments, *, displays=False, panel_checks=()):
+def confirmed_tracks(frames, fragments, *, displays=False, panel_checks=(), vehicle_review=False):
     """Preserve existing fragment and association rules within each detection pass."""
     canonicalize = canonical_displays if displays else canonical_observations
     canonical_frames = {}
     for stamp, observations in frames.items():
         canonical_frames[stamp], aliases = canonicalize(observations)
         fragments.update(aliases)
-    return split_tracks(canonical_frames, displays=displays, panel_checks=panel_checks)
+    return split_tracks(canonical_frames, displays=displays, panel_checks=panel_checks,
+                        vehicle_review=vehicle_review)
 
 
-def add_object_tracks(graph):
+def add_object_tracks(graph, *, object_reconciliation=False):
     """Link object samples to a concrete track, preserving separations at cuts."""
     grouped = defaultdict(lambda: (defaultdict(list), defaultdict(list)))
     panels = defaultdict(list)
@@ -248,7 +298,8 @@ def add_object_tracks(graph):
         fragments = {}
         displays = label in DISPLAY_LABELS
         checks = panels.get(shot, ()) if displays else ()
-        baseline = confirmed_tracks(base_frames, fragments, displays=displays, panel_checks=checks)
+        baseline = confirmed_tracks(base_frames, fragments, displays=displays, panel_checks=checks,
+                                    vehicle_review=object_reconciliation and label in VEHICLE_LABELS)
         detail = confirmed_tracks(detail_frames, fragments, displays=displays, panel_checks=checks)
         for anchor, observations in append_detail_tracks(baseline, detail, panel_checks=checks):
             first, last = observations[0], observations[-1]

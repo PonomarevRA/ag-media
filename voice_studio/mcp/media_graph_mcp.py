@@ -548,22 +548,32 @@ def register_media_graph_tools(mcp, root, studio_root):
     @mcp.tool()
     @render_lane.offload
     def media_graph_frame(snapshot_id: str, at_ms: int | None = None, node_id: str | None = None,
-                          technical: bool = False, max_side: int = 1024) -> list[TextContent | ImageContent]:
+                          technical: bool = False, max_side: int = 1024,
+                          crop: bool = False) -> list[TextContent | ImageContent]:
         """Return a PNG from the exact original video. Choose timestamp or timed node ID.
         JSON includes the original frame palette and measured lower-third caption contrast.
-        Technical mode adds linked and timed boxes, shot label and caption when available."""
+        Technical mode adds linked and timed boxes, shot label and caption when available.
+        crop=True extracts the selected node’s box from the original before scaling."""
         from voice_studio.graph.media_graph_frame import render_frame
 
         if (at_ms is None) == (node_id is None):
             raise ValueError("Укажи один таймкод или один ID узла.")
         metadata, at, context = store.frame_context(snapshot_id, at_ms, node_id)
+        region = None
+        if crop:
+            if technical or node_id is None or not context.get("targetObservationId"):
+                raise ValueError("Для кропа нужен ID узла с рамкой. Техническая разметка включается отдельно.")
+            region = context["boxes"][0]["box"]
         image, palette = render_frame(checked_source(metadata["source"]), at, max_side=max_side,
-                                      context=context if technical else None, include_palette=True)
+                                      context=context if technical else None, include_palette=True,
+                                      **({"region": region} if region is not None else {}))
         checked_source(metadata["source"])
         details = {"snapshotId": snapshot_id, "timeMs": at, "nodeId": node_id,
                    "technical": technical, "palette": palette, "shotColor": context.get("shotColor")}
         if technical:
             details["overlay"] = context
+        if region is not None:
+            details["cropBox"] = region
         return [TextContent(type="text", text=encode(details)),
                 ImageContent(type="image", mimeType="image/png", data=b64encode(image).decode("ascii"))]
 
