@@ -73,16 +73,14 @@ export function mountFrameInspection(find, video, {paint, openObject, openProfil
 }
 
 /** Dispatch the exact marks already drawn in the monitor; text remains plain DOM text. */
-function frameChoices(kind, frame, openObject, openProfile) {
+export function frameChoices(kind, frame, openObject, openProfile) {
   if (kind === "object" || kind === "interface") {
     return ((kind === "object" ? frame.objects : frame.panels) ?? []).map(row => ({
       text: uiText(row.panelType ?? row.label), action: trigger => openObject(row, kind, frame, trigger),
     }));
   }
-  if (kind === "face") {
-    return [...new Set(frame.faces.map(hit => hit[6] ?? hit[0]))].map(faceId => ({
-      text: uiText`Лицо ${faceId}`, action: trigger => openProfile({faceId}, trigger),
-    }));
+  if (kind === "face" || kind === "body" || kind === "body-count") {
+    return characterChoices(kind, frame, openProfile);
   }
   if (kind === "speech" && frame.phrase) {
     const speaker = effectiveSpeaker(frame.phrase);
@@ -91,12 +89,28 @@ function frameChoices(kind, frame, openObject, openProfile) {
     }] : [])];
   }
   if (kind === "shot") return [{text: uiText`План ${frame.shot}`}];
-  if (kind === "body-count") return [{text: uiText`Оценка числа людей: ${frame.personCount}`}];
-  if (kind === "body") return [...frame.marks].filter(([, mark]) => mark.box).map(([track]) => ({
-    text: uiText`Трек ${track}`,
-  }));
   if (kind === "change") return [{text: uiText`Зон изменений: ${frame.changes?.length ?? 0}`}];
   if (kind === "graphic") return [{text: uiText`Возможных вставок: ${frame.graphics?.length ?? 0}`},
     {text: uiText("Рамки построены по устойчивым изменениям изображения.")}];
   return (frame.text ?? []).filter(row => row.text).map(row => ({text: row.text}));
+}
+
+/** Associate figures only with face IDs measured on the exact displayed frame. */
+function characterChoices(kind, frame, openProfile) {
+  const faces = new Map((frame.faces ?? []).map(hit => [hit[0], hit[6] ?? hit[0]]));
+  const choices = [], presented = new Set();
+  if (kind === "body-count") choices.push({text: uiText`Оценка числа людей: ${frame.personCount}`});
+  const tracks = kind === "body"
+    ? [...(frame.marks ?? [])].filter(([, mark]) => mark.box).map(([track]) => track)
+    : faces.keys();
+  for (const track of tracks) {
+    const faceId = faces.get(track);
+    if (faceId === undefined) {
+      choices.push({text: uiText`Трек ${track}`});
+    } else if (!presented.has(faceId)) {
+      presented.add(faceId);
+      choices.push({text: uiText`Лицо ${faceId}`, action: trigger => openProfile({faceId}, trigger)});
+    }
+  }
+  return choices;
 }

@@ -1,5 +1,6 @@
 """Continue confirmed tracks with a single nearby weak detector measurement."""
 
+import subprocess
 from collections import Counter, defaultdict
 from time import perf_counter
 
@@ -133,11 +134,43 @@ def add_candidates(frame, anchor_frame, anchors, candidates, matches, stats, bas
             "trackingWitness": {"timeMs": anchor_frame["timeMs"], "box": list(anchor["box"]), "basis": basis},
         })
         stats["continued"] += 1
-        if basis != "box-iou":
+        if basis == "native-edge-view":
+            stats["nativeContinued"] += 1
+        elif basis != "box-iou":
             stats["cameraContinued"] += 1
 
 
-def continue_object_tracks(frames, raw_samples):
+def edge_anchors(anchors, occupied):
+    """Keep large edge-clipped detections that disappeared on the next sample."""
+    selected = []
+    for anchor in anchors:
+        x, y, w, h = anchor["box"]
+        touches_edge = min(x, 1 - x - w, y, 1 - y - h) < .012
+        if (touches_edge and w * h >= .12 and anchor["score"] >= STRONG_TRACKING_SCORE
+                and not near_other(anchor["box"], occupied, AMBIGUOUS_IOU)):
+            selected.append(anchor)
+    return selected
+
+
+def continue_native_edge(detector, source, frame, anchor_frame, anchors, occupied, stats):
+    """Recover one measured continuation when reducing the scene loses a clipped object."""
+    from voice_studio.speech.speaker_photos import frame_at
+
+    stats["nativeChecks"] += 1
+    try:
+        image = frame_at(source["source"], source["formats"], frame["timeMs"] + source["offsetMs"], native=True)
+        if image is None:
+            return
+        proposals = detector.detect(image, sectors=False, minimum_score=TRACKING_PROPOSAL_SCORE)
+    except (OSError, ValueError, subprocess.SubprocessError, cv2.error):
+        return
+    candidates = [item for item in proposals if usable(item)
+                  and not near_other(item["box"], occupied, AMBIGUOUS_IOU)]
+    matches = match_weak(anchors, candidates, occupied, stats)
+    add_candidates(frame, anchor_frame, anchors, candidates, matches, stats, "native-edge-view")
+
+
+def continue_object_tracks(frames, raw_samples, *, detector=None, native_source=None):
     """Append only same-shot continuations of already confirmed detector observations.
 
     Raw samples contain the existing extracted image path and pre-confirmation
@@ -146,7 +179,8 @@ def continue_object_tracks(frames, raw_samples):
     """
     started = perf_counter()
     stats = {"basis": WEAK_CONTINUATION, "continued": 0, "cameraContinued": 0, "weakCandidates": 0,
-             "cameraPairs": 0, "densePairs": 0, "ambiguousCandidates": 0}
+             "cameraPairs": 0, "densePairs": 0, "ambiguousCandidates": 0,
+             "nativeChecks": 0, "nativeContinued": 0}
     previous = None
     for frame in frames:
         stamp = frame["timeMs"]
@@ -166,6 +200,9 @@ def continue_object_tracks(frames, raw_samples):
                     if motion:
                         matches = match_weak(anchors, cont, occupied, stats, motion)
                         add_candidates(frame, anchor_frame, anchors, cont, matches, stats, motion["basis"])
+                if not matches and detector is not None and native_source and stats["nativeChecks"] < 6:
+                    if clipped := edge_anchors(anchors, occupied):
+                        continue_native_edge(detector, native_source, frame, anchor_frame, clipped, occupied, stats)
         previous = (frame, occupied[:MAX_OBSERVATIONS])
     stats["elapsedMs"] = round((perf_counter() - started) * 1000)
     return stats

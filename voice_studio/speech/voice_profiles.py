@@ -416,9 +416,14 @@ def apply_voice_profiles(result, wav, audio_start_ms, *, source_id, registry=Non
         raise ValueError("Cannot reuse a voice registry across sources")
     cues = result.get("segments", [])
     config = registry.config
-    windows, candidates = [], []
+    windows, candidates, video_proofs = [], [], []
     for index, cue in enumerate(cues):
+        video = speaking_evidence(cue, result, visual_scope)
+        video_proofs.append(video)
         start, end = audio_interval(cue)
+        if video and video.get("basis") == "light-asd-local":
+            witness = video["evidence"][0]
+            start, end = witness["timeMs"], witness["endMs"]
         end = min(end, start + config.max_duration_ms)
         overlap = overlaps_audio(cue, result)
         windows.append((start, end, overlap))
@@ -445,7 +450,7 @@ def apply_voice_profiles(result, wav, audio_start_ms, *, source_id, registry=Non
             reason = "short-audio" if end - start < config.min_duration_ms else "sample-budget"
             quality = qualities.get(index, {"accepted": False, "reasons": [reason]})
             decision = registry.observe(vectors.get(index), provenance,
-                                        video=speaking_evidence(cue, result, visual_scope), quality=quality)
+                                        video=video_proofs[index], quality=quality)
         cue.pop("voiceProfileId", None)
         if decision["profileId"]:
             cue["voiceProfileId"] = decision["profileId"]

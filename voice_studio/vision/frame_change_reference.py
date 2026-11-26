@@ -93,14 +93,25 @@ def mark_reference_regions(image, regions):
         region["detectionBasis"] = REFERENCE_BASIS
 
 
+def covered_fraction(box, enclosing):
+    """Measure how much of the smaller reference region is already represented."""
+    x, y, w, h = box
+    u, v, a, b = enclosing
+    shared = max(0, min(x + w, u + a) - max(x, u)) * max(0, min(y + h, v + b) - max(y, v))
+    return shared / (w * h) if w > 0 and h > 0 else 0
+
+
 def merge_reference_regions(adjacent, stable, limit):
     """Reserve a spatially distinct reference observation before filling adjacent slots."""
     adjacent = [dict(region) for region in adjacent or ()]
     distinct = []
     for region in stable:
-        nearest = max(adjacent, key=lambda item: overlap(region["box"], item["box"]), default=None)
-        if nearest is not None and overlap(region["box"], nearest["box"]) >= .45:
-            nearest.update({key: region[key] for key in ("detectionBasis", "sharpness")})
+        box = region["box"]
+        nearest = max(adjacent, key=lambda item: covered_fraction(box, item["box"]), default=None)
+        if nearest is not None and (covered_fraction(box, nearest["box"]) >= .65
+                                    or overlap(box, nearest["box"]) >= .45):
+            nearest["detectionBasis"] = region["detectionBasis"]
+            nearest["sharpness"] = max(nearest.get("sharpness", 0), region["sharpness"])
         else:
             distinct.append({**region, "referenceOnly": True})
     if not distinct:

@@ -29,6 +29,8 @@
 :root[data-studio-shell="true"] .studio-nav { gap: 4px; }
 :root[data-studio-shell="true"] .studio-nav a { min-block-size: 44px; padding: 8px 11px 8px 9px; border-inline-start-width: 3px; font-size: .87rem; }
 :root[data-studio-shell="true"] .studio-nav a[aria-current="page"] { padding-inline-start: 9px; }
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-navigation { padding-inline: 8px; }
+:root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-nav { padding-inline: 0; justify-items: center; }
 :root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-navigation-heading { flex-direction: column; gap: 6px; }
 :root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .brand-name,
 :root[data-studio-shell="true"][data-sidebar-collapsed="true"] #desktop-navigation .studio-nav-label { display: none; }

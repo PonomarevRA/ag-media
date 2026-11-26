@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from voice_paths import temporary_directory
 from voice_studio.vision.video_activity_chunks import STEP, iou
 
 MAX_PAIRS = 3
@@ -70,6 +71,22 @@ def boundary_pairs(cues, observations, visual):
         if len(pairs) == MAX_PAIRS:
             break
     return pairs
+
+
+def run_native_review(source, formats, pairs):
+    """Verify a bounded set of candidate pairs with the existing original-crop worker."""
+    from voice_studio.vision.video_revolver import MODEL, SFACE, VISION, run_worker
+
+    if not pairs:
+        return []
+    try:
+        with temporary_directory() as folder:
+            request = Path(folder) / "speaker-face-pairs.json"
+            request.write_text(json.dumps({"source": str(source), "formats": formats,
+                                           "yunet": str(MODEL), "sface": str(SFACE), "pairs": pairs}), encoding="utf-8")
+            return run_worker("voice_studio.vision.speaker_face_recheck", [request], [VISION], timeout=25)["matches"]
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        return []
 
 
 def measure_pairs(request):

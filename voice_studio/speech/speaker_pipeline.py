@@ -11,7 +11,7 @@ from voice_studio.mods.errors import ModError
 from voice_studio.speech.speaker_profiles import collect_profiles, cue_number
 
 LOGGER = logging.getLogger(__name__)
-PROFILE_PIPELINE_VERSION = 'source-profile-integration-3'
+PROFILE_PIPELINE_VERSION = 'source-profile-integration-4'
 
 
 def voice_profile_failure(error):
@@ -134,7 +134,8 @@ def attach_voice_profiles(report, wav, audio_start_ms, source_id, *, registry=No
     if invalid_overlaps:
         for item in clean:
             item['overlap'] = True
-    layer = {'segments': clean, 'videoEvidence': profile_visual_evidence(report.get('videoEvidence')),
+    layer = {'segments': clean, 'videoEvidence': {**profile_visual_evidence(report.get('videoEvidence')),
+                                                    'localVoiceAnchors': _mapping(report.get('_localVoiceAnchors'))},
              'speechOverlaps': _overlaps(report.get('speechOverlaps'))}
     with stage(emit, 'voice-profiles') as progress:
         try:
@@ -256,11 +257,11 @@ def attach_dialogue_audit(report, source_id, *, emit=ignore_progress):
         except (TypeError, ValueError, KeyError, AttributeError) as error:
             LOGGER.warning('Dialogue inventory unavailable: %s', type(error).__name__)
             inventory = {'status': 'unavailable', 'reason': 'invalid-or-unsupported-evidence'}
-            progress['state'] = 'failed'
+            progress.update(state='failed', reason='Проверка диалога не смогла прочитать данные о репликах и голосовых интервалах.')
         report['dialogueAudit'] = inventory
 
 
-def enrich_source_speech(report, source, prepared_audio, audio_start_ms, cache, *, emit=ignore_progress):
+def enrich_source_speech(report, source, prepared_audio, audio_start_ms, cache, *, formats=None, emit=ignore_progress):
     """Key voice stage and private registry by identical source-clock positive/negative evidence."""
     from voice_studio.graph.media_analysis_revolver import result_fingerprint
     from voice_studio.graph.media_stage_cache import source_digest
@@ -270,17 +271,41 @@ def enrich_source_speech(report, source, prepared_audio, audio_start_ms, cache, 
     identity = source_digest(source)
     report['sourceDigest'] = identity
     evidence = profile_visual_evidence(report.get('videoEvidence'))
+    visual = _mapping(report.get('videoEvidence'))
     overlaps = _overlaps(report.get('speechOverlaps'))
+    anchors = {}
+    if formats and not _invalid_overlaps(report.get('speechOverlaps')) and evidence['localAnchorsEligible']:
+        from voice_studio.speech.local_voice_anchors import local_anchors, review_pairs
+
+        candidates = local_anchors({**evidence, 'visibleSpeechIntervals': _rows(visual.get('visibleSpeechIntervals'))},
+                                   report.get('speechTurns') or [])
+        from voice_studio.speech.voice_profile_evidence import overlaps_audio
+
+        anchors = {str(cue['startMs']): candidates[str(cue['startMs'])] for cue in _rows(report.get('segments'))
+                   if _integer(cue.get('startMs')) and _integer(cue.get('endMs'))
+                   and str(cue['startMs']) in candidates
+                   and 'speakerNumber' not in cue and not overlaps_audio(cue, {'speechOverlaps': overlaps})
+                   and not _mapping(cue.get('speakerVideoEvidence'))}
+        pairs = review_pairs(anchors, visual) if anchors else []
+    else:
+        pairs = []
     upstream = {'sourceId': identity, 'audioStartMs': audio_start_ms,
                 'segments': _voice_input_cues(report.get('segments')), 'turns': report.get('speechTurns', []),
-                'videoProofs': evidence, 'overlaps': overlaps,
+                'videoProofs': evidence, 'localAnchors': anchors, 'nativeReviewPairs': pairs, 'overlaps': overlaps,
                 'overlapEvidenceValid': not _invalid_overlaps(report.get('speechOverlaps'))}
     registry_key = result_fingerprint([VERSION, PROFILE_PIPELINE_VERSION, getattr(cache, 'revision', None),
                                        layer_fingerprint('voice'), upstream])
 
     def compute():
         """Avoid reusing references learned before changed overlap or static/frozen exclusions."""
+        resolved = deepcopy(anchors)
+        if pairs:
+            from voice_studio.speech.local_voice_anchors import reconcile_anchors
+            from voice_studio.vision.speaker_face_recheck import run_native_review
+
+            reconcile_anchors(resolved, pairs, run_native_review(source, formats, pairs))
         layer = {'segments': deepcopy(report.get('segments', [])), 'videoEvidence': evidence,
+                 '_localVoiceAnchors': resolved,
                  'speechOverlaps': deepcopy(report.get('speechOverlaps'))}
         directory = cache.revolver.directory
         path = directory / 'voice-registry' / VERSION / registry_key / 'registry.json' if directory else None
@@ -344,7 +369,8 @@ def profile_visual_evidence(evidence, *, offset=0, id_base=0):
     if invalid_static:
         for phrase in phrases.values():
             phrase['activity']['state'] = 'unconfirmed'
-    return {'phrases': phrases, 'facialExpressions': {'staticFaceEvidence': {'exclusions': exclusions}}}
+    return {'phrases': phrases, 'facialExpressions': {'staticFaceEvidence': {'exclusions': exclusions}},
+            'localAnchorsEligible': not invalid_static}
 
 
 def remap_voice_faces(report):
@@ -354,6 +380,7 @@ def remap_voice_faces(report):
         return
     numbers = {voice['id']: voice['number'] for voice in _voices(report)}
     raw_matches, face_matches, editorial_matches = defaultdict(set), defaultdict(set), defaultdict(set)
+    local_aliases = {}
     unresolved_raw = set()
     cues = _rows(report.get('segments'))
     for cue in cues:
@@ -370,8 +397,16 @@ def remap_voice_faces(report):
             editorial_matches[editorial].add(number)
         face = cue.get('visualFace')
         decision = _mapping(cue.get('voiceProfileEvidence'))
-        if _integer(face) and decision.get('basis') == 'explicit-video':
-            face_matches[face].add(number)
+        if decision.get('basis') == 'explicit-video':
+            proof = _mapping(decision.get('video'))
+            if proof.get('basis') == 'light-asd-local':
+                for row in _rows(proof.get('evidence')):
+                    if _integer(row.get('faceId')):
+                        face_matches[row['faceId']].add(number)
+                        if _integer(row.get('profileFace')):
+                            local_aliases[row['faceId']] = row['profileFace']
+            elif _integer(face):
+                face_matches[face].add(number)
     raw = deepcopy(_mapping(evidence.get('rawFaceSpeakers')))
     for face, binding in _mapping(evidence.get('faceSpeakers')).items():
         if isinstance(binding, dict) and not binding.get('voiceProfileMapped'):
@@ -402,6 +437,10 @@ def remap_voice_faces(report):
                 candidates = set()
         if len(candidates) == 1:
             mapped[str(face)] = {**binding, 'speaker': next(iter(candidates)), 'voiceProfileMapped': True}
+            if face_id in face_matches and binding.get('basis') == 'visible-only':
+                mapped[str(face)]['basis'] = 'audio-visual'
+                if face_id in local_aliases or face_id in local_aliases.values():
+                    mapped[str(face)].update(confirmedIdentity=True, profileFace=local_aliases.get(face_id, face_id))
         else:
             mapped[str(face)] = {**binding, 'basis': 'visible-only', 'speaker': None, 'voiceProfileMapped': True}
     evidence['faceSpeakers'] = mapped

@@ -132,6 +132,10 @@ def reference_report(profiles):
     """Expose the source spans and agreement in the export without reference file paths."""
     summary = {}
     for number, profile in profiles.items():
+        if "profileVersion" in profile:
+            summary[number] = {"profileVersion": profile["profileVersion"],
+                               "recordedLanguage": profile["recordedLanguage"]}
+            continue
         row = {key: profile[key] for key in ("startMs", "endMs", "clips", "voiceAgreement")}
         fallback = profile.get("fallback")
         row["fallback"] = {key: fallback[key] for key in ("startMs", "endMs")} if fallback else None

@@ -25,6 +25,19 @@ Call `media_graph_frame(snapshot_id=..., node_id=..., crop=true)` for the eviden
 PNG. This crops the checked original at the node's time before scaling. A detailed
 `screen_region` can also provide `regionKind`, `previousStateMs` and `lastObservedMs`.
 
+## Voice quality and restoration
+
+Start `audio_voice_quality` with an absolute path to a dialogue stem or media file.
+Pass verified speaking ranges as `speech_intervals_ms: [[start, end], …]` to estimate
+steady noise in the gaps. Poll `audio_job` for levels in dBFS, relative band levels,
+and `recommendedModes`. Without speaking ranges, the tool treats the selected interval
+as dialogue and leaves the noise estimate empty.
+
+Call `audio_voice_restore` with the same range and any combination of `clarity`,
+`quiet-speech`, and `denoise`. Leaving `modes` out uses the recommendation.
+The job returns aligned reference and processed WAV paths. An explicit denoise
+request uses a conservative preset when no stable noise was measured.
+
 ## Ordinary MCP measurements
 
 1. `ui_windows()` lists connected native/browser pages.

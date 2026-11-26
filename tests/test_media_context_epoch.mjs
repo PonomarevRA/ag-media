@@ -10,6 +10,8 @@ import * as words from "../web/i18n.js";
 import * as speakers from "../web/speaker-label.js";
 import {mergeAnalysisPartial} from "../web/video-analysis.js";
 import {retainedSpeakerEdits, speakerEditKey} from "../web/analysis-stage-selection.js";
+import {mountTranscriptOcrChecks} from "../web/transcript-ocr-checks.js";
+import {mountTranscriptSrt} from "../web/transcript-srt.js";
 
 if (!process.argv.includes("--host-fixture")) {
   test("the actual transcript host fences real WebMCP reads on report mutations only", () => {
@@ -60,6 +62,7 @@ async function mountedHost(upload = true) {
   const panel = () => new Proxy({}, {get: () => noWork});
   let emitChunk, stopLiveCapture;
   const known = {...words, ...speakers, mergeAnalysisPartial, retainedSpeakerEdits, speakerEditKey,
+    mountTranscriptOcrChecks, mountTranscriptSrt,
     editorFaceBindings: () => null, speakerProfiles: () => [],
     captureAudio: async (_kind, _device, chunk, stopped) => {
       emitChunk = chunk;

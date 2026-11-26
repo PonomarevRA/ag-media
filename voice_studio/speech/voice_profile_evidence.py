@@ -17,7 +17,19 @@ def speaking_evidence(cue, result, visual_scope=None):
                 "evidence": explicit.get("evidence", []), "strength": "explicit"}
     if visual_scope is None:
         return None
-    phrase = (result.get("videoEvidence") or {}).get("phrases", {}).get(str(cue["startMs"]), {})
+    evidence = result.get("videoEvidence") or {}
+    if local := evidence.get("localVoiceAnchors", {}).get(str(cue["startMs"])):
+        left, right = local["startMs"], local["endMs"]
+        if cue["startMs"] <= left < right <= cue["endMs"]:
+            face = local["faceId"]
+            canonical = local.get("profileFace", face)
+            witness = {"faceId": face, "timeMs": left, "endMs": right}
+            if canonical != face:
+                witness.update(profileFace=canonical, identitySimilarity=local["identitySimilarity"])
+            return {"subjectId": f"{visual_scope}:face:{canonical}", "basis": "light-asd-local",
+                    "strength": "explicit", "visualScope": str(visual_scope), "identityScope": "window-local",
+                    "evidence": [witness]}
+    phrase = evidence.get("phrases", {}).get(str(cue["startMs"]), {})
     activity = phrase.get("activity") or {}
     active, total = activity.get("activeFrames", 0), activity.get("phraseFrames", 0)
     if not all(isinstance(value, (int, float)) and isfinite(value) for value in (active, total)):

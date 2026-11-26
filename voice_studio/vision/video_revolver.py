@@ -113,7 +113,7 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
             result["stages"]["yunet"] = "ok"
         except (OSError, ValueError, subprocess.SubprocessError):
             result["stages"]["yunet"] = "failed"
-            progress["state"] = "failed"
+            progress.update(state="failed", reason="YuNet не смог подготовить фото говорящих. Проверьте модели обработки лиц.")
     for start, observation in observations.items():
         entry = result["phrases"].setdefault(start, {})
         photo = observation.get("sample", {}).pop("jpeg", None)
@@ -133,23 +133,16 @@ def collect_evidence(source, wav, phrases, audio_start_ms, formats, result, emit
 def confirm_profile_face_links(source, formats, phrases, observations, visual):
     """Recheck isolated face changes in Assist mode before building voice profiles."""
     from voice_studio.vision.frame_changes import assist_settings
-    from voice_studio.vision.speaker_face_recheck import boundary_pairs
+    from voice_studio.vision.speaker_face_recheck import boundary_pairs, run_native_review
 
     if not assist_settings():
         return
     pairs = boundary_pairs(phrases, observations, visual)
     if not pairs:
         return
-    try:
-        with temporary_directory() as folder:
-            request = Path(folder) / "speaker-face-pairs.json"
-            request.write_text(json.dumps({"source": str(source), "formats": formats,
-                                           "yunet": str(MODEL), "sface": str(SFACE), "pairs": pairs}), encoding="utf-8")
-            review = run_worker("voice_studio.vision.speaker_face_recheck", [request], [VISION], timeout=25)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return
-    visual["faceTracking"]["profileFaceReview"] = {"compared": len(pairs), "confirmed": len(review["matches"])}
-    for match in review["matches"]:
+    matches = run_native_review(source, formats, pairs)
+    visual["faceTracking"]["profileFaceReview"] = {"compared": len(pairs), "confirmed": len(matches)}
+    for match in matches:
         activity = observations[str(match["cueMs"])]
         activity.update(profileFace=match["face"], faceEvidence="original-head-crops", identitySimilarity=match["similarity"])
 

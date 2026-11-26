@@ -18,6 +18,7 @@ RESOURCE_CAPABILITIES = (
 )
 OUTPUT_IDS = {"speech.asr": "studio.asr", "speech.diarization": "studio.diarization",
               "speech.embedding": "studio.embedding", "audio.classification": "studio.audio-classification",
+              "translation.text": "studio.translations",
               "vision.visual-batch": "studio.visual", "vision.scene-batch": "studio.scene"}
 for _capability in RESOURCE_CAPABILITIES:
     OUTPUT_IDS[_capability] = "studio.model-resource"
@@ -75,6 +76,11 @@ _DEFINITIONS = {
             "text": _array_schema(_object_schema({"text": {"type": "string"}, "box": _BOX}, ("text", "box")))}, ("timeMs", "objects", "text")))}, ("status", "frames")),
         "units": {"frames[].timeMs": "milliseconds", "box": "normalized [x,y,width,height]", "score": "probability in [0,1]"},
         "supportLimits": ["Frames sorted by timeMs; all normalized boxes fit inside the image. Optional motion, color, shot and interface metadata is finite JSON but otherwise not standardized."]},
+    "studio.translations": {
+        "schema": _object_schema({"translations": {"type": "array", "minItems": 1, "maxItems": 400,
+                                    "items": {"type": "string", "minLength": 1, "maxLength": 1000}}}, ("translations",)),
+        "units": {},
+        "supportLimits": ["Input uses sourceLanguage, targetLanguage and texts. Return one translation per text in input order."]},
     "studio.named-input": {
         "schema": {"type": "object", "additionalProperties": True}, "units": {},
         "supportLimits": ["Finite JSON object containing named arguments from the documented host batch operation.", "Operation-specific required fields, units and opaque builtin inputs are not standardized by this generic input envelope."]},
@@ -275,6 +281,17 @@ def _audio(value, path):
             _number(score["score"], score_path + ".score", 0, 1)
 
 
+def _translations(value, path):
+    """Validate nonblank bounded translations before replacing any cue text."""
+    _object(value, path, ("translations",))
+    rows = value["translations"]
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 400:
+        _fail(path + ".translations", "expected 1 to 400 translations")
+    for index, text in enumerate(rows):
+        if not isinstance(text, str) or not text.strip() or len(text) > 1000:
+            _fail(f"{path}.translations[{index}]", "expected nonblank text of up to 1000 characters")
+
+
 def validate_contract(value, reference, path="result", *, capability=None, direction="output"):
     """Validate finite JSON and semantic invariants, raising ModError at the failing JSON path.
 
@@ -286,7 +303,7 @@ def validate_contract(value, reference, path="result", *, capability=None, direc
     _finite(value, path)
     validators = {"studio.asr": _asr, "studio.diarization": _diarization,
                   "studio.scene": _scene, "studio.embedding": _embedding,
-                  "studio.audio-classification": _audio}
+                  "studio.audio-classification": _audio, "studio.translations": _translations}
     if contract_id in validators:
         validators[contract_id](value, path)
     elif contract_id == "studio.model-resource":

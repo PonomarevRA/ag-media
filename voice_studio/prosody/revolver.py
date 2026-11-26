@@ -100,9 +100,14 @@ def synthesis_variants(text, language, model, settings):
         candidate = re.sub(r"[.!?…]*$", "", text) + ending
         if candidate != text and not text.endswith(('"', '»', '”', ')', ']', '}')):
             result.append(("tone-" + tone, [(candidate, 0)]))
-    if settings.get("pauses") and model in {"f5", "coqui"}:
-        phrases = phrase_plan(text)
-        # A bounded number of segments limits repeated inference and seam artifacts.
-        if 2 <= len(phrases) <= 4 and "".join("".join(p["text"].split()) for p in phrases) == "".join(text.split()):
-            result.append(("pauses", [(p["text"], p["pauseMs"]) for p in phrases]))
+    if settings.get("sequence") and model == "qwen":
+        split_variant = "voice-sequence"
+    elif settings.get("pauses") and model in {"f5", "coqui"}:
+        split_variant = "pauses"
+    else:
+        return result
+    phrases = phrase_plan(text)
+    # A bounded number of segments limits repeated inference and seam artifacts.
+    if 2 <= len(phrases) <= 4 and "".join("".join(p["text"].split()) for p in phrases) == "".join(text.split()):
+        result.append((split_variant, [(p["text"], p["pauseMs"]) for p in phrases]))
     return result

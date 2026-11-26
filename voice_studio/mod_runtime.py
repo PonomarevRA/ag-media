@@ -33,6 +33,9 @@ LAYER_CAPABILITIES = {
 
 def _builtin(mod_id, capability, payload, settings):
     """Invoke the exact selected checkpoint, preserving the previous native runner."""
+    if mod_id == 'builtin.apple-translation' and capability == 'translation.text':
+        from voice_studio.synthesis.dub_text_translation import translate_apple
+        return translate_apple(payload)
     if mod_id == 'builtin.frame-changes':
         from voice_studio.vision.frame_changes import run_scan
         return run_scan(payload['inputs'], payload['folder'], payload['clockFilter'], settings)

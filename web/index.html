@@ -102,6 +102,8 @@
               <label id="reading-mode-field" class="select-field" for="reading-mode" hidden>Текст для записи
                 <select id="reading-mode">
                   <option value="corpus">Фразы корпуса</option>
+                  <option value="voice-reference">Эталон голоса · по фразам</option>
+                  <option value="voice-reference-batch">Эталон голоса · несколько реплик</option>
                   <option value="story-parts">Поезд на рассвете · по частям</option>
                   <option value="story-full">Поезд на рассвете · целиком</option>
                 </select>
@@ -112,6 +114,7 @@
               <p id="story-hint" class="muted" hidden></p>
               <p id="prompt-progress" class="mono"></p>
               <blockquote id="next-prompt"></blockquote>
+              <ol id="numbered-voice-script" hidden></ol>
               <button id="use-prompt" type="button">Скопировать фразу в расшифровку</button>
             </div>
             <label id="record-denoise-field" class="inline-check" hidden><input id="record-denoise" type="checkbox" checked> Подавлять фоновый шум</label>
@@ -122,6 +125,7 @@
             <audio id="preview" controls preload="metadata" hidden></audio>
           </div>
           <div class="record-editor" data-ag-width="content" data-ag-width-min-em="7">
+            <div id="record-transcript-fields">
             <label for="transcript">Что прозвучало в записи</label>
             <textarea id="transcript" rows="2" maxlength="500" placeholder="Расшифровка появится после остановки записи"></textarea>
             <p id="transcript-length" class="muted" role="status" hidden>Сократи расшифровку до 500 знаков перед сохранением.</p>
@@ -139,28 +143,48 @@
             </section>
             <label id="prompt-check"><input id="mark-prompt" type="checkbox"> В записи прочитана фраза из корпуса</label>
             <label id="evaluation-only-field"><input id="evaluation-only" type="checkbox"> Только для проверки</label>
+            </div>
             <label class="consent"><input id="consent" type="checkbox"> Я записываю свой голос или имею разрешение владельца.</label>
             <div class="record-actions">
               <button id="save-recording" class="primary" disabled>Сохранить запись</button>
               <button id="use-saved-take" type="button" hidden>Синтез по этой записи</button>
             </div>
             <p id="record-feedback" class="muted" role="status"></p>
+            <section id="reference-batch-review" aria-labelledby="reference-batch-review-title" hidden>
+              <h3 id="reference-batch-review-title">Реплики для сверки</h3>
+              <p class="muted">Послушай фрагмент и подтверди, если прозвучал текст сценария.</p>
+              <ul id="reference-batch-review-list"></ul>
+            </section>
           </div>
         </div>
       </section>
       <div class="profile-workflow" data-ag-width="content" data-ag-width-min-em="7">
         <section class="panel" aria-labelledby="samples-title" data-ag-width="fill">
           <h2 id="samples-title">Профили голоса</h2>
+          <p id="voice-catalog-empty" class="muted" hidden>Сохрани набор записей, чтобы голос появился в каталоге.</p>
+          <ul id="voice-catalog-list" class="studio-list" data-ag-width="fill"></ul>
+          <audio id="voice-catalog-preview" preload="none"></audio>
           <p class="muted" id="sample-count">Загрузка записей…</p>
           <a class="history-jump" href="/history">Управлять записями</a>
+          <label class="select-field" for="voice-catalog-name" data-ag-width="fill">Имя голосового профиля
+            <input id="voice-catalog-name" type="text" maxlength="80" autocomplete="off">
+          </label>
           <div class="actions">
             <button id="save-profile" disabled>Сохранить версию</button>
+            <button id="voice-profile-rename" type="button" disabled>Переименовать</button>
             <button id="export" disabled>Скачать корпус ZIP</button>
           </div>
-          <div class="profile-choice">
-            <label class="select-field" for="profiles">Профиль
-              <select id="profiles"><option value="">Текущий набор</option></select>
-            </label>
+          <div class="actions">
+            <button id="select-voice-reference-takes" type="button" disabled>Выбрать последние дубли эталона</button>
+            <button id="check-voice-profile" type="button" disabled>Сравнить образцы</button>
+            <button id="save-checked-voice-profile" type="button" disabled>Сохранить проверенный профиль</button>
+          </div>
+          <p id="voice-reference-status" class="muted" role="status"></p>
+          <details id="voice-reference-report" hidden>
+            <summary>Качество и сходство записей</summary>
+            <div id="voice-reference-results"></div>
+          </details>
+          <div class="actions">
             <button id="delete-profile" type="button" disabled>Удалить версию</button>
           </div>
         </section>
@@ -351,12 +375,12 @@
           </div>
         </div>
       </section>
-      <details id="media-analysis" class="media-analysis capture-options" hidden>
-        <summary id="media-analysis-title">Ход анализа</summary>
+      <section id="media-analysis" class="media-analysis capture-options" aria-labelledby="media-analysis-title" data-ag-width="fill" hidden>
+        <h3 id="media-analysis-title" data-ag-width="fill">Ход анализа <span id="media-analysis-elapsed" class="muted mono"></span></h3>
+        <ol id="media-analysis-stages" role="list" aria-label="Шаги анализа" data-ag-width="fill"></ol>
         <p id="media-analysis-status" role="status"></p>
         <progress id="media-analysis-meter" max="100" aria-label="Приблизительный прогресс анализа"></progress>
-        <ol id="media-analysis-stages"></ol>
-      </details>
+      </section>
       <details id="media-dialogue-audit" class="capture-options" data-ag-width="fill" hidden></details>
       <div class="editor-workbench" data-ag-width="fill">
         <section class="editor-preview" data-ag-width="content" data-ag-width-min-em="9" aria-labelledby="editor-monitor-title">
@@ -424,10 +448,19 @@
             <div class="editor-inspector-meta" data-ag-width="fill">
               <p id="transcript-current" class="muted" data-ag-width="content" data-ag-width-min-em="1" hidden></p>
               <div class="editor-inspector-actions" data-ag-width="content" data-ag-width-min-em="2">
+              <select id="media-srt-script" aria-label="Письмо для SRT" hidden>
+                <option value="original">Как в расшифровке</option>
+                <option value="simplified">Упрощённое · 简体中文</option>
+              </select>
               <a id="media-srt" class="download studio-icon transcript-tip" data-icon="subtitles" data-hint aria-label="Скачать SRT" download="subtitles.srt"><span class="visually-hidden">Скачать SRT</span></a>
               <button id="media-json" class="download studio-icon transcript-tip" data-icon="json" data-hint type="button" aria-label="Скачать JSON"><span class="visually-hidden">Скачать JSON</span></button>
               </div>
             </div>
+            <p id="media-srt-status" class="muted" role="status" hidden></p>
+            <details id="media-ocr-checks" hidden>
+              <summary>Расхождения с текстом на экране</summary>
+              <ul id="media-ocr-check-list"></ul>
+            </details>
             <ol id="media-segments" aria-label="Фразы с таймкодами"></ol>
             <p id="media-evidence-status" class="muted" hidden></p>
             <details id="media-speaker-profiles" hidden>
@@ -497,12 +530,21 @@
               <option value="ru">Русский</option>
             </select>
           </label>
+          <label class="select-field" id="media-dub-translation-field" hidden>Переводчик
+            <select id="media-dub-translation-method" aria-describedby="media-dub-translation-status">
+              <option value="manual">Вручную</option>
+              <option value="model" disabled>Мод перевода</option>
+              <option value="whisper">Whisper · перевод на английский</option>
+            </select>
+          </label>
           <label class="inline-check">
             <input id="media-dub-pronunciation" type="checkbox" aria-describedby="media-dub-pronunciation-help">
             Уменьшить акцент
           </label>
         </div>
         <p id="media-dub-pronunciation-help" class="muted">Экспериментальный режим. Использует тембр образца и старается приблизить произношение к языку дубляжа.</p>
+        <p id="media-dub-translation-status" class="muted" aria-live="polite" hidden></p>
+        <div id="media-dub-profiles" class="actions" aria-label="Голоса для дубляжа" data-ag-width="fill" hidden></div>
         <ol id="media-dub-cues" class="media-dub-cues"></ol>
         <div class="actions">
           <button id="media-dub-translate" type="button">Заполнить перевод</button>
@@ -635,6 +677,30 @@
           <div id="media-frame-inspection-items" class="editor-screen-list"></div>
         </div>
       </section>
+      <section id="media-step-window" class="editor-object-window" role="dialog" aria-labelledby="media-step-title" hidden>
+        <header class="editor-object-window-heading">
+          <h3 id="media-step-title" tabindex="-1"></h3>
+          <div class="editor-object-window-actions">
+            <button id="media-step-minimize" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Свернуть окно" data-icon="minimize" data-hint></button>
+            <button id="media-step-expand" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Развернуть окно" aria-pressed="false" data-icon="expand-window" data-hint></button>
+            <button id="media-step-close" class="studio-icon studio-quiet-action" type="button"
+                    aria-label="Закрыть окно" data-icon="close" data-hint></button>
+          </div>
+        </header>
+        <div class="editor-detail-body media-step-details" data-ag-width="fill">
+          <p id="media-step-state"></p>
+          <p id="media-step-context" class="muted" hidden></p>
+          <section id="media-step-diagnostic" aria-labelledby="media-step-diagnostic-title" data-ag-width="fill" hidden>
+            <h4 id="media-step-diagnostic-title">Подробности шага</h4>
+            <p id="media-step-message"></p>
+            <code id="media-step-error-type" class="muted" hidden></code>
+          </section>
+          <button id="media-step-retry" type="button" hidden>Пересчитать этап</button>
+          <p id="media-step-retry-group" class="muted" hidden></p>
+        </div>
+      </section>
       <div class="editor-detail-shelves">
         <div id="media-object-shelf" class="editor-object-shelf" role="group" aria-label="Свёрнутые окна" hidden>
           <button id="media-object-restore" class="studio-icon" type="button" aria-controls="media-object-preview"
@@ -647,6 +713,11 @@
         <div id="media-frame-inspection-shelf" class="editor-object-shelf" role="group" aria-label="Свёрнутые окна" hidden>
           <button id="media-frame-inspection-restore" class="studio-icon" type="button" aria-controls="media-frame-inspection"
                   data-icon="film"><span id="media-frame-inspection-restore-label"></span></button>
+        </div>
+        <div id="media-step-shelf" class="editor-object-shelf" role="group" aria-label="Свёрнутые окна" hidden>
+          <button id="media-step-restore" class="studio-icon" type="button" aria-controls="media-step-window" data-icon="refresh">
+            <span id="media-step-restore-label"></span>
+          </button>
         </div>
       </div>
     </section>
@@ -664,6 +735,10 @@
     </section>
     <section class="panel compare" data-ag-width="fill" aria-labelledby="compare-title">
       <h2 id="compare-title" tabindex="-1">Синтез дублей</h2>
+      <label class="select-field" for="synthesis-voice-profile" data-ag-width="fill">Голос для синтеза
+        <select id="synthesis-voice-profile" aria-describedby="synthesis-voice-summary" disabled></select>
+      </label>
+      <p id="synthesis-voice-summary" class="muted"></p>
       <div id="engines" class="engines" role="group" aria-label="Модели для синтеза"></div>
       <label for="test-text">Текст для синтеза</label>
       <textarea id="test-text" rows="2" maxlength="500"></textarea>
@@ -685,7 +760,9 @@
           <button id="review-prosody" type="button">Проверить текст</button>
           <label class="inline-check"><input id="try-stress" type="checkbox"> Дубль с ударениями · F5</label>
           <label class="inline-check"><input id="try-pauses" type="checkbox"> Дубль с паузами между фразами</label>
+          <label class="inline-check"><input id="try-voice-sequence" type="checkbox" aria-describedby="voice-sequence-help"> Подобрать и сгладить фразы · Qwen</label>
         </div>
+        <p id="voice-sequence-help" class="muted">Для текста из двух–четырёх предложений. На каждое предложение — два дубля с проверкой слов Whisper.</p>
         <label class="select-field" for="try-tone">Подача в отдельном дубле
           <select id="try-tone"><option value="">Как в тексте</option><option value="question">Вопрос</option>
             <option value="exclamation">Восклицание</option></select>

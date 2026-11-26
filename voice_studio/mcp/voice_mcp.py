@@ -220,17 +220,33 @@ def build_server(studio, *, studio_root=None, graph_root=None):
     @mcp.tool()
     @http_lane.offload
     def speech_sources(language: Language = "ru") -> dict[str, Any]:
-        """List available local engines and reference recording IDs for generation."""
+        """List local engines and voice profiles with measurements and stable version IDs for generation and dubbing."""
         return studio.request("voice-sources", language, {})
 
     @mcp.tool()
     @http_lane.offload
-    def speech_generate(text: str, reference_ids: list[str], engine: Engine = "qwen",
-                       language: Language = "ru", checkpoint_id: str | None = None) -> dict[str, Any]:
-        """Queue local speech generation using recordings you are authorized to use."""
+    def speech_profile_check(reference_ids: list[str], language: Language = "ru",
+                             save: bool = False, name: str | None = None) -> dict[str, Any]:
+        """Compare up to eight authorized local takes and optionally save their verified order."""
+        return studio.request("voice-profile-check", language, {"refs": reference_ids, "save": save, "name": name})
+
+    @mcp.tool()
+    def speech_reference_script(language: Language = "ru") -> dict[str, Any]:
+        """Return spoken prompts, separate delivery directions and the held-out control phrase."""
+        from voice_studio.prosody.reference_script import reference_script
+
+        return reference_script(language)
+
+    @mcp.tool()
+    @http_lane.offload
+    def speech_generate(text: str, reference_ids: list[str] | None = None, engine: Engine = "qwen",
+                       language: Language = "ru", checkpoint_id: str | None = None,
+                       profile_version: int = 0, smooth_sequence: bool = False) -> dict[str, Any]:
+        """Queue local speech from authorized samples or a saved profile. With smooth_sequence, add a matched Qwen variant for two to four sentences."""
         checkpoints = {engine: checkpoint_id} if checkpoint_id else {}
         return studio.request("synthesize", language, {"text": text, "models": [engine],
-                              "refs": reference_ids, "checkpoints": checkpoints})
+                              "refs": reference_ids, "profile": profile_version, "checkpoints": checkpoints,
+                              "prosody": {"sequence": smooth_sequence}})
 
     @mcp.tool()
     @http_lane.offload
@@ -246,6 +262,13 @@ def build_server(studio, *, studio_root=None, graph_root=None):
                         shutil.copyfileobj(response, output)
                         job["wavPath"] = output.name
         return job
+
+    @mcp.tool()
+    @http_lane.offload
+    def media_pipeline_status(run_id: str | None = None) -> dict[str, Any]:
+        """Read Studio upload stages, elapsed milliseconds, retry groups and stage errors. Omit run_id for the latest Studio run; for graph builds use media_graph_job."""
+        options = {"id": run_id} if run_id is not None else {}
+        return studio.request("analysis-status", "ru", **options)
 
     @mcp.tool()
     async def media_transcribe(file_path: str, language: ClipLanguageMode | None = None,

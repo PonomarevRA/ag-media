@@ -29,6 +29,8 @@ PROFILES = {
     "screen_analyze": (("picture", "ui"), "screenshot UI interface button form diagram OCR скриншот интерфейс кнопка поле схема черновик"),
     "audio_separate": (("sound",), "stems dialogue music effects разделение дорожки реплики музыка звуки шумодав"),
     "audio_denoise": (("sound",), "cleanup noise rnnoise шумодав шумоподавление чистка"),
+    "audio_voice_quality": (("sound",), "voice audio quality speech level noise floor bandwidth оценка голоса уровень речи шум частоты"),
+    "audio_voice_restore": (("sound",), "restore clean dialogue equalizer voice boost speech denoise очистка речи усиление тихих фраз"),
     "audio_job": (("sound",), "status stems denoise очередь дорожки шумоподавление"),
     "media_transcribe": (("sound", "face", "picture"),
                          "speech speakers gaze objects ocr транскрипция спикеры лица предметы подсчёт людей"),
@@ -51,10 +53,13 @@ PROFILES = {
 PROFILES.update({
     "media_catalog": (("runtime",), "catalogue categories tools graph discover каталог категории инструменты"),
     "ui_measure": (("ui",), "live measure geometry padding gap alignment text inset batch измерение отступы текст кнопка массив"),
-    "speech_sources": (("sound",), "speech synthesis engines reference recordings голос синтез источники"),
+    "speech_sources": (("sound",), "speech synthesis engines reference recordings voice profile catalog dubbing голос синтез источники каталог дубляж"),
+    "speech_profile_check": (("sound",), "compare enrollment takes embedding cosine voice quality профиль эталон сходство голосов"),
+    "speech_reference_script": (("sound",), "voice reference script recording intonation cues голос эталон текст запись интонации"),
     "speech_generate": (("sound",), "speech synthesis generation voice clone синтез озвучка голос"),
     "speech_job": (("sound",), "speech synthesis generation status WAV озвучка готовность"),
     "media_graph_job": (("graph",), "graph analysis progress status граф статус анализ"),
+    "media_pipeline_status": (("runtime",), "studio pipeline steps progress elapsed errors retries этапы анализ ошибка прогресс"),
     "media_graph_list": (("graph",), "saved immutable media graphs граф список"),
     "transcript_materials": (("transcript", "sound"), "saved editable transcripts список транскрипции"),
     "transcript_get": (("transcript", "sound"), "timed transcript cues revision текст реплики таймкоды"),
@@ -68,6 +73,8 @@ PROFILES["browser_ml_capabilities"] = (("runtime",), "browser WebNN execution pr
 
 def tool_scope(name):
     """Separate live UI, recorded media and model-management operations even when categories overlap."""
+    if name == "media_pipeline_status":
+        return "studio-pipeline"
     scopes = {"ui_": "live-window", "screen_": "local-screenshot", "media_graph_": "timed-media-graph",
               "media_mods_": "model-management", "transcript_": "saved-transcript", "audio_": "source-audio",
               "speech_": "speech-synthesis", "dialogue_": "dialogue-audit", "video_": "source-video"}

@@ -1,6 +1,9 @@
 import {apiText, uiText} from "./i18n.js";
+import {mountAnalysisStepWindow} from "./analysis-step-window.js";
+import {attachStudioHint} from "./studio-icons.js";
 const STAGES = [
   ["upload", uiText("Загрузка файла"), 1],
+  ["source-probe", uiText("Проверка файла"), .3],
   ["audio", uiText("FFmpeg · извлечение звука"), 1],
   ["diarization", uiText("Sherpa · голоса"), 1.5, .045],
   ["whisper", uiText("Whisper · текст и таймкоды"), 1, .12],
@@ -25,6 +28,11 @@ const CACHE_LAYERS = {
   "speaker-review": ["speaker-review"], people: ["person-layer"], scene: ["scene"],
   voice: ["voice-profiles"], object_review: ["object-review"],
 };
+const RETRY_GROUPS = {audio: "speech", "dialogue-audit": "voice"};
+for (const [group, stages] of Object.entries(CACHE_LAYERS)) {
+  if (group !== "speaker-review") for (const stage of stages) RETRY_GROUPS[stage] = group;
+}
+const SYMBOLS = {queued: "·", running: "…", done: "✓", skipped: "↷", partial: "!", failed: "×", pending: "·", invalidated: "↻"};
 
 /**
  * Distinguish checkpoints from shared inference without hiding failed/skipped states.
@@ -33,6 +41,7 @@ const CACHE_LAYERS = {
  * @returns {string} Localized status text for the existing progress row.
  */
 export function analysisStageStatus(event, cacheMode) {
+  if (event.state === "failed") return STATE.failed + (event.reason ? " · " + apiText(event.reason) : "");
   if (event.cacheHit === true) {
     if (event.state === "skipped") {
       return uiText("Из кэша · пропущен") + (event.reason ? " · " + apiText(event.reason) : "");
@@ -56,7 +65,7 @@ const REPORT_FIELDS = {
   visual: ["videoEvidence", "segments", "speakerReview", "srt"],
   "scene-preview": ["sceneEvidence"],
   scene: ["sceneEvidence", "shotColors", "objectTimeline", "objectProfiles", "videoEvidence",
-    "segments", "language", "durationMs", "text", "srt", "corrections"],
+    "segments", "language", "durationMs", "text", "srt", "corrections", "ocrTranscriptChecks"],
 };
 
 /** Apply a known report layer only after the base and keep earlier layers available. */
@@ -91,7 +100,10 @@ export async function readAnalysisStream(response, update) {
         buffer = buffer.slice(end + 1);
         if (!line) continue;
         const event = JSON.parse(line);
-        if (event.error) throw new Error(apiText(event.error));
+        if (!event.stage && typeof event.error === "string" && event.error) {
+          if (event.pipeline) update({pipeline: event.pipeline});
+          throw new Error(apiText(event.error));
+        }
         if (event.result) return event.result;
         update(event);
       }
@@ -110,26 +122,43 @@ export function recoveryProgress(event) {
   return event.recoveryPass === "alternate" ? uiText`другой язык · ${progress}` : progress;
 }
 
-/** Display actual server stages and an approximate, explicitly qualified time estimate. */
-export function mountMediaAnalysis(find) {
+/** Show wall time independently of accumulated work in parallel stages. */
+export function pipelineDuration(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (ms < 60_000) return uiText`${(ms / 1000).toFixed(1)} с`;
+  const seconds = Math.floor(ms / 1000);
+  return [Math.floor(seconds / 60), String(seconds % 60).padStart(2, "0")].join(":");
+}
+
+/** Display actual server stages, measured wall time and the current ETA. */
+export function mountMediaAnalysis(find, retry) {
   const region = find("media-analysis");
+  const clock = find("media-analysis-elapsed");
   const meter = find("media-analysis-meter");
   const status = find("media-analysis-status");
   const list = find("media-analysis-stages");
+  const details = mountAnalysisStepWindow(find, retry);
   const rows = new Map();
   const cacheModes = new Map();
   let timer;
   let duration;
   let started;
+  let terminal;
 
   function estimate() {
+    if (started !== undefined) clock.textContent = "· " + pipelineDuration(performance.now() - started);
+    for (const row of rows.values()) {
+      if (row.state !== "running" || row.started === undefined) continue;
+      row.elapsed = pipelineDuration(performance.now() - row.started);
+      details.update(row);
+    }
     const pending = [...rows.values()].filter(row => ["queued", "running"].includes(row.state));
     const active = pending.filter(row => row.state === "running");
     const current = active[0];
     if (!current) {
       const waiting = pending.find(row => row.waitingReason);
       if (waiting) {
-        status.textContent = [waiting.label.textContent, apiText(waiting.waitingReason)].join(" · ");
+        status.textContent = [waiting.name, apiText(waiting.waitingReason)].join(" · ");
         return;
       }
       status.textContent = pending.length ? uiText("Подготовка следующего этапа…") : uiText("Собираем результат…");
@@ -137,13 +166,13 @@ export function mountMediaAnalysis(find) {
     }
     if (duration === undefined || current.id === "upload") {
       meter.removeAttribute("value");
-      status.textContent = `${current.label.textContent}…`;
+      status.textContent = `${current.name}…`;
       return;
     }
     if (current.id === "whisper-recovery" && current.started !== undefined) {
       const seconds = Math.floor((performance.now() - current.started) / 1000);
       const passed = uiText`прошло ${seconds} с`;
-      status.textContent = [current.label.textContent, current.recoveryProgress, passed].filter(Boolean).join(" · ");
+      status.textContent = [current.name, current.progress, passed].filter(Boolean).join(" · ");
       return;
     }
     let remaining = 0;
@@ -161,41 +190,75 @@ export function mountMediaAnalysis(find) {
     meter.value = 100 * (rows.size - pending.length) / rows.size;
     const rounded = Math.max(5, Math.ceil((remaining + activeRemaining) / 5) * 5);
     const hint = overdue ? uiText("время уточняется") : uiText`ещё около ${rounded} с`;
-    status.textContent = `${active.map(row => row.label.textContent).join(" + ")} · ${hint}`;
+    status.textContent = `${active.map(row => row.name).join(" + ")} · ${hint}`;
+  }
+
+  /** Add a compact status button while preserving the order of known pipeline steps. */
+  function addRow(id, name, base, rate = 0) {
+    const line = document.createElement("li");
+    line.dataset.stage = id;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "studio-icon pipeline-step";
+    button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-controls", "media-step-window");
+    attachStudioHint(button, "");
+    const placeHint = () => {
+      const root = button.ownerDocument.documentElement;
+      const bounds = button.getBoundingClientRect();
+      button.dataset.hintSide = root.clientWidth - bounds.left < root.clientWidth * .48 ? "end" : "start";
+    };
+    button.addEventListener("pointerenter", placeHint);
+    button.addEventListener("focus", placeHint);
+    line.append(button);
+    const row = {id, line, button, name, base, rate, retryGroup: RETRY_GROUPS[id]};
+    button.onclick = () => details.open(row, button);
+    rows.set(id, row);
+    if (id === "whisper-recovery" && rows.has("whisper")) rows.get("whisper").line.after(line);
+    else list.append(line);
+    return row;
+  }
+
+  /** Update the actual worker outcome and any diagnostic delivered by the server. */
+  function applyStep(event) {
+    if (!event.stage || !Object.hasOwn(SYMBOLS, event.state)) return;
+    const definition = STAGES.find(([id]) => id === event.stage);
+    if (!rows.has(event.stage) && !definition) return;
+    const row = rows.get(event.stage) ?? addRow(...definition);
+    row.state = event.state;
+    row.reason = event.reason;
+    row.waitingReason = row.state === "queued" ? row.reason : undefined;
+    if (row.state === "queued") row.started = undefined;
+    if (row.state === "running" && row.started === undefined) row.started = performance.now();
+    if (event.detail && row.id === "whisper") row.name = event.detail + uiText(" · текст и таймкоды");
+    row.error = event.error || (row.state === "failed" && {message: event.reason || uiText("Этап завершился с ошибкой.")});
+    row.lastFailure = event.lastFailure || row.error || row.lastFailure;
+    row.windowStartMs = event.windowStartMs;
+    row.retryGroup = event.retryGroup || row.retryGroup;
+    row.elapsed = pipelineDuration(event.elapsedMs);
+    row.status = analysisStageStatus({state: event.state, cacheHit: event.cacheHit, reused: event.reused}, cacheModes.get(row.id));
+    row.progress = row.id === "whisper-recovery" ? recoveryProgress(event) : "";
+    if (event.totalChunks > 1) row.progress = uiText`Блок ${event.chunk} из ${event.totalChunks}`;
+    row.line.dataset.state = row.state;
+    row.line.dataset.cache = event.cacheHit === true ? "hit" : cacheModes.get(row.id) || "none";
+    row.button.textContent = SYMBOLS[row.state];
+    const label = [row.name, row.status, row.elapsed].filter(Boolean).join(" · ");
+    row.button.setAttribute("aria-label", label);
+    row.button.dataset.hint = label;
+    details.update(row);
   }
 
   function update(event) {
+    if (event.pipeline) {
+      terminal = event.pipeline;
+      return;
+    }
+    if (event.runId) region.dataset.runId = event.runId;
     if (typeof event.durationMs === "number") duration = event.durationMs / 1000;
     if (Object.hasOwn(CACHE_LAYERS, event.cacheLayer) && typeof event.cacheHit === "boolean") {
       for (const id of CACHE_LAYERS[event.cacheLayer]) cacheModes.set(id, event.cacheHit ? "cached" : "recompute");
     }
-    if (event.stage === "whisper-recovery" && ["running", "done", "partial"].includes(event.state) && !rows.has(event.stage)) {
-      const [, name, base, rate] = STAGES.find(([id]) => id === event.stage);
-      const line = document.createElement("li");
-      const label = document.createElement("span");
-      label.textContent = name;
-      const detail = document.createElement("span");
-      line.append(label, detail);
-      rows.get("whisper")?.line.after(line);
-      rows.set(event.stage, {id: event.stage, line, label, detail, base, rate, state: "queued"});
-    }
-    const row = rows.get(event.stage);
-    if (row) {
-      row.state = event.state;
-      row.waitingReason = event.state === "queued" ? event.reason : undefined;
-      if (event.state === "queued") row.started = undefined;
-      row.warning = row.id === "person-layer" && event.state === "skipped" && Boolean(event.reason);
-      row.line.dataset.state = event.state;
-      row.line.dataset.cache = event.cacheHit === true ? "hit" : cacheModes.get(event.stage) || "none";
-      if (event.state === "running" && row.started === undefined) row.started = performance.now();
-      if (event.detail && row.id === "whisper") row.label.textContent = event.detail + uiText(" · текст и таймкоды");
-      row.detail.textContent = analysisStageStatus(event, cacheModes.get(event.stage));
-      if (event.stage === "whisper-recovery") {
-        row.recoveryProgress = recoveryProgress(event);
-        if (row.recoveryProgress) row.detail.textContent += " · " + row.recoveryProgress;
-      }
-      if (event.totalChunks > 1) row.detail.textContent += uiText` · блок ${event.chunk}/${event.totalChunks}`;
-    }
+    applyStep(event);
     estimate();
   }
 
@@ -204,17 +267,23 @@ export function mountMediaAnalysis(find) {
     rows.clear();
     cacheModes.clear();
     duration = undefined;
+    started = terminal = undefined;
+    delete region.dataset.runId;
+    clock.textContent = "";
+    const returnStep = details.close();
     region.hidden = true;
     list.replaceChildren();
     meter.removeAttribute("value");
+    return returnStep;
   }
 
   return {
     reset,
     update,
+    setAvailable: details.setAvailable,
     start(flags) {
-      reset();
-      const enabled = new Set(["upload", "audio", "whisper", "dialogue-pauses", "audio-layers", "speaker-context"]);
+      const returnStep = reset();
+      const enabled = new Set(["upload", "source-probe", "audio", "whisper", "dialogue-pauses", "audio-layers", "speaker-context"]);
       if (flags.speakers === "1") enabled.add("diarization").add("voice-profiles").add("dialogue-audit");
       if (flags.visual === "1") enabled.add("light-asd").add("yunet");
       if (flags.visual === "1" && flags.speakers === "1" && !flags.speaker_count) enabled.add("speaker-review");
@@ -224,26 +293,22 @@ export function mountMediaAnalysis(find) {
       for (const layer of (flags.selected_stages ?? "").split(",")) {
         for (const id of CACHE_LAYERS[layer] ?? []) enabled.add(id);
       }
-      for (const [id, name, base, rate = 0] of STAGES) {
+      for (const [id, name, base, rate] of STAGES) {
         if (!enabled.has(id)) continue;
-        const line = document.createElement("li");
-        const label = document.createElement("span");
-        label.textContent = id === "whisper" && flags.quality === "1" ? uiText("Whisper Small · текст и таймкоды") : name;
-        const detail = document.createElement("span");
-        detail.textContent = STATE.queued;
-        line.dataset.state = "queued";
-        line.append(label, detail);
-        rows.set(id, {id, line, label, detail, base, rate, state: "queued"});
-        list.append(line);
+        addRow(id, id === "whisper" && flags.quality === "1" ? uiText("Whisper Small · текст и таймкоды") : name, base, rate);
+        applyStep({stage: id, state: "queued"});
       }
       region.hidden = false;
-      region.open = true;
       meter.hidden = false;
       started = performance.now();
       update({stage: "upload", state: "running"});
+      if (returnStep) rows.get(returnStep)?.button.focus({preventScroll: true});
       timer = setInterval(estimate, 1000);
     },
-    finish(error, stageReport) {
+    finish(error, stageReport, pipeline = terminal) {
+      clearInterval(timer);
+      if (pipeline?.runId) region.dataset.runId = pipeline.runId;
+      for (const event of pipeline?.stages ?? []) applyStep(event);
       // The final manifest distinguishes deliberately pending work from skipped workers.
       if (!error && stageReport) {
         for (const [layer, info] of Object.entries(stageReport)) {
@@ -251,16 +316,17 @@ export function mountMediaAnalysis(find) {
           if (!state) continue;
           for (const id of CACHE_LAYERS[layer] ?? []) {
             const observed = rows.get(id)?.state;
-            if (state === "failed" && ["failed", "partial", "skipped"].includes(observed)) continue;
-            if (["pending", "invalidated", "failed"].includes(state)) update({stage: id, state});
+            if (["done", "failed", "partial", "skipped"].includes(observed)) continue;
+            if (["pending", "invalidated", "failed"].includes(state)) applyStep({stage: id, state, reason: info?.reason});
           }
         }
       }
-      clearInterval(timer);
       for (const row of rows.values()) {
-        if (row.state === "running") update({stage: row.id, state: error ? "failed" : "done"});
-        if (row.state === "queued") update({stage: row.id, state: "skipped"});
+        if (row.state === "running") applyStep({stage: row.id, state: error ? "failed" : "done", reason: error});
+        if (row.state === "queued") applyStep({stage: row.id, state: error ? "pending" : "skipped"});
       }
+      const wallTime = pipeline?.elapsedMs ?? (performance.now() - started);
+      clock.textContent = "· " + pipelineDuration(wallTime);
       if (error) {
         meter.removeAttribute("value");
         meter.hidden = true;
@@ -268,10 +334,9 @@ export function mountMediaAnalysis(find) {
       } else {
         meter.hidden = false;
         meter.value = 100;
-        const hasIssues = [...rows.values()].some(row => ["failed", "partial"].includes(row.state) || row.warning);
-        region.open = hasIssues;
-        const seconds = Math.round((performance.now() - started) / 1000);
-        status.textContent = hasIssues ? uiText`Анализ завершён с замечаниями за ${seconds} с` : uiText`Анализ завершён за ${seconds} с`;
+        const hasIssues = [...rows.values()].some(row => ["failed", "partial"].includes(row.state) || row.lastFailure
+          || (row.id === "person-layer" && row.state === "skipped" && row.reason));
+        status.textContent = uiText(hasIssues ? "Анализ завершён с замечаниями" : "Анализ завершён");
       }
     },
   };

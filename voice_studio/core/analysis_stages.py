@@ -4,6 +4,8 @@ from contextlib import contextmanager
 from threading import Lock
 from time import monotonic
 
+from voice_studio.core.analysis_runs import stage_error
+
 MAX_ACTIVITY_CUES = 64
 
 
@@ -50,8 +52,8 @@ def stage(emit, name):
     except (BrokenPipeError, ConnectionResetError):
         status["state"] = "running"
         raise
-    except Exception:
-        status["state"] = "failed"
+    except Exception as error:
+        status.update(state="failed", error=stage_error(error))
         raise
     finally:
         if status["state"] != "running":

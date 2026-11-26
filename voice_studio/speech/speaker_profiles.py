@@ -55,8 +55,17 @@ def collect_profiles(result):
     editor = evidence.get("editorTimeline", {})
     outfits = editor.get("clothingByFace", {})
     attributes = editor.get("faceAttributes", {})
-    faces = {binding["speaker"]: (int(face), binding["basis"])
-             for face, binding in evidence.get("faceSpeakers", {}).items() if binding["basis"] != "visible-only"}
+    faces, verified_aliases = {}, defaultdict(set)
+    for number, binding in evidence.get("faceSpeakers", {}).items():
+        if binding["basis"] == "visible-only":
+            continue
+        face, speaker = int(number), binding["speaker"]
+        canonical = binding.get("profileFace")
+        if type(canonical) is int and binding.get("confirmedIdentity"):
+            verified_aliases[speaker].add(face)
+            faces[speaker] = canonical, binding["basis"]
+        elif speaker not in verified_aliases:
+            faces[speaker] = face, binding["basis"]
     identities = {row["number"]: row for row in result.get("speakerIdentityGroups", [])}
     records = []
     for number, cues in list(grouped.items())[:MAX_PROFILES]:
@@ -78,6 +87,8 @@ def collect_profiles(result):
                 record['voice'] = public_voice_profile(voice)
         if identity:
             record.update(confirmedIdentityId=identity["id"], faceIds=identity["faceIds"])
+        elif len(verified_aliases[number]) > 1:
+            record["faceIds"] = sorted(verified_aliases[number])
         outfit = outfits.get(str(face)) or outfits.get(face)
         if outfit:
             record["clothing"] = outfit

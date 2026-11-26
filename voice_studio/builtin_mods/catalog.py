@@ -31,6 +31,7 @@ MODELS = (
     ('nanodet', 'NanoDet Plus 2022nov', 'vision.objects', 'vision/nanodet.onnx', 'Apache-2.0', 'vision/video_scene.py:analyze_frames'),
     ('light-asd', 'Light ASD AVA', 'vision.active-speaker', 'vision/light-asd/pretrain_AVA_CVPR.model', 'MIT code; exact weights redistribution unconfirmed', 'workers/light_asd_worker.py:score_scan'),
     ('mobilefacenet-expression', 'MobileFaceNet FER 2022july', 'vision.expressions', 'vision/facial_expression_recognition_mobilefacenet_2022july.onnx', 'Apache-2.0', 'vision/facial_expression_model.py:ExpressionClassifier'),
+    ('apple-translation', 'Apple Translation', 'translation.text', None, 'Apple system framework', 'synthesis/dub_text_translation.py:translate_apple'),
     ('apple-ocr', 'Apple Vision OCR', 'vision.ocr', None, 'Apple system framework', 'vision/scene_ocr.py:recognize'),
     ('tesseract', 'Tesseract Russian + English', 'vision.ocr', 'vision/tessdata/rus.traineddata', 'Apache-2.0', 'vision/scene_ocr.py:recognize'),
     ('mediapipe-face', 'MediaPipe Face Landmarker', 'vision.gaze', 'mediapipe/face_landmarker.task', 'Apache-2.0', 'vision/person_layers.py:dispatch_layers'),
@@ -83,6 +84,10 @@ def manifests():
         ready = path.is_file() if path else bool(shutil.which('ffmpeg'))
         if key.startswith('apple-'):
             ready = sys.platform == 'darwin'
+        if key == 'apple-translation':
+            from voice_studio.synthesis.apple_translation import adapter_available
+
+            ready = adapter_available()
         if key == 'fish':
             ready = False  # Discovery must never contact the local server.
         adapter_file = PROJECT_ROOT / 'voice_studio' / entry.split(':', 1)[0]
@@ -100,6 +105,8 @@ def manifests():
                                       'protocol': 'local-model-resource-v1' if resource_protocol(capability) else 'named-batch-result-v1'}})
     for item in result:
         key = item['id']
+        if key == 'builtin.apple-translation':
+            item['description'] = 'On-device text translation using language packs installed in macOS 26 or later.'
         if key == 'builtin.frame-changes':
             item['defaultEnabled'] = False
             item['description'] = 'Local pixel changes. Assist mode adds split-screen OCR and targeted object checks.'

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mergeAnalysisPartial, readAnalysisStream, analysisStageStatus} from "../web/video-analysis.js";
+import {mergeAnalysisPartial, readAnalysisStream, analysisStageStatus, pipelineDuration} from "../web/video-analysis.js";
 import {studioWebTools} from "../web/web-mcp.js";
 
 test("WebMCP accepts both boolean people count settings and rejects string flags", async () => {
@@ -41,6 +41,24 @@ test("NDJSON propagates server errors and rejects truncated results", async () =
   const bytes = message => new TextEncoder().encode(message);
   await assert.rejects(readAnalysisStream(stream(bytes('{"error":"Не удалось"}\n')), () => {}), /Не удалось/);
   await assert.rejects(readAnalysisStream(stream(bytes('{"result":')), () => {}), /прервался/);
+});
+
+test("an optional step error reaches the inspector without stopping the stream", async () => {
+  const step = {stage: "scene", state: "failed", error: {message: "OCR timed out", type: "TimeoutError"}};
+  const payload = new TextEncoder().encode([step, {result: {segments: []}}].map(JSON.stringify).join("\n") + "\n");
+  const events = [];
+  assert.deepEqual(await readAnalysisStream(stream(payload), event => events.push(event)), {segments: []});
+  assert.deepEqual(events, [step]);
+});
+
+test("terminal errors preserve pipeline details and wall duration uses a separate clock", async () => {
+  const pipeline = {status: "failed", elapsedMs: 63540, stages: [{stage: "whisper", state: "failed"}]};
+  const payload = new TextEncoder().encode(JSON.stringify({error: "Stopped", pipeline}) + "\n");
+  const events = [];
+  await assert.rejects(readAnalysisStream(stream(payload), event => events.push(event)), /Stopped/);
+  assert.deepEqual(events, [{pipeline}]);
+  assert.equal(pipelineDuration(pipeline.elapsedMs), "1:03");
+  assert.equal(pipelineDuration(1200), "1.2 с");
 });
 
 test("base, audio and scene reports arrive separately without replacing unrelated layers", async () => {
@@ -122,6 +140,7 @@ test("checkpoint hits, shared inference and real recomputation have distinct tru
   assert.equal(analysisStageStatus({state: "running"}, "recompute"), "Пересчитывается");
   assert.equal(analysisStageStatus({state: "done", elapsedMs: 1250}, "recompute"), "Пересчитано · 1.3 с");
   assert.equal(analysisStageStatus({state: "failed"}, "recompute"), "Ошибка");
+  assert.equal(analysisStageStatus({state: "failed", cacheHit: true}), "Ошибка");
   assert.equal(analysisStageStatus({state: "skipped", reason: "Нет весов Light-ASD"}), "Пропущен · Нет весов Light-ASD");
   const reason = "Одна голосовая группа, коротких реплик для проверки нет";
   assert.equal(analysisStageStatus({state: "skipped", reason}), `Пропущен · ${reason}`);

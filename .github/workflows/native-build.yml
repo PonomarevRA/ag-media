@@ -9,19 +9,20 @@ on:
       - 'packaging/**'
       - 'requirements-core.txt'
       - 'voice_studio/app/first_run.py'
+      - 'voice_studio/synthesis/native/**'
       - 'voice_studio/provision/**'
 permissions:
   contents: read
 jobs:
   macos:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv python install 3.12
       - run: uv venv --python 3.12 .venv
       - run: uv pip install --python .venv/bin/python -r requirements-core.txt
-      - run: .venv/bin/python -m unittest tests.test_desktop_runtime -v
+      - run: .venv/bin/python -m unittest tests.test_desktop_runtime tests.test_frontend_assets tests.test_chinese_dub tests.test_dub_audio_quality -v
       - run: .venv/bin/python packaging/build_native.py --python .venv/bin/python --site-packages .venv/lib/python3.12/site-packages --output dist/macos --work /tmp/ag-media-native-build
       - uses: actions/upload-artifact@v4
         with:

@@ -60,7 +60,7 @@ def public_voice_evidence(row):
     video = row.get('video')
     if isinstance(video, dict):
         result['video'] = scalar_facts(video, ('subjectId', 'basis', 'strength', 'visualScope', 'identityScope'))
-        result['video']['evidence'] = [scalar_facts(item, ('activeFrames', 'phraseFrames', 'faceId', 'timeMs', 'source', 'basis',
+        result['video']['evidence'] = [scalar_facts(item, ('activeFrames', 'phraseFrames', 'faceId', 'timeMs', 'endMs', 'source', 'basis',
                                                           'faceEvidence', 'changeReview', 'profileFace', 'identitySimilarity'))
                                        for item in bounded_rows(video.get('evidence'), 16) if isinstance(item, dict)]
     return result

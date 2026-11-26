@@ -7,14 +7,18 @@ import {buildFaceGaze} from "./speaker-gaze.js";
 export function faceProfile(faceId, evidence, index = [], durationMs = Infinity) {
   if (!Number.isInteger(faceId) || faceId < 1 || !evidence) return undefined;
   const timeline = evidence.editorTimeline;
-  const matches = index.filter(item => item.faceId === faceId);
+  const matches = index.filter(item => item.faceId === faceId || item.faceIds?.includes(faceId));
   const entry = matches.length === 1 ? matches[0] : undefined;
-  const observations = {...entry?.appearance, ...timeline?.faceAttributes?.[faceId]};
-  if (observations.age === undefined && entry?.age !== undefined) observations.age = entry.age;
+  const observations = {...(entry?.faceId === faceId ? entry?.appearance : null), ...timeline?.faceAttributes?.[faceId]};
+  if (observations.age === undefined && entry?.faceId === faceId && entry?.age !== undefined) observations.age = entry.age;
   const profile = {id: `face-${faceId}`, kind: "face", name: uiText`Лицо ${faceId}`,
-    face: {id: faceId, basis: "visual", observations},
-    clothing: timeline?.clothingByFace?.[faceId] ?? entry?.clothing};
-  if (entry) profile.reference = {id: entry.id, pinned: entry.pinned, reused: entry.reused};
+    face: {id: faceId, basis: entry?.faceBasis ?? "visual", observations},
+    clothing: timeline?.clothingByFace?.[faceId] ?? (entry?.faceId === faceId ? entry?.clothing : undefined)};
+  if (entry) {
+    profile.reference = {id: entry.id, pinned: entry.pinned, reused: entry.reused};
+    profile.faceIds = entry.faceIds;
+    profile.voice = entry.voice;
+  }
   profile.gaze = buildFaceGaze(evidence, durationMs).get(faceId);
   profile.facialExpressions = profileExpressions(profile, evidence);
   return profile;

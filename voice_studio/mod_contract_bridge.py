@@ -21,4 +21,8 @@ def validate_provider_output(capability, payload, result):
         jobs = payload.get('jobs')
         if isinstance(jobs, list) and len(result) != len(jobs):
             raise ModExecutionError('ASR provider must return exactly one canonical result per input job.')
+    if capability == 'translation.text':
+        texts = payload.get('texts') if isinstance(payload, dict) else None
+        if not isinstance(texts, list) or len(result['translations']) != len(texts):
+            raise ModExecutionError('Translation provider must return exactly one translation per input text.')
     return result

@@ -15,16 +15,26 @@ import {installStudioDesign} from "./studio-design.js";
 import {mountStudioSettings} from "./studio-settings.js";
 import {mountStudioStorage} from "./studio-storage.js";
 import {createAutoMap} from "./auto-synthesis.js";
+import {reportMatches, showVoiceReferenceReport} from "./voice-enrollment.js";
+import {mountVoiceCatalog, voiceProfileLabel} from "./voice-catalog.js";
 
 const byId = id => document.getElementById(id);
 const state = {data: null, language: "ru", refs: new Set(), models: new Set(),
   checkpoints: {}, assembly: [], blocks: [], profile: 0, audio: null, previewUrl: null,
+  referenceBatchNumbers: new Set(), referenceBatchReview: [],
   busy: false, toolsCaptureRevision: 0};
 installInterfaceLocale(document, () => Boolean(state.audio || byId("media-preview").hasAttribute("src")));
 installStudioDesign(document);
 const navigation = mountStudioNavigation(byId);
 const previewPlayer = mountPlayer(byId("preview"), uiText("Прослушивание записи"));
 previewPlayer.root.hidden = true;
+const catalogAudio = byId("voice-catalog-preview");
+const catalogPlayer = mountPlayer(catalogAudio, uiText("Прослушивание голосового образца"));
+catalogPlayer.root.hidden = true;
+const catalogView = mountVoiceCatalog(byId, selectVoiceProfile, profile => {
+  catalogPlayer.setSource(`/media/${profile.previewId}.wav`);
+  catalogAudio.play().catch(error => notice(error.message, true));
+});
 const deck = new TrackDeck(() => processing.syncTracks());
 document.addEventListener("studio-design-change", () => deck.draw());
 const processing = new ProcessingPanel(deck, () => state.language);
@@ -182,8 +192,9 @@ function renderHistory() {
         if (input.checked) state.refs.add(item.id);
         else state.refs.delete(item.id);
         state.profile = 0;
-        byId("profiles").value = "";
+        catalogView.render(state.data.voiceCatalog || [], 0);
         updateSampleCount();
+        renderVoiceReport();
         renderTraining();
         syncButtons();
       });
@@ -228,14 +239,22 @@ function updateSampleCount() {
 }
 
 function renderRecordings() {
-  const {profiles} = state.data;
   updateSampleCount();
   if (!byId("history-page").hidden) renderHistory();
-  fillSelect(byId("profiles"), [["", uiText("Текущий набор")],
-    ...profiles.map(item => [String(item.version), uiText`Версия ${item.version} · ${JSON.parse(item.refs).length} записей`])],
-    String(state.profile || ""));
+  catalogView.render(state.data.voiceCatalog || [], state.profile);
   renderReading();
+  renderVoiceReport();
   renderTraining();
+}
+
+/** Show a saved review or a review of the live selection. */
+function renderVoiceReport(open = false) {
+  const raw = state.data.profiles.find(row => row.version === state.profile)?.reference_report;
+  const report = reportMatches(state.referenceReport, state.refs) ? state.referenceReport : raw ? JSON.parse(raw) : null;
+  showVoiceReferenceReport(byId, report, state.data.recordings, state.data.referenceScript?.prompts || [], {open});
+  if (!report && state.refs.size > state.data.referenceTakeLimit) {
+    byId("voice-reference-status").textContent = uiText`Для сравнения выбери до ${state.data.referenceTakeLimit} записей.`;
+  }
 }
 
 /** Compare transcripts without treating capitalization or punctuation as content changes. */
@@ -243,8 +262,55 @@ function comparableReading(text) {
   return (text || "").toLowerCase().replaceAll("ё", "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-/** Return the visible story text, or the legacy prompt when reading the corpus. */
+/** Resolve the recording guide selection independently of the legacy corpus. */
+function activeReferencePrompt() {
+  if (byId("reading-mode").value !== "voice-reference") return null;
+  return state.data?.referenceScript?.prompts[Number(byId("story-part").value)] || null;
+}
+
+/** Select the continuous reference workflow only in the voice recorder. */
+function batchReferenceMode() {
+  return location.pathname !== "/tools" && byId("reading-mode").value === "voice-reference-batch";
+}
+
+/** Print numbered text and delivery directions as separate, accessible rows. */
+function renderNumberedReference(prompts) {
+  const list = byId("numbered-voice-script");
+  list.replaceChildren(...prompts.map(prompt => {
+    const row = element("li");
+    row.append(element("strong", uiText(prompt.label)),
+      element("p", uiText(prompt.hint), {className: "muted"}), element("p", prompt.text));
+    return row;
+  }));
+}
+
+/** Present uncertain boundaries for listening and explicit confirmation. */
+function renderReferenceBatchReview() {
+  const panel = byId("reference-batch-review");
+  panel.hidden = !batchReferenceMode() || !state.referenceBatchReview.length;
+  byId("reference-batch-review-list").replaceChildren(...state.referenceBatchReview.map(row => {
+    const listen = element("button", uiText`Слушать с начала реплики ${row.number}`, {type: "button"});
+    listen.onclick = () => {
+      const audio = byId("preview");
+      audio.currentTime = row.startMs / 1000;
+      audio.play().catch(error => notice(error.message, true));
+    };
+    const confirm = element("button", uiText("Подтвердить текст и сохранить"), {type: "button"});
+    confirm.dataset.confirmReference = row.number;
+    confirm.onclick = () => act(() => saveReferenceBatch(row.number));
+    const item = element("li");
+    const controls = element("div", "", {className: "actions"});
+    controls.append(listen, confirm);
+    item.append(element("strong", uiText`Реплика ${row.number}`), element("p", row.text),
+      element("p", uiText`Whisper услышал: ${row.heard}`, {className: "muted"}), controls);
+    return item;
+  }));
+}
+
+/** Return the words shown on the recorder screen. */
 function activeReading() {
+  const reference = activeReferencePrompt();
+  if (reference) return reference.text;
   const story = state.data?.readingStory;
   const mode = byId("reading-mode").value;
   if (story && mode === "story-full") return story.text;
@@ -254,15 +320,34 @@ function activeReading() {
 
 /** Keep the guided selector and history-derived completion separate from legacy prompt IDs. */
 function renderReading(selectNext = false) {
-  const {readingStory: story, prompt, promptNumber, promptCount, promptDone, promptBand} = state.data;
+  const {readingStory: story, referenceScript, prompt, promptNumber, promptCount, promptDone, promptBand} = state.data;
   const mode = byId("reading-mode").value;
-  const useStory = Boolean(story && mode !== "corpus");
+  const guided = mode === "voice-reference" && referenceScript;
+  const batch = Boolean(batchReferenceMode() && referenceScript);
+  const useStory = Boolean(story && mode.startsWith("story-"));
   const partsMode = useStory && mode === "story-parts";
   const partSelect = byId("story-part");
-  byId("reading-mode-field").hidden = !story;
-  byId("story-part-field").hidden = !partsMode;
-  byId("story-hint").hidden = !useStory;
-  if (useStory) {
+  byId("reading-mode-field").hidden = !story && !referenceScript;
+  byId("story-part-field").hidden = !partsMode && !guided;
+  byId("story-hint").hidden = !useStory && !guided && !batch;
+  byId("numbered-voice-script").hidden = !batch;
+  byId("next-prompt").hidden = byId("use-prompt").hidden = batch;
+  byId("record-transcript-fields").hidden = batch;
+  byId("reference-batch-review").hidden = !batch || !state.referenceBatchReview.length;
+  if (batch) {
+    renderNumberedReference(referenceScript.prompts);
+    byId("prompt-progress").textContent = "";
+    byId("story-hint").textContent = uiText("Читай несколько реплик подряд. Перед каждой можно сказать «номер» и её номер. Для микрофона — до 43 с, для файла — до 90 с.");
+  } else if (guided) {
+    const recorded = new Set(state.data.recordings.map(row => row.reference_prompt));
+    const next = guided.prompts.findIndex(part => !recorded.has(part.id));
+    const count = guided.prompts.filter(part => recorded.has(part.id)).length;
+    fillSelect(partSelect, guided.prompts.map(({id, label}, index) =>
+      [String(index), `${index + 1}. ${uiText(label)}${recorded.has(id) ? uiText(" · записан") : ""}`]),
+      selectNext && next >= 0 ? String(next) : partSelect.value);
+    byId("prompt-progress").textContent = uiText`Записано фраз: ${count} из ${guided.prompts.length}`;
+    byId("story-hint").textContent = uiText(activeReferencePrompt()?.hint || "");
+  } else if (useStory) {
     const recorded = new Set(state.data.recordings.filter(row => !row.evaluation_only)
       .map(row => comparableReading(row.text)));
     const done = text => recorded.has(comparableReading(text));
@@ -284,7 +369,7 @@ function renderReading(selectNext = false) {
       ? uiText`Фраза ${promptNumber} из ${promptCount} · ${apiText(promptBand)} · записано ${promptDone}`
       : uiText`Записано ${promptDone} из ${promptCount}`;
   }
-  byId("prompt-check").hidden = useStory || !prompt || location.pathname === "/tools";
+  byId("prompt-check").hidden = batch || Boolean(guided) || useStory || !prompt || location.pathname === "/tools";
   byId("next-prompt").textContent = activeReading() || uiText("Все подготовленные фразы записаны. Можно ввести свой текст.");
 }
 
@@ -404,6 +489,7 @@ function resultCard(job) {
   const heading = job.kind === "training" ? uiText`Дообучение · ${name}` : name;
   const header = element("div", "", {className: "list-entry-heading"});
   const variants = {baseline: "", stress: uiText(" · Ударения"), pauses: uiText(" · Паузы"),
+    "voice-sequence": uiText(" · Подбор фраз"),
     "tone-question": uiText(" · Вопрос"), "tone-exclamation": uiText(" · Восклицание"), "word-retry": uiText(" · Пересинтез")};
   const details = `${jobNames[job.status]}${variants[job.variant] || ""}${job.seconds ? uiText` · ${job.seconds.toFixed(1)} с` : ""}`;
   header.append(element("h4", heading), element("span", details, {className: "entry-state mono"}));
@@ -421,6 +507,15 @@ function resultCard(job) {
     card.append(element("p", uiText`Косинусная близость голоса: ${voice}${job.speaker_cosine == null ? "" : " · " + encoder}`),
       element("p", uiText`Ошибки слов, Whisper: ${words}`, {className: "muted"}),
       element("p", `Seed ${job.seed}`, {className: "muted mono"}));
+    if (job.delivery_comparison) {
+      const delivery = JSON.parse(job.delivery_comparison);
+      const measures = [
+        uiText`Длительность к эталону ×${delivery.durationRatio.toFixed(2)}`,
+        uiText`Разница в паузах ${delivery.pauseDifferenceMs > 0 ? "+" : ""}${delivery.pauseDifferenceMs} мс`,
+        delivery.pitchShapeSemitones == null ? null : uiText`Отклонение F0 ${delivery.pitchShapeSemitones.toFixed(2)} полутона`,
+      ];
+      card.append(element("p", measures.filter(Boolean).join(" · "), {className: "muted"}));
+    }
   }
   if (job.variant === "word-retry" && job.status === "done") {
     if (job.word_error_rate !== null) {
@@ -435,6 +530,11 @@ function resultCard(job) {
     card.append(removeButton(uiText("Удалить результат"), "result", job.id));
   }
   if (job.status !== "done" || job.kind === "training") return card;
+  if (job.voice_sequence) {
+    const {phrases} = JSON.parse(job.voice_sequence);
+    const takes = phrases.map(row => row.take).join(" → ");
+    card.append(element("p", uiText`Выбранные дубли по порядку: ${takes}`, {className: "muted"}));
+  }
   card.append(audioPlayer(job.id, heading, job.seconds), resultActions(job, name));
   const baseline = state.data.jobs.find(other => other.id === job.baseline_id && other.status === "done");
   if (baseline) {
@@ -571,14 +671,26 @@ function syncButtons() {
   const working = state.busy || Boolean(state.recorder);
   const transcript = byId("transcript");
   const length = transcript.value.trim().length;
+  const batch = batchReferenceMode();
   byId("transcript-length").hidden = length <= transcript.maxLength;
+  byId("save-recording").textContent = batch ? uiText("Разделить реплики и сохранить") : uiText("Сохранить запись");
   byId("save-recording").disabled = working || !state.audio || !byId("consent").checked ||
-    !length || length > transcript.maxLength;
+    (batch ? !state.data?.referenceBatchReady || state.referenceBatchSaved : !length || length > transcript.maxLength);
+  for (const button of byId("reference-batch-review-list").querySelectorAll("[data-confirm-reference]")) {
+    button.disabled = working || !state.audio || !byId("consent").checked;
+  }
   byId("check-transcript").disabled = working || !length;
   byId("review-prosody").disabled = working || !byId("test-text").value.trim();
   byId("try-stress").disabled = working || state.language !== "ru" || !state.models.has("f5");
   byId("try-pauses").disabled = byId("try-tone").disabled = working || !["f5", "coqui"].some(model => state.models.has(model));
+  byId("try-voice-sequence").disabled = working || !state.models.has("qwen") || !state.data?.recognition;
   byId("save-profile").disabled = working || !state.refs.size;
+  const canCheck = Boolean(state.refs.size && state.refs.size <= state.data?.referenceTakeLimit);
+  byId("check-voice-profile").disabled = working || !canCheck;
+  byId("save-checked-voice-profile").disabled = working || !canCheck ||
+    !reportMatches(state.referenceReport, state.refs) || !state.referenceReport?.referenceIds.length;
+  byId("select-voice-reference-takes").disabled = working || !state.data?.recordings.some(
+    row => row.reference_prompt && !row.evaluation_only);
   byId("export").disabled = working || !state.refs.size;
   const missing = !state.refs.size ? uiText("Добавь запись в профиль.")
     : !state.models.size ? uiText("Выбери модель для синтеза.")
@@ -599,11 +711,12 @@ function syncButtons() {
   for (const button of document.querySelectorAll(".delete-item")) button.disabled = working;
   for (const select of document.querySelectorAll(".rating")) select.disabled = working;
   byId("upload").disabled = working || !state.data;
-  byId("profiles").disabled = working || !state.data?.profiles.length;
+  catalogView.sync(state.data?.voiceCatalog || [], state.profile, working);
   for (const select of document.querySelectorAll(".weights-field select")) select.disabled = working;
   for (const input of byId("recordings").querySelectorAll("input")) input.disabled = working;
   byId("transcript").readOnly = Boolean(state.recorder || state.recognizing);
-  byId("use-prompt").disabled = working || !state.audio || !activeReading() || byId("evaluation-only").checked;
+  byId("use-prompt").disabled = working || !state.audio || !activeReading() ||
+    byId("evaluation-only").checked && !activeReferencePrompt();
   byId("reading-mode").disabled = byId("story-part").disabled = working;
   byId("held-out").disabled = working || !state.data;
   byId("clear-source").disabled = working;
@@ -641,6 +754,7 @@ function applyState(data, language, reset, polling) {
     JSON.stringify([data.engines, data.checkpoints]);
   state.data = data;
   if (reset) {
+    state.referenceReport = null;
     state.models = new Set(Object.keys(data.engines).filter(id => data.engines[id].ready));
     const latest = data.profiles[0];
     state.profile = latest?.version || 0;
@@ -652,6 +766,7 @@ function applyState(data, language, reset, polling) {
     state.testIndex = -1;
     byId("test-text").value = data.testText;
   }
+  if (polling) catalogView.render(data.voiceCatalog || [], state.profile);
   for (const model of state.models) {
     if (!data.engines[model].ready) state.models.delete(model);
   }
@@ -698,6 +813,10 @@ function setAudio(blob) {
   byId("transcript-suggestions").replaceChildren();
   if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
   state.audio = blob;
+  state.referenceBatchSaved = false;
+  state.referenceBatchNumbers.clear();
+  state.referenceBatchReview = [];
+  renderReferenceBatchReview();
   state.lastSaved = "";
   byId("record-feedback").textContent = "";
   byId("evaluation-only").checked = false;
@@ -746,7 +865,7 @@ async function toggleRecording() {
         setAudio(blob);
         byId("transcript").value = "";
         byId("mark-prompt").checked = false;
-        act(recognize);
+        if (!batchReferenceMode()) act(recognize);
       }
       syncButtons();
     };
@@ -769,7 +888,7 @@ byId("upload").onchange = event => {
     setAudio(file);
     byId("transcript").value = "";
     byId("mark-prompt").checked = false;
-    act(recognize);
+    if (!batchReferenceMode()) act(recognize);
   }
   event.target.value = "";
 };
@@ -953,6 +1072,7 @@ byId("language").onchange = event => act(async () => {
   state.comparison = "";
   deck.clear();
   state.language = event.target.value;
+  catalogPlayer.setSource(null);
   byId("reading-mode").value = "corpus";
   clearProsodyPreview();
   state.lastSaved = "";
@@ -971,14 +1091,41 @@ byId("language").onchange = event => act(async () => {
   setAudio(null);
   await refresh(true);
 });
+/** Save exact matches or one reviewed line while preserving the source preview. */
+async function saveReferenceBatch(number) {
+  const status = byId("record-feedback");
+  status.textContent = uiText("Whisper ищет реплики по словам и таймкодам…");
+  const flags = {consent: "1"};
+  if (number) flags.confirmed = number;
+  try {
+    const {saved, review} = await request("record-reference-batch", state.audio, flags);
+    for (const row of saved) state.referenceBatchNumbers.add(row.number);
+    state.referenceBatchReview = review.filter(row => !state.referenceBatchNumbers.has(row.number));
+    const numbers = [...state.referenceBatchNumbers].sort((left, right) => left - right);
+    state.referenceBatchSaved = Boolean(numbers.length || state.referenceBatchReview.length);
+    const messages = [];
+    if (numbers.length) messages.push(uiText`Сохранены реплики: ${numbers.join(", ")}.`);
+    if (state.referenceBatchReview.length) messages.push(uiText`Нужно сверить: ${state.referenceBatchReview.length}.`);
+    status.textContent = messages.join(" ") || uiText("Совпадающие реплики не найдены. Проверь текст и повтори запись.");
+    renderReferenceBatchReview();
+    if (saved.length) await refresh();
+  } catch (error) {
+    status.textContent = error.message;
+    throw error;
+  }
+}
+
 byId("save-recording").onclick = () => act(async () => {
+  if (batchReferenceMode()) return saveReferenceBatch();
   const tools = location.pathname === "/tools";
   const flags = {text: byId("transcript").value, consent: "1"};
-  const evaluationOnly = tools || byId("evaluation-only").checked;
-  const storyTake = !evaluationOnly && state.data.readingStory && byId("reading-mode").value !== "corpus";
+  const guide = tools ? null : activeReferencePrompt();
+  const evaluationOnly = tools || byId("evaluation-only").checked || guide?.role === "evaluation";
+  const storyTake = !evaluationOnly && state.data.readingStory && byId("reading-mode").value.startsWith("story-");
   const advanceStory = storyTake && comparableReading(flags.text) === comparableReading(activeReading());
+  if (guide) flags.reference_prompt = guide.id;
   if (evaluationOnly) flags.evaluation = "1";
-  else if (!storyTake && byId("mark-prompt").checked && state.data.promptNumber) flags.prompt = state.data.promptNumber;
+  else if (!storyTake && !guide && byId("mark-prompt").checked && state.data.promptNumber) flags.prompt = state.data.promptNumber;
   const data = await request("record", state.audio, flags);
   if (!evaluationOnly && state.refs.size < 500) {
     state.refs.add(data.id);
@@ -986,7 +1133,7 @@ byId("save-recording").onclick = () => act(async () => {
   }
   setAudio(null);
   await refresh();
-  if (advanceStory) renderReading(true);
+  if (advanceStory || guide) renderReading(true);
   if (!tools) chooseComparison(data.id);
   byId("transcript").value = "";
   byId("recognition-status").textContent = "";
@@ -1006,18 +1153,61 @@ byId("save-recording").onclick = () => act(async () => {
 });
 
 byId("save-profile").onclick = () => act(async () => {
-  const data = await request("profile", {refs: [...state.refs]});
+  const data = await request("profile", {refs: [...state.refs], name: byId("voice-catalog-name").value});
   state.profile = data.version;
   await refresh();
   notice(uiText`Версия ${data.version} сохранена.`);
 });
-byId("profiles").onchange = () => {
-  state.profile = Number(byId("profiles").value);
-  const profile = state.data.profiles.find(item => item.version === state.profile);
-  if (profile) state.refs = new Set(JSON.parse(profile.refs));
+byId("voice-profile-rename").onclick = () => act(async () => {
+  await request("voice-profile-rename", {version: state.profile, name: byId("voice-catalog-name").value});
+  await refresh();
+  const profile = state.data.voiceCatalog.find(row => row.version === state.profile);
+  if (profile) notice(uiText`Имя сохранено · ${voiceProfileLabel(profile)}`);
+});
+byId("select-voice-reference-takes").onclick = () => {
+  const latest = new Map();
+  for (const row of state.data.recordings) {
+    if (row.reference_prompt && !row.evaluation_only) latest.set(row.reference_prompt, row.id);
+  }
+  state.refs = new Set(latest.values());
+  state.profile = 0;
   renderRecordings();
   syncButtons();
 };
+
+/** Recheck on save to bind the report to the exact saved audio and ordering. */
+function reviewReferences(save) {
+  return act(async () => {
+    byId("voice-reference-status").textContent = uiText("Сравниваем записи…");
+    try {
+      const report = await request("voice-profile-check", {
+        refs: [...state.refs], save, name: save ? byId("voice-catalog-name").value : undefined,
+      });
+      state.referenceReport = report;
+      if (report.profileVersion) {
+        state.profile = report.profileVersion;
+        state.refs = new Set(report.referenceIds);
+        await refresh();
+        notice(uiText`Версия ${report.profileVersion} сохранена.`);
+      }
+      renderVoiceReport(true);
+    } catch (error) {
+      byId("voice-reference-status").textContent = error.message;
+      throw error;
+    }
+  });
+}
+
+byId("check-voice-profile").onclick = () => reviewReferences(false);
+byId("save-checked-voice-profile").onclick = () => reviewReferences(true);
+/** Share the selected profile and its exact take order across the workbench and synthesis. */
+function selectVoiceProfile(version) {
+  state.profile = version;
+  const profile = state.data.profiles.find(item => item.version === version);
+  if (profile) state.refs = new Set(JSON.parse(profile.refs));
+  renderRecordings();
+  syncButtons();
+}
 byId("export").onclick = () => act(async () => {
   const blob = await request("export", {refs: [...state.refs]});
   const url = URL.createObjectURL(blob);
@@ -1058,7 +1248,8 @@ byId("synthesize").onclick = () => act(async () => {
     refs: [...state.refs], profile: state.profile, checkpoints: state.checkpoints,
     comparison: state.comparison || null, prosody: {
       stress: byId("try-stress").checked && state.language === "ru" && state.models.has("f5"),
-      pauses: byId("try-pauses").checked, tone: byId("try-tone").value
+      pauses: byId("try-pauses").checked, tone: byId("try-tone").value,
+      sequence: state.models.has("qwen") && Boolean(state.data?.recognition) && byId("try-voice-sequence").checked
     }, repeats: state.comparison ? Number(byId("repeats").value) : 1});
   await refresh();
   byId("jobs-title").focus();

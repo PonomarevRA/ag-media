@@ -41,7 +41,12 @@
 .transcript-message-details { font-size: .78rem; margin-block-start: 4px; }
 .transcript-message-details > summary { cursor: pointer; color: var(--muted); padding-block: 3px; }
 .transcript-message-details > :not(summary) { margin-block: 5px; max-inline-size: 100%; }
-.editor-inspector > .editor-panel-heading { align-items: center; }
+.editor-inspector > .editor-panel-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.editor-inspector > .editor-panel-heading > h3 { overflow-wrap: anywhere; }
 .editor-inspector > .editor-panel-heading > .studio-icon { border: 0; background: transparent; box-shadow: none; inline-size: 32px; min-inline-size: 32px; block-size: 32px; min-block-size: 32px; padding: 5px; }
 .editor-inspector > .editor-panel-heading > .studio-icon:hover { background: var(--surface); }
 .editor-inspector > .editor-panel-heading > .studio-icon svg { inline-size: 18px; block-size: 18px; }

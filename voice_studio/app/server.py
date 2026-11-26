@@ -1,7 +1,7 @@
 """Serve the single-user ag-media-studio on loopback."""
 
 import argparse
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, ExitStack, nullcontext
 from hashlib import file_digest
 from http.server import ThreadingHTTPServer
 import json
@@ -17,6 +17,7 @@ from voice_studio.core.workspace_lock import workspace_lock
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from voice_studio.core.analysis_stages import ignore_progress, serialized_progress, stage
+from voice_studio.core.analysis_runs import AnalysisRuns
 from voice_studio.synthesis.engines import MAX_AUDIO, ROOT
 from voice_studio.audio.audio_processing import process_wave
 from voice_studio.speech.asr_context_graph import VERSION as ASR_CONTEXT_VERSION, corrections
@@ -60,6 +61,7 @@ class StudioServer(ThreadingHTTPServer):
         """Give native and browser servers the same independent, ephemeral page broker."""
         self.ui_bridge = UIBridge()
         self.model_installs = ModelInstalls()
+        self.analysis_runs = AnalysisRuns()
         super().__init__(*args, **kwargs)
 
     def server_close(self):
@@ -141,6 +143,11 @@ class Handler(LoopbackRequestHandler):
                     self.send_header("Content-Length", str(len(image)))
                     self.end_headers()
                     self.wfile.write(image)
+            elif url.path == "/api/video-dub-text-translation":
+                from voice_studio.synthesis.dub_text_translation import translation_status
+
+                query = parse_qs(url.query)
+                self.reply(200, translation_status(query.get("source", [None])[0], query.get("target", [None])[0]))
             elif url.path == "/api/model-install":
                 self.reply(200, self.server.model_installs.inventory())
             elif url.path == "/api/mods/pipeline":
@@ -155,6 +162,13 @@ class Handler(LoopbackRequestHandler):
                 self.reply(200, {"languages": WHISPER_LANGUAGES})
             elif url.path == "/api/state":
                 self.reply(200, self.server.studio.state(self.language(parse_qs(url.query))))
+            elif url.path == "/api/analysis-status":
+                run_id = parse_qs(url.query).get("id", [None])[0]
+                self.reply(200, self.server.analysis_runs.status(run_id))
+            elif url.path == "/api/voice-reference-profiles":
+                self.reply(200, {"profiles": self.server.studio.list_dub_profiles(self.language(parse_qs(url.query)))})
+            elif url.path == "/api/voice-catalog":
+                self.reply(200, {"profiles": self.server.studio.list_voice_catalog(self.language(parse_qs(url.query)))})
             elif url.path in {"/api/transcript-materials", "/api/transcript-material"}:
                 query = parse_qs(url.query, keep_blank_values=True)
                 language = self.language(query, transcript=True)
@@ -171,12 +185,15 @@ class Handler(LoopbackRequestHandler):
                 query = parse_qs(url.query, keep_blank_values=True)
                 key = query.get("id", [None])[0]
                 jobs = self.server.studio.rows(
-                    "SELECT id, model, status, seconds, error FROM jobs "
+                    "SELECT id, model, status, seconds, error, word_error_rate, speaker_cosine, speaker_encoder, delivery_comparison, voice_sequence FROM jobs "
                     "WHERE id=? AND language=? AND demo=? AND kind='synthesis'",
                     (key, self.language(query), int(self.server.studio.demo)))
                 if jobs:
                     from voice_studio.builtin_mods.synthesis import synthesis_provenance
-                    self.reply(200, {**jobs[0], **synthesis_provenance(self.server.studio.media, key)})
+                    job = jobs[0]
+                    job["deliveryComparison"] = json.loads(job.pop("delivery_comparison") or "null")
+                    job["voiceSequence"] = json.loads(job.pop("voice_sequence") or "null")
+                    self.reply(200, {**job, **synthesis_provenance(self.server.studio.media, key)})
                 else:
                     self.reply(404, {"error": "Задание синтеза не найдено."})
             elif re.fullmatch(r"/media/[a-f0-9]{32}\.wav", url.path):
@@ -251,12 +268,22 @@ class Handler(LoopbackRequestHandler):
             yield (path, layer) if overlay else path
 
     def receive_media(self, language, limit=MAX_UPLOAD_BYTES, allow_empty=False, *,
-                      progress=False, context=False, **settings):
+                      progress=False, context=False, track_run=True, **settings):
         """Transcribe an upload through the JSON or streaming client contract."""
-        with self.uploaded_media(limit) as path:
+        registry = getattr(self.server, "analysis_runs", None) if track_run else None
+        scope = registry.track() if registry is not None else nullcontext()
+        with scope as run, Handler.media_analysis_upload(self, limit, run) as path:
             def analyze(emit=ignore_progress):
+                """Apply one analysis and send its measured status independently of partial media."""
                 studio = self.server.studio
                 digest = None
+
+                def record_progress(event):
+                    """Record stage state before forwarding the original progressive event."""
+                    run.observe(event)
+                    emit(event)
+
+                notify = record_progress if run is not None else emit
 
                 def source_digest():
                     """Hash this upload once, when the first editable report needs its identity."""
@@ -277,11 +304,11 @@ class Handler(LoopbackRequestHandler):
 
                 previews = self.server.scroll_previews.analysis() if settings.get("scene") else nullcontext()
                 with previews as publish_mosaic:
-                    result = transcribe_uploaded_media(studio.root, language, path, allow_empty=allow_empty, emit=emit,
+                    result = transcribe_uploaded_media(studio.root, language, path, allow_empty=allow_empty, emit=notify,
                                               publish=publish if progress else None, publish_mosaic=publish_mosaic,
                                               **settings)
                     if context:
-                        with stage(emit, "speaker-context") as progress_stage:
+                        with stage(notify, "speaker-context") as progress_stage:
                             digest = source_digest()
                             detected = result["language"]
                             graph = studio.transcripts.recover(detected, digest, result)
@@ -291,13 +318,28 @@ class Handler(LoopbackRequestHandler):
                                 result["speakerProfileWarning"] = "Не удалось закрепить профили в локальной истории."
                             if not graph["decisions"] and not result.get("speakerProfileIndex"):
                                 progress_stage["state"] = "skipped"
+                    if run is not None:
+                        run.finish(layers=result.get("analysisStages"))
+                        result = {**result, "pipeline": run.snapshot()}
                     return result
             if progress:
-                self.stream_analysis(analyze)
+                if run is None:
+                    self.stream_analysis(analyze)
+                else:
+                    self.stream_analysis(analyze, run)
             else:
                 self.reply(200, analyze())
 
-    def stream_analysis(self, analyze):
+    @contextmanager
+    def media_analysis_upload(self, limit, run):
+        """Expose upload timing before reading the HTTP body and preserve stream errors."""
+        timing = stage(run.observe, "upload") if run is not None else nullcontext()
+        with ExitStack() as stack:
+            with timing:
+                path = stack.enter_context(self.uploaded_media(limit))
+            yield path
+
+    def stream_analysis(self, analyze, run=None):
         """Flush stage records as NDJSON and finish with one result or error record."""
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
@@ -312,16 +354,29 @@ class Handler(LoopbackRequestHandler):
             self.wfile.flush()
 
         notify = serialized_progress(write_record)
-        notify({"stage": "upload", "state": "done"})
+        if run is None:
+            notify({"stage": "upload", "state": "done"})
+        else:
+            upload = run.snapshot()["stages"][0]
+            notify({**upload, "runId": run.run_id})
+
+        def failed(error, message):
+            """Flush the terminal snapshot before the client displays the error."""
+            if run is None:
+                notify({"error": message})
+            else:
+                run.finish(error)
+                notify({"error": message, "pipeline": run.snapshot()})
+
         try:
             result = analyze(emit=notify)
         except (BrokenPipeError, ConnectionResetError):
             raise
         except (ValueError, ModError) as exc:
-            notify({"error": str(exc)[:300]})
+            failed(exc, str(exc)[:300])
         except Exception as exc:
             print(f"Analysis failure: {exc}", flush=True)
-            notify({"error": "Ошибка анализа видео. Подробности в терминале."})
+            failed(exc, "Ошибка анализа видео. Подробности в терминале.")
         else:
             notify({"result": result})
 
@@ -473,9 +528,21 @@ class Handler(LoopbackRequestHandler):
             if url.path == "/api/video-dub":
                 with self.uploaded_media(overlay=True) as (path, dub):
                     output = path.with_name("dub.zip")
-                    report = build_video_dub(path, dub, path.parent, output)
+                    assignments = dub.get("speakerProfiles", {})
+                    prompts = studio.copy_dub_prompts(dub.get("dubLanguage", "en"), assignments, path.parent) if assignments != {} else {}
+                    report = build_video_dub(path, dub, path.parent, output, voice_prompts=prompts)
                     filename = "russian-dub.zip" if report["dubLanguage"] == "ru" else "english-dub.zip"
                     self.file(output, "application/zip", attachment=filename)
+                return
+            if url.path == "/api/video-dub-text-translation":
+                from voice_studio.synthesis.dub_text_translation import MAX_REQUEST_BYTES, translate_text
+
+                self.reply(200, translate_text(json.loads(self.body(MAX_REQUEST_BYTES))))
+                return
+            if url.path == "/api/subtitles/simplify":
+                from voice_studio.speech.subtitle_script import MAX_EXPORT_BYTES, simplified_subtitles
+
+                self.reply(200, simplified_subtitles(json.loads(self.body(MAX_EXPORT_BYTES))))
                 return
             if url.path == "/api/video-dub-translate":
                 with self.uploaded_media(overlay=True) as (path, dub):
@@ -491,7 +558,8 @@ class Handler(LoopbackRequestHandler):
                     self.file(output, "application/zip", attachment="clothing-masks.zip")
                 return
             if url.path == "/api/transcribe-chunk":
-                self.receive_media(self.transcription_language(query, language), limit=4 * 1024 * 1024, allow_empty=True)
+                self.receive_media(self.transcription_language(query, language), limit=4 * 1024 * 1024,
+                                   allow_empty=True, track_run=False)
                 return
             if url.path == "/api/transcribe":
                 result = recognize(studio.root, language, self.body(MAX_AUDIO))
@@ -505,8 +573,18 @@ class Handler(LoopbackRequestHandler):
                 transcript = unquote(self.headers.get("X-Voice-Transcript", ""))
                 prompt = query.get("prompt", [None])[0]
                 key = studio.record(language, transcript, self.body(MAX_AUDIO), int(prompt) if prompt else None,
-                                    evaluation_only=query.get("evaluation") == ["1"])
+                                    evaluation_only=query.get("evaluation") == ["1"],
+                                    reference_prompt=query.get("reference_prompt", [None])[0])
                 self.reply(201, {"id": key})
+                return
+            if url.path == "/api/record-reference-batch":
+                if query.get("consent") != ["1"]:
+                    raise ValueError("Подтвердите право использовать записанный голос.")
+                numbers = query.get("confirmed", [None])[0]
+                if numbers is not None and not re.fullmatch(r"[1-8](?:,[1-8]){0,7}", numbers):
+                    raise ValueError("Некорректные номера реплик.")
+                confirmed = {int(value) for value in numbers.split(",")} if numbers is not None else None
+                self.reply(201, studio.record_reference_batch(language, self.body(MAX_AUDIO), confirmed=confirmed))
                 return
             limit = MAX_DOCUMENT_BYTES if url.path == "/api/transcript-material" else 64 * 1024
             data = json.loads(self.body(limit))
@@ -567,9 +645,16 @@ class Handler(LoopbackRequestHandler):
                 state = studio.state(language)
                 recordings = [{key: item[key] for key in ("id", "seconds", "created")}
                               for item in state["recordings"] if not item["evaluation_only"]]
-                self.reply(200, {"demo": state["demo"], "engines": state["engines"], "recordings": recordings})
+                self.reply(200, {"demo": state["demo"], "engines": state["engines"], "recordings": recordings,
+                                 "reviewedProfiles": studio.list_dub_profiles(language),
+                                 "voiceCatalog": state["voiceCatalog"]})
             elif url.path == "/api/profile":
-                self.reply(201, {"version": studio.save_profile(language, data.get("refs"))})
+                self.reply(201, {"version": studio.save_profile(language, data.get("refs"), name=data.get("name"))})
+            elif url.path == "/api/voice-profile-check":
+                self.reply(200, studio.check_voice_profile(language, data.get("refs"),
+                                                           save=data.get("save", False), name=data.get("name")))
+            elif url.path == "/api/voice-profile-rename":
+                self.reply(200, {"name": studio.rename_voice_profile(language, data.get("version"), data.get("name"))})
             elif url.path == "/api/rate":
                 studio.rate(language, data.get("id"), data.get("score"))
                 self.reply(200, {"ok": True})

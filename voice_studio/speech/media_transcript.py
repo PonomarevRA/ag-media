@@ -31,6 +31,7 @@ from voice_studio.core.media_resources import batch_media_job, pilot_resources, 
 from voice_studio.speech.transcription_languages import CLIP_LANGUAGES, STUDIO_LANGUAGES
 from voice_studio.speech.recognition import SMALL_MODEL, ready, recognize_file, recognize_result, resolve_whisper_language
 from voice_studio.vision.scene_transcript import reconcile_names
+from voice_studio.speech.ocr_checks import measure_ocr_checks
 from voice_studio.speech.speaker_diarization import detect_turns, label_phrases, label_words
 from voice_studio.speech.speaker_review import review_speakers
 from voice_studio.speech.speech_overlap import audio_overlaps, clip_overlaps, mixed_label, visual_overlaps
@@ -235,6 +236,7 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
             detail.update(object_layers(result))
             if reconcile_names(result["segments"], scene_data, result["language"]):
                 detail.update(transcript_result(result["segments"], result["durationMs"], result["language"]))
+            detail["ocrTranscriptChecks"] = measure_ocr_checks(result["segments"], scene_data)
             result.update(detail)
             if publish is not None:
                 publish("scene", detail)
@@ -247,7 +249,7 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
                 publish("visual", {"videoEvidence": result["videoEvidence"]})
         if speakers and not allow_empty and result.get('speechTurns'):
             from voice_studio.speech.speaker_pipeline import enrich_source_speech
-            enrich_source_speech(result, source, prepared_audio, audio_start_ms, cache, emit=emit)
+            enrich_source_speech(result, source, prepared_audio, audio_start_ms, cache, formats=FORMATS, emit=emit)
             if publish is not None:
                 publish('voice', result)
         if selection.selective and "voice" not in selection.states:
@@ -440,10 +442,10 @@ def diarize_audio(wav, speaker_count, merge_similar, emit):
                 turns = detect_turns(wav, speaker_count)
         except ValueError as exc:
             warning = str(exc)
-            progress["state"] = "failed"
+            progress.update(state="failed", reason=warning)
         if not turns and not warning:
             warning = "Модель не нашла уверенных голосовых интервалов."
-            progress["state"] = "skipped"
+            progress.update(state="skipped", reason=warning)
     return turns, warning
 
 

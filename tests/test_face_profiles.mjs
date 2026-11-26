@@ -61,3 +61,13 @@ test("face gaze preserves simultaneous independent observations without attribut
   assert.equal(buildSpeakerGaze(evidence, 400).size, 0);
   assert.deepEqual(faceProfile(17, evidence, [], 400).gaze, gaze.get(17));
 });
+
+test("aliases share the verified voice without borrowing another frame's appearance", () => {
+  const voice = {id: "source-profile", sampleCount: 2};
+  const index = [{id: voice.id, faceId: 3, faceIds: [3, 6], faceBasis: "audio-visual", voice, appearance: {age: 48}}];
+  const profile = faceProfile(6, {editorTimeline: {faceAttributes: {6: {headTurn: "left"}}}}, index);
+  assert.equal(profile.face.id, 6);
+  assert.deepEqual(profile.face.observations, {headTurn: "left"});
+  assert.deepEqual(profile.faceIds, [3, 6]);
+  assert.equal(profile.voice, voice);
+});

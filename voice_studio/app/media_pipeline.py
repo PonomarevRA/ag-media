@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from voice_paths import ensure_temporary_root, workspace_temp
-from voice_studio.core.analysis_stages import ignore_progress
+from voice_studio.core.analysis_stages import ignore_progress, stage
 from voice_studio.core.storage_cache import use_cache
 from voice_studio.graph.media_analysis_revolver import AnalysisRevolver
 from voice_studio.graph.media_graph_ingest import analyze_source, probe_source
@@ -18,7 +18,8 @@ def transcribe_uploaded_media(root, language, source, *, allow_empty=False, emit
     source = Path(source)
     if allow_empty:
         return transcribe_media(root, language, source, allow_empty=True, emit=emit, publish=publish, **settings)
-    metadata = probe_source(source)
+    with stage(emit, "source-probe"):
+        metadata = probe_source(source)
     if metadata['durationMs'] <= MAX_MEDIA_SECONDS * 1000:
         return transcribe_media(root, language, source, emit=emit, publish=publish,
                                 publish_mosaic=publish_mosaic, **settings)

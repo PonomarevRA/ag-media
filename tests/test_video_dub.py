@@ -177,6 +177,18 @@ class VideoDubTests(TestCase):
             with (patch('voice_studio.synthesis.video_dub.ready', return_value=True),
                   patch('voice_studio.synthesis.video_dub.generate', side_effect=fake_generate),
                   patch('voice_studio.synthesis.video_dub.prepare_background', return_value=folder / BACKGROUND_WAV)):
+                prompts = {1: {"text": "Chosen reference.", "path": str(folder / "fixture.wav"),
+                               "profileVersion": 5, "recordedLanguage": "en"}}
+                report = build_video_dub(source, {"sourceLanguage": "ru", "cues": cues},
+                                         folder, archive, voice_prompts=prompts)
+            self.assertEqual(selected[-2:], [("qwen", "en", "Chosen reference.", "source"),
+                                              ("qwen", "en", cues[1]["sourceText"], "source")])
+            self.assertEqual(report["references"][1], {"profileVersion": 5, "recordedLanguage": "en"})
+            self.assertEqual(report["references"][2]["startMs"], 1500)
+
+            with (patch('voice_studio.synthesis.video_dub.ready', return_value=True),
+                  patch('voice_studio.synthesis.video_dub.generate', side_effect=fake_generate),
+                  patch('voice_studio.synthesis.video_dub.prepare_background', return_value=folder / BACKGROUND_WAV)):
                 report = build_video_dub(source, {
                     "sourceLanguage": "en", "dubLanguage": "ru", "pronunciationMode": "neutral",
                     "cues": [{**cues[0], "targetText": "Русская реплика"}],

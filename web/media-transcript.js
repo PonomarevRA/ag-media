@@ -2,6 +2,8 @@ import {mountAnalysisStageSelection, stageSelectionQuery, retainedSpeakerEdits, 
 import {buildSpeakerGaze} from "./speaker-gaze.js";
 import {mountSpeakerProfileDialog} from "./speaker-profile-dialog.js";
 import {mountTranscriptPanel} from "./transcript-inspector.js";
+import {mountTranscriptOcrChecks} from "./transcript-ocr-checks.js";
+import {mountTranscriptSrt} from "./transcript-srt.js";
 import {mountVideoShortcuts} from "./video-shortcuts.js";
 import {apiText, textFor, uiText} from "./i18n.js";
 import {mountVideoTimeline} from "./video-timeline.js";
@@ -97,7 +99,7 @@ export function mountMediaTranscript(request, currentLanguage) {
   });
   mountVideoShortcuts(playback, find("media-panel"), () => displayedEvidence?.timeline?.stepMs ?? 40);
   const scene = mountVideoScene(find, playback, overlay);
-  const analysis = mountMediaAnalysis(find);
+  const analysis = mountMediaAnalysis(find, rerunMediaStages);
   const stageSelection = mountAnalysisStageSelection(find, rerunMediaStages);
   const music = mountMusicSample(find, playback, request);
   const dubbing = mountVideoDub(find, request);
@@ -115,7 +117,8 @@ export function mountMediaTranscript(request, currentLanguage) {
   for (const button of [find("media-srt"), find("media-json")]) {
     installChatHint(button);
   }
-  const subtitle = find("media-srt");
+  const updateSrt = mountTranscriptSrt(find, request);
+  const updateOcrChecks = mountTranscriptOcrChecks(find, playback);
   const json = find("media-json");
   const kind = find("capture-kind");
   const device = find("capture-device");
@@ -278,9 +281,9 @@ export function mountMediaTranscript(request, currentLanguage) {
     videoExport.hidden = true;
     videoExportStatus.textContent = "";
     previewStatus.hidden = true;
-    if (subtitle.hasAttribute("href")) URL.revokeObjectURL(subtitle.href);
-    subtitle.removeAttribute("href");
-    subtitle.hidden = json.hidden = true;
+    updateSrt(null);
+    updateOcrChecks(null);
+    json.hidden = true;
     list.replaceChildren();
     videoEvidence = null;
     displayedEvidence = null;
@@ -324,6 +327,7 @@ export function mountMediaTranscript(request, currentLanguage) {
   function busy(active) {
     working = active;
     stageSelection.setBusy(active);
+    analysis.setAvailable(!active && Boolean(originalUpload));
     objectReconciliation.disabled = active;
     editing.setBusy(active);
     input.disabled = kind.disabled = start.disabled = distinguish.disabled = active;
@@ -577,9 +581,9 @@ export function mountMediaTranscript(request, currentLanguage) {
     renderSpeakerProfiles(find("media-speaker-profiles"), find("media-speaker-profile-list"),
       playback, data.speakerProfiles, displayedEvidence, profileDialog.open);
     editing.update();
-    if (subtitle.hasAttribute("href")) URL.revokeObjectURL(subtitle.href);
-    subtitle.href = URL.createObjectURL(new Blob([data.srt], {type: "application/x-subrip"}));
-    subtitle.hidden = json.hidden = false;
+    updateSrt(data);
+    updateOcrChecks(data);
+    json.hidden = false;
     videoExport.hidden = data.analysisComplete === false || !originalUpload || !(videoEvidence?.timeline || playback.videoWidth);
     result.hidden = false;
   }
@@ -729,7 +733,7 @@ export function mountMediaTranscript(request, currentLanguage) {
       const final = await request(route, payload, options);
       const data = displayAnalysisReport(final, true, partial !== null);
       if (tracked) {
-        analysis.finish(undefined, data.analysisStages);
+        analysis.finish(undefined, data.analysisStages, data.pipeline);
         analysisOptions.open = false;
       }
       const soundStatus = ["unavailable", "failed"].includes(data.soundAnalysisStatus)

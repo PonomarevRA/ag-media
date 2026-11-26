@@ -92,6 +92,8 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             if not colors_only:
                 request["includeMosaicFiles"] = publish_mosaic is not None
                 request["scrollInputs"] = inputs
+                request["nativeCheckSource"] = {"source": str(source), "formats": formats,
+                                                "offsetMs": window[0] if window else 0}
                 request["scrollClock"] = scroll_clock(frames, cuts)
                 features = scene_pilot_features()
                 if features:
@@ -695,7 +697,8 @@ def measure_scene_frames(folder, request, cv2, *, ocr=None, primary=None):
     if track_objects:
         from voice_studio.vision.object_track_continuation import continue_object_tracks
         try:
-            pilot_results["objectTracking"] = continue_object_tracks(frames, tracking_raw)
+            pilot_results["objectTracking"] = continue_object_tracks(frames, tracking_raw, detector=detector,
+                                                                            native_source=request.get("nativeCheckSource"))
         except (OSError, ValueError, cv2.error):
             logging.getLogger(__name__).exception("Object track continuation failed")
             pilot_results["objectTracking"] = {"status": "failed"}

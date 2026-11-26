@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
+from shutil import copyfile
 from voice_paths import publish_file, temporary_directory
 from threading import Lock
 from time import monotonic
@@ -29,11 +30,16 @@ from voice_studio.synthesis.engines import (F5_ACCENT_WEIGHTS, MODELS, SINGLE_RE
                      local_weights, normalize, research_enabled)
 from voice_studio.synthesis.fragment_similarity import matching_windows, score_windows
 from voice_studio.prosody.reading_story import recording_story
-from voice_studio.speech.recognition import ready as recognition_ready
+from voice_studio.prosody.reference_script import recorded_prompt, reference_script
+from voice_studio.prosody.reference_take_matching import extract_reference_takes
+from voice_studio.speech.recognition import SMALL_MODEL, ready as recognition_ready, transcribe
 from voice_studio.prosody.prosody import VERSION as PROSODY_VERSION
 from voice_studio.prosody.revolver import (VERSION as REVOLVER_VERSION, fragment_radius, fragment_trials, mark_lapshi,
                       review_words, synthesis_variants)
 from voice_studio.synthesis.speech_metrics import measure, speaker_encoder
+from voice_studio.synthesis.reference_enrollment import MAX_TAKES, check_references, delivery_comparison
+from voice_studio.synthesis.voice_sequence import render_voice_sequence
+from voice_studio.synthesis.voice_catalog import profile_name, voice_catalog
 from voice_studio.vision.tracking import Tracking
 
 PROMPTS = {
@@ -106,13 +112,21 @@ class Studio:
                 db.execute("ALTER TABLE recordings ADD COLUMN prompt_number INTEGER")
             if "evaluation_only" not in recording_columns:
                 db.execute("ALTER TABLE recordings ADD COLUMN evaluation_only INTEGER NOT NULL DEFAULT 0")
+            if "reference_prompt" not in recording_columns:
+                db.execute("ALTER TABLE recordings ADD COLUMN reference_prompt TEXT")
+            profile_columns = {row["name"] for row in db.execute("PRAGMA table_info(profiles)")}
+            if "reference_report" not in profile_columns:
+                db.execute("ALTER TABLE profiles ADD COLUMN reference_report TEXT")
+            if "name" not in profile_columns:
+                db.execute("ALTER TABLE profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''")
             columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
             if "checkpoint_id" not in columns:
                 db.execute("ALTER TABLE jobs ADD COLUMN checkpoint_id TEXT")
             for name, kind in (("comparison_id", "TEXT"), ("seed", "INTEGER"),
                                ("word_error_rate", "REAL"), ("speaker_cosine", "REAL"), ("variant", "TEXT"), ("baseline_id", "TEXT"),
                                ("comparison_start", "INTEGER"), ("retry_focus", "INTEGER"), ("retry_stress", "INTEGER"),
-                               ("batch_id", "TEXT"), ("accent_mode", "TEXT"), ("speaker_encoder", "TEXT")):
+                               ("batch_id", "TEXT"), ("accent_mode", "TEXT"), ("speaker_encoder", "TEXT"),
+                               ("delivery_comparison", "TEXT"), ("voice_sequence", "TEXT")):
                 if name not in columns:
                     db.execute(f"ALTER TABLE jobs ADD COLUMN {name} {kind}")
             for row in db.execute("SELECT run_id FROM jobs WHERE status IN ('queued', 'running')"):
@@ -141,6 +155,7 @@ class Studio:
 
     def state(self, language):
         """Return only UI fields, current prompt and engine status."""
+        base_whisper_ready = recognition_ready()
         recordings = self.rows("SELECT * FROM recordings WHERE language=? ORDER BY rowid", (language,))
         corpus_recordings = [row for row in recordings if not row["evaluation_only"]]
         plan = reading_plan(language, PROMPTS[language], corpus_recordings)
@@ -149,7 +164,7 @@ class Studio:
         jobs = self.rows("""SELECT jobs.id,kind,jobs.model,status,text,seconds,score,error,jobs.profile,
                                    demo,run_id,checkpoint_id,checkpoints.profile AS checkpoint_profile,
                                    comparison_id,seed,word_error_rate,speaker_cosine,speaker_encoder,jobs.variant,
-                                   jobs.baseline_id,jobs.retry_focus,jobs.batch_id
+                                   jobs.baseline_id,jobs.retry_focus,jobs.batch_id,jobs.delivery_comparison,jobs.voice_sequence
                             FROM jobs LEFT JOIN checkpoints ON jobs.checkpoint_id=checkpoints.id
                             WHERE jobs.language=? AND demo=? ORDER BY jobs.rowid DESC""",
                          (language, int(self.demo)))
@@ -157,17 +172,24 @@ class Studio:
             if job["variant"] == "pilot-plain" and job["status"] == "done" and job["run_id"]:
                 job["listener_choice"] = self.tracking.client.get_run(job["run_id"]).data.tags.get(
                     "listener_stress_choice")
-        return {"recordings": recordings, "profiles": profiles, **plan, "recognition": recognition_ready(),
+        return {"recordings": recordings, "profiles": profiles, **plan, "recognition": base_whisper_ready,
+                "voiceCatalog": voice_catalog(profiles, recordings),
+                "referenceBatchReady": base_whisper_ready or recognition_ready(SMALL_MODEL),
                 "checkpoints": checkpoints, "jobs": jobs, "demo": self.demo, "readingStory": recording_story(language),
+                "referenceScript": reference_script(language), "referenceTakeLimit": MAX_TAKES,
                 "autoRuns": self.automatic.state(language), "autoReady": self.automatic.enabled(),
                 "stressComparisonReady": research_enabled() and not self.demo and language == "ru" and F5_ACCENT_WEIGHTS.is_file(),
                 "modelNames": MODELS,
                 "engines": availability(self.demo, language, any(c["model"] == "f5" for c in checkpoints)),
                 "trainers": [m for m in MODELS if (self.demo or research_enabled()) and self.trainer(m, language)], "testText": TEST_TEXT[language]}
 
-    def record(self, language, text, audio, prompt_number=None, evaluation_only=False):
+    def record(self, language, text, audio, prompt_number=None, evaluation_only=False, *, reference_prompt=None):
         """Decode, validate, and save a user recording with its transcript."""
         text = require_text(text, 500)
+        if reference_prompt is not None:
+            prompt = recorded_prompt(language, reference_prompt, text)
+            evaluation_only = evaluation_only or prompt.role == "evaluation"
+            prompt_number = None
         if evaluation_only:
             prompt_number = None
         if prompt_number is not None and not 1 <= prompt_number <= len(PROMPTS[language]) + len(EXTRA[language]):
@@ -181,13 +203,40 @@ class Studio:
             seconds = normalize(raw, wav, duration_limit=45)
             publish_file(wav, destination)
         try:
-            self.write("""INSERT INTO recordings(id,language,text,seconds,prompt_number,evaluation_only)
-                          VALUES(?,?,?,?,?,?)""",
-                       (key, language, text, seconds, prompt_number, int(evaluation_only)))
+            self.write("""INSERT INTO recordings(id,language,text,seconds,prompt_number,evaluation_only,reference_prompt)
+                          VALUES(?,?,?,?,?,?,?)""",
+                       (key, language, text, seconds, prompt_number, int(evaluation_only), reference_prompt))
         except sqlite3.Error:
             destination.unlink()
             raise
         return key
+
+    def record_reference_batch(self, language, audio, *, confirmed=None):
+        """Save exact matches or selected candidates after local Whisper alignment."""
+        guide = {row["id"]: row for row in reference_script(language)["prompts"]}
+        created = []
+        with temporary_directory(prefix="voice-reference-batch-") as folder:
+            work = Path(folder)
+            found, suggestions = extract_reference_takes(audio, language, work, confirmed)
+            try:
+                with closing(self.connect()) as db, db:
+                    db.execute("BEGIN IMMEDIATE")
+                    for row in found:
+                        key = uuid4().hex
+                        prompt = guide[row["prompt"]]
+                        row["id"] = key
+                        row["evaluationOnly"] = prompt["role"] == "evaluation"
+                        destination = self.media / f"{key}.wav"
+                        created.append(destination)
+                        publish_file(work / f"take-{row['number']}.wav", destination)
+                        db.execute("""INSERT INTO recordings(id,language,text,seconds,evaluation_only,reference_prompt)
+                                      VALUES(?,?,?,?,?,?)""", (key, language, prompt["text"],
+                                   (row["endMs"] - row["startMs"]) / 1000, row["evaluationOnly"], prompt["id"]))
+            except (OSError, sqlite3.Error):
+                for path in created:
+                    path.unlink(missing_ok=True)
+                raise
+        return {"saved": found, "review": suggestions}
 
     def references(self, language, ids, maximum=500, include_evaluation=False):
         """Resolve an ordered selection of recordings in the requested language."""
@@ -203,13 +252,81 @@ class Studio:
             raise ValueError("Записи «Только для проверки» можно использовать только как исходник для сравнения.")
         return selected
 
-    def save_profile(self, language, ids):
+    def save_profile(self, language, ids, *, reference_report=None, name=None):
         """Save an immutable version of the reference set."""
+        label = profile_name(name)
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             self.references(language, ids)
-            return db.execute("INSERT INTO profiles(language,refs) VALUES(?,?)",
-                              (language, json.dumps(ids))).lastrowid
+            report = json.dumps(reference_report, ensure_ascii=False) if reference_report else None
+            return db.execute("INSERT INTO profiles(language,refs,reference_report,name) VALUES(?,?,?,?)",
+                              (language, json.dumps(ids), report, label)).lastrowid
+
+    def check_voice_profile(self, language, ids, *, save=False, name=None):
+        """Check saved takes and optionally commit the measured reference order."""
+        if type(save) is not bool:
+            raise ValueError("Некорректный режим сохранения профиля.")
+        label = profile_name(name) if save else None
+        rows = self.references(language, ids, maximum=MAX_TAKES)
+        report = check_references(rows, self.media)
+        if save and report["referenceIds"]:
+            report["profileVersion"] = self.save_profile(language, report["referenceIds"],
+                                                         reference_report=report, name=label)
+        return report
+
+    def list_voice_catalog(self, language):
+        """Read catalog metadata for one language without touching the model workers."""
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN")
+            profiles = db.execute("SELECT * FROM profiles WHERE language=? ORDER BY version DESC", (language,)).fetchall()
+            recordings = db.execute("SELECT id,evaluation_only FROM recordings WHERE language=?", (language,)).fetchall()
+        return voice_catalog(profiles, recordings)
+
+    def rename_voice_profile(self, language, version, name):
+        """Update a label while keeping its stable version and exact reference audio."""
+        if type(version) is not int or not 1 <= version < 2**63:
+            raise ValueError("Неизвестная версия профиля.")
+        label = profile_name(name)
+        with closing(self.connect()) as db, db:
+            changed = db.execute("UPDATE profiles SET name=? WHERE language=? AND version=?", (label, language, version))
+            if not changed.rowcount:
+                raise ValueError("Неизвестная версия профиля.")
+        return label
+
+    def list_dub_profiles(self, language):
+        """List reviewed versions available for a speaker assignment in video dubbing."""
+        return self.rows("""SELECT version FROM profiles WHERE language=? AND reference_report IS NOT NULL
+                            ORDER BY version DESC LIMIT 100""", (language,))
+
+    def copy_dub_prompts(self, language, assignments, folder):
+        """Resolve reviewed profiles and snapshot their first reference under the workspace write lock."""
+        if language not in ("ru", "en") or not isinstance(assignments, dict) or len(assignments) > 24:
+            raise ValueError("Некорректные профили для дубляжа.")
+        prompts = {}
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            for speaker, version in assignments.items():
+                if (not isinstance(speaker, str) or not speaker.isascii() or not speaker.isdecimal()
+                        or len(speaker) > 3 or str(int(speaker)) != speaker or speaker == "0"
+                        or type(version) is not int or not 1 <= version < 2**63):
+                    raise ValueError("Некорректный спикер или версия голосового профиля.")
+                profile = db.execute("""SELECT refs FROM profiles WHERE language=? AND version=?
+                                        AND reference_report IS NOT NULL""", (language, version)).fetchone()
+                if not profile:
+                    raise ValueError("Проверенный профиль нужного языка недоступен.")
+                key = json.loads(profile["refs"])[0]
+                row = db.execute("""SELECT text FROM recordings WHERE language=? AND id=?
+                                    AND evaluation_only=0""", (language, key)).fetchone()
+                if row is None:
+                    raise ValueError("Запись голосового профиля недоступна.")
+                path = folder / f"reference-profile-{speaker}.wav"
+                try:
+                    copyfile(self.media / f"{key}.wav", path)
+                except OSError as error:
+                    raise ValueError("Аудио голосового профиля недоступно.") from error
+                prompts[int(speaker)] = {"path": str(path), "text": row["text"],
+                                         "profileVersion": version, "recordedLanguage": language}
+        return prompts
 
     def export(self, language, ids, destination):
         """Package the selected human takes and their exact text as a portable corpus."""
@@ -285,21 +402,29 @@ class Studio:
                 or any(not isinstance(item, str) or item not in MODELS for item in models)):
             raise ValueError("Выберите доступные модели.")
         ids = data.get("refs")
-        rows = self.references(language, ids)
         profile = data.get("profile", 0)
-        if type(profile) is not int or profile < 0:
+        if type(profile) is not int or not 0 <= profile < 2**63:
             raise ValueError("Неизвестная версия профиля.")
-        if profile and not self.rows("SELECT 1 FROM profiles WHERE version=? AND language=? AND refs=?",
-                                     (profile, language, json.dumps(ids))):
-            raise ValueError("Набор записей не совпадает с версией профиля.")
+        if profile:
+            stored = self.rows("SELECT refs FROM profiles WHERE version=? AND language=?", (profile, language))
+            saved_ids = json.loads(stored[0]["refs"]) if stored else None
+            if saved_ids is None or (ids is not None and ids != saved_ids):
+                raise ValueError("Набор записей не совпадает с версией профиля.")
+            ids = saved_ids
+        rows = self.references(language, ids)
         jobs = self.synthesis_plan(language, models, data.get("checkpoints", {}))
         settings = data.get("prosody", {})
-        if (not isinstance(settings, dict) or set(settings) - {"stress", "pauses", "tone"}
-                or any(type(settings.get(flag, False)) is not bool for flag in ("stress", "pauses"))
+        if (not isinstance(settings, dict) or set(settings) - {"stress", "pauses", "tone", "sequence"}
+                or any(type(settings.get(flag, False)) is not bool for flag in ("stress", "pauses", "sequence"))
                 or settings.get("tone", "") not in ("", "question", "exclamation")):
             raise ValueError("Некорректные настройки просодии.")
         # Prepare the text once per engine, before expanding the sampling plan.
         variants = {model: synthesis_variants(text, language, model, settings) for model, _ in jobs}
+        if settings.get("sequence"):
+            if "qwen" not in variants or not recognition_ready():
+                raise ValueError("Для подбора фраз нужны Qwen и локальный Whisper.")
+            if not any(variant == "voice-sequence" for variant, _ in variants["qwen"]):
+                raise ValueError("Для подбора фраз введи от двух до четырёх предложений.")
         candidates = []
         for take in range(repeats):
             # Reuse the same sampling plan when switching models or checkpoints.
@@ -307,7 +432,7 @@ class Studio:
             seed = int.from_bytes(hashlib.sha256(seed_material.encode()).digest()[:4], "big")
             for model, checkpoint in jobs:
                 candidates.extend((model, checkpoint, seed, variant, phrases)
-                                  for variant, phrases in variants[model])
+                                  for variant, phrases in variants[model] if take == 0 or variant != "voice-sequence")
         return self.enqueue_synthesis(language, text, rows, profile, candidates, comparison_id)
 
     def compare_lapshi(self, language, data):
@@ -599,6 +724,11 @@ class Studio:
                    (metrics.get("whisper_word_error_rate"), cosine, encoder if cosine is not None else None, key))
         for name, value in metrics.items():
             self.tracking.client.log_metric(run_id, name, value)
+        prompt = self.rows("SELECT reference_prompt FROM recordings WHERE id=? AND language=?",
+                           (comparison_id, language))
+        if prompt and prompt[0]["reference_prompt"] == "holdout" and (deadline is None or monotonic() < deadline):
+            delivery = delivery_comparison(self.media / f"{comparison_id}.wav", self.media / f"{key}.wav")
+            self.write("UPDATE jobs SET delivery_comparison=? WHERE id=?", (json.dumps(delivery), key))
 
     @capture_synthesis
     def run_synthesis(self, key, model, language, rows, profile, checkpoint, comparison_id,
@@ -607,21 +737,41 @@ class Studio:
         refs = [{"path": str(self.media / f"{row['id']}.wav"), "text": row["text"]}
                 for row in (rows[:1] if model in SINGLE_REFERENCE_ENGINES else rows[:5])]
 
+        def render(text, path, take_seed):
+            """Run one normalized take using the requested engine and reference."""
+            raw = path.with_name(f"raw-{path.name}")
+            generate(model, {"output": str(raw), "text": text, "language": language,
+                             "references": refs, "seed": take_seed,
+                             "checkpoint": checkpoint["path"] if checkpoint else "",
+                             "config": checkpoint["config"] if checkpoint else "",
+                             "architecture": checkpoint.get("architecture") if checkpoint else None,
+                             "deadline": deadline}, self.demo)
+            normalize(raw, path, deadline=deadline)
+
+        def render_candidate(text, path, index, number):
+            """Assign a reproducible independent seed to each numbered take."""
+            take_seed = (seed + 7919 * index + 1009 * number) % 2**32
+            render(text, path, take_seed)
+
+        def recognize_candidate(path):
+            """Check the generated wording without adding a corpus recording."""
+            return transcribe(self.root, language, path.read_bytes(), deadline=deadline)
+
         def operation():
             """Render segments, assemble with explicit rests, and validate the result."""
             with temporary_directory() as folder:
                 work = Path(folder)
+                if variant == "voice-sequence":
+                    output, report = render_voice_sequence(
+                        phrases, Path(refs[0]["path"]), work, render_candidate, recognize_candidate)
+                    seconds = normalize(output, work / "final.wav", deadline=deadline)
+                    publish_file(work / "final.wav", self.media / f"{key}.wav")
+                    self.write("UPDATE jobs SET voice_sequence=? WHERE id=?", (json.dumps(report), key))
+                    return seconds
                 parts = []
                 for index, (text, pause_ms) in enumerate(phrases):
-                    raw = work / f"raw-{index}.wav"
                     part = work / f"part-{index}.wav"
-                    generate(model, {"output": str(raw), "text": text, "language": language,
-                                     "references": refs, "seed": seed,
-                                     "checkpoint": checkpoint["path"] if checkpoint else "",
-                                     "config": checkpoint["config"] if checkpoint else "",
-                                     "architecture": checkpoint.get("architecture") if checkpoint else None,
-                                     "deadline": deadline}, self.demo)
-                    normalize(raw, part, deadline=deadline)
+                    render(text, part, seed)
                     parts.append((part, pause_ms))
                 output = work / "output.wav"
                 if len(parts) == 1:

@@ -2,12 +2,16 @@
 
 from threading import Lock
 
+from voice_studio.core.analysis_runs import AnalysisRun
+
 
 class GraphPublication:
     """Expose a coherent revision only after its snapshot is available on disk."""
 
-    def __init__(self, job_id):
+    def __init__(self, job_id, *, progressive=True):
         self.job_id = job_id
+        self.progressive = progressive
+        self.run = AnalysisRun("graph", job_id)
         self.lock = Lock()
         self.latest = {}
         self.activities = {}
@@ -24,6 +28,7 @@ class GraphPublication:
 
     def activity(self, event):
         """Expose actual running workers separately from the last readable snapshot phase."""
+        self.run.observe(event)
         name = event.get('stage')
         if not isinstance(name, str):
             return

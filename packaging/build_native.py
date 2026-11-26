@@ -134,6 +134,17 @@ def sign_bundle(bundle):
     run(["/usr/bin/codesign", "--verify", "--deep", "--strict", bundle])
 
 
+def build_apple_translation(source, resources, work):
+    """Ship the helper with the app so macOS users need no compiler."""
+    target = resources / "translation" / "apple-translation"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    swift_source = source / "voice_studio/synthesis/native/apple_translation.swift"
+    run(["xcrun", "--sdk", "macosx", "swiftc", "-O", "-parse-as-library",
+         "-target", platform.machine() + "-apple-macosx13.0", "-module-cache-path", work / "swift-cache",
+         swift_source, "-o", target])
+
+
+
 def build(options):
     """Create a tested native app plus DMG and checksum metadata without installing it."""
     if sys.platform != "darwin":
@@ -163,6 +174,7 @@ def build(options):
         "externalEngines": ["ffmpeg", "ffprobe", "Whisper CLI and weights", "MLX/TTS runtimes"], "automaticDownloads": False}, indent=2) + "\n")
     swift = sorted((source / "packaging/native").glob("*.swift"))
     run(["xcrun", "swiftc", "-O", "-parse-as-library", "-target", platform.machine() + "-apple-macosx13.0", "-module-cache-path", options.work / "swift-cache", *swift, "-o", executable])
+    build_apple_translation(source, resources, options.work)
     minimum_audit = audit_macos_minimum(bundle)
     (output / "macos-minimum-os-audit.json").write_text(json.dumps(minimum_audit, indent=2) + "\n")
     # Import through a real standalone interpreter: its prefix and worker executable

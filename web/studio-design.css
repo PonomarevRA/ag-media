@@ -138,8 +138,15 @@ button.studio-icon.studio-quiet-action:hover:not(:disabled) {
   min-inline-size: 0;
 }
 .record-source, .record-editor { min-inline-size: 0; }
-.record-editor > label[for="transcript"] { margin-top: 0; }
+.record-editor label[for="transcript"] { margin-top: 0; }
 .record-editor #recognition-status:empty { min-height: 0; margin: 0; }
+.voice-catalog-entry { min-inline-size: 0; overflow-wrap: anywhere; }
+.voice-catalog-select { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
+.voice-catalog-select[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#synthesis-voice-summary:empty { display: none; }
+#voice-catalog-name { inline-size: 100%; min-inline-size: 0; margin: 0; }
+.media-dub-voice { flex: 1 1 14rem; min-inline-size: 0; overflow-wrap: anywhere; }
+.media-dub-voice > p { margin-block: .35em 0; }
 .record-check-actions { margin-block: 8px 12px; }
 .record-check-actions #transcript-suggestions { flex-basis: 100%; }
 .record-check-actions #transcript-suggestions:empty { display: none; }

@@ -15,7 +15,7 @@ const CAPABILITY_LABELS = {
   "vision.active-speaker": "Кто говорит в кадре", "vision.expressions": "Выражения лица",
   "vision.ocr": "Текст в кадре", "vision.gaze": "Взгляд и поворот головы",
   "vision.segmentation": "Маски персонажей", "vision.appearance": "Внешние признаки лица",
-  "synthesis.tts": "Синтез речи", "prosody.context": "Ударения по контексту",
+  "translation.text": "Перевод текста", "synthesis.tts": "Синтез речи", "prosody.context": "Ударения по контексту",
   "prosody.lexical": "Ударения в словах", "vision.visual-batch": "Полный анализ лиц",
   "vision.scene-batch": "Полный анализ сцены", "vision.person-batch": "Фигуры, взгляд и маски",
 };

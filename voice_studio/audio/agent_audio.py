@@ -12,6 +12,7 @@ from uuid import uuid4
 import wave
 
 from voice_studio.audio.audio_processing import denoise_wave
+from voice_studio.audio.voice_quality import measure_dialogue, recommended_modes, restore_dialogue
 from voice_studio.synthesis.dub_background import PYTHON, RATE
 from voice_studio.synthesis.engines import ffmpeg
 from voice_paths import model_path, publish_directory, temporary_directory
@@ -46,7 +47,7 @@ def media_interval(file_path, start_ms, end_ms):
     return source, start_ms, end_ms
 
 
-def decode_interval(source, start_ms, end_ms, output, rate, codec="pcm_f32le"):
+def decode_interval(source, start_ms, end_ms, output, rate, codec="pcm_f32le", *, channels=2):
     """Keep the source clock, including silence before a delayed audio track."""
     offset = audio_offset(source)
     start = start_ms * rate // 1000
@@ -54,8 +55,9 @@ def decode_interval(source, start_ms, end_ms, output, rate, codec="pcm_f32le"):
     stop = start + duration * rate // 1000
     chain = (f"asetpts=PTS-STARTPTS,aresample={rate}:async=1:first_pts=0,adelay={offset}:all=1,"
              f"apad,atrim=start_sample={start}:end_sample={stop},asetpts=N/SR/TB")
+    channel_options = ["-ac", str(channels)] if channels is not None else []
     ffmpeg(["-protocol_whitelist", "file,pipe", "-format_whitelist", FORMATS, "-i", str(source),
-            "-map", "0:a:0", "-ac", "2", "-af", chain, "-t", f"{duration / 1000:.3f}",
+            "-map", "0:a:0", *channel_options, "-af", chain, "-t", f"{duration / 1000:.3f}",
             "-c:a", codec, str(output)])
 
 
@@ -134,8 +136,8 @@ def separate_audio(output, file_path, start_ms, end_ms, language, transcription,
         paths = {stem: str(final / f"{stem}.wav") for stem in STEMS}
         result = {"sourcePath": str(source), "startMs": start, "endMs": end, "sampleRate": RATE,
                   "method": MRX, "stems": paths,
-                  "suggestedTool": {"name": "voice_audio_denoise", "arguments": {"file_path": paths["dialogue"]},
-                                    "when": "If steady noise is audible in dialogue, compare a cleaned copy in A/B."}}
+                  "suggestedTool": {"name": "audio_voice_quality", "arguments": {"file_path": paths["dialogue"]},
+                                    "when": "Measure the dialogue before choosing restoration."}}
         if transcription:
             attach_dialogue(result, work, rendered, final, language, speakers, export_cues)
         result["manifestPath"] = str(final / "manifest.json")
@@ -176,3 +178,54 @@ def clean_audio(output, file_path, start_ms, end_ms):
         publish_directory(rendered, final)
     return {"sourcePath": str(source), "startMs": start, "endMs": end, "method": method, "delayCompensatedSamples": delay,
             "referencePath": str(final / "reference.wav"), "cleanedPath": str(final / "cleaned.wav")}
+
+
+def selected_speech_spans(spans, start, end):
+    """Clip and merge supplied speech spans on the media clock for a selected range."""
+    if spans is None:
+        return [(start, end)]
+    if len(spans) > 1000 or any(a < 0 or a >= b for a, b in spans):
+        raise ValueError("Укажи до 1000 корректных интервалов речи.")
+    merged = []
+    for a, b in sorted(spans):
+        left, right = max(start, a), min(end, b)
+        if left >= right:
+            continue
+        if merged and left <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], right))
+        else:
+            merged.append((left, right))
+    return merged
+
+
+@batch_media_job
+def inspect_voice_quality(file_path, start_ms, end_ms, speech_intervals_ms):
+    """Measure a local range without writing an artifact or inferring the speaker's identity."""
+    source, start, end = media_interval(file_path, start_ms, end_ms)
+    spans = selected_speech_spans(speech_intervals_ms, start, end)
+    with temporary_directory() as scratch:
+        reference = Path(scratch) / "reference.wav"
+        decode_interval(source, start, end, reference, 48_000, codec="pcm_s16le", channels=None)
+        quality = measure_dialogue(reference, spans, offset_ms=start)
+    return {"startMs": start, "endMs": end, "quality": quality,
+            "speechTiming": "provided" if speech_intervals_ms is not None else "assumed-dialogue",
+            "recommendedModes": recommended_modes(quality)}
+
+
+@batch_media_job
+def render_voice_restoration(output, file_path, start_ms, end_ms, speech_intervals_ms, modes):
+    """Publish an aligned reference and a separately processed WAV for the requested presets."""
+    source, start, end = media_interval(file_path, start_ms, end_ms)
+    spans = selected_speech_spans(speech_intervals_ms, start, end)
+    output.mkdir(mode=0o700, parents=True, exist_ok=True)
+    final = output / f"voice-restoration-{uuid4().hex}"
+    with temporary_directory() as scratch:
+        rendered = Path(scratch) / "comparison"
+        rendered.mkdir()
+        reference, cleaned = rendered / "reference.wav", rendered / "cleaned.wav"
+        decode_interval(source, start, end, reference, 48_000, codec="pcm_s16le", channels=None)
+        result = restore_dialogue(reference, cleaned, spans, modes=modes, offset_ms=start)
+        publish_directory(rendered, final)
+    return {**result, "startMs": start, "endMs": end, "referencePath": str(final / reference.name),
+            "recommendedModes": recommended_modes(result["quality"]),
+            "cleanedPath": str(final / cleaned.name) if result["status"] == "enhanced" else None}

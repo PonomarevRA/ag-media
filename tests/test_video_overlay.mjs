@@ -289,3 +289,10 @@ test("change boxes are exported only during the measured source frame", () => {
   const {samples} = previewExportPlan(...args, [witness]);
   assert.deepEqual(samples, [[680, 720, [["stroke", "#ffdf66", 80, 60, 16, 10, 1.5, [3, 3]]]]]);
 });
+
+test("adjacent and reference change outlines for the same pixels appear once", () => {
+  const main = {box: [.02, .4, .65, .55]};
+  const repeated = {box: [.1, .5, .12, .2]};
+  const separate = {box: [.8, .5, .15, .2]};
+  assert.deepEqual(previewChangeRegions([main, repeated, separate], [], [], 1600), [main, separate]);
+});

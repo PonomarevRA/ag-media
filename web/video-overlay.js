@@ -495,8 +495,11 @@ export function previewChangeRegions(exact, inspected, cuts, time) {
       if (visible.length >= 4) return visible;
     }
   }
-  if (!visible.length) return exact;
-  return visible.concat((exact ?? []).filter(region => !overlaps(region))).slice(0, 4);
+  for (const region of exact ?? []) {
+    if (!overlaps(region)) visible.push(region);
+    if (visible.length >= 4) break;
+  }
+  return visible;
 }
 
 /** Use one layout and draw order for browser pixels and the MP4 render instructions. */

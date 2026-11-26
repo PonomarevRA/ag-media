@@ -18,6 +18,7 @@ from pydantic import StrictBool, StrictInt
 from base64 import b64encode
 
 from voice_studio.core.media_event_bus import MediaEventBus, media_event_scope
+from voice_studio.core.analysis_stages import ignore_progress, stage
 from voice_studio.core.mcp_lanes import AsyncWorkLane
 from voice_studio.graph.media_graph_events import AsyncGraphPublisher
 from voice_studio.graph.media_analysis_revolver import AnalysisRevolver
@@ -153,7 +154,8 @@ def intermediate_publisher(publication, store, source, media, language):
 def graph_event_publisher(event_bus, publication, store, source, media, language):
     """Adapt existing readiness and recoverable partial errors to the job bus.
     """
-    publish = intermediate_publisher(publication, store, source, media, language)
+    publish = intermediate_publisher(publication if publication and publication.progressive else None,
+                                     store, source, media, language)
     if publish is None:
         return None
     return AsyncGraphPublisher(event_bus, publish,
@@ -199,10 +201,12 @@ def _build_snapshot(store, studio_root, file_path, language, analysis_path, visu
     enabled = selection.enabled if selection.enabled is not None else selection.forced
     visual = visual or "visual" in enabled
     scene = scene or "scene" in enabled
-    source = identify(file_path)
-    event_bus.bind_source(source["sha256"])
-    original = checked_source(source)
-    media = probe_source(original)
+    emit = publication.activity if publication is not None else ignore_progress
+    with stage(emit, "source-probe"):
+        source = identify(file_path)
+        event_bus.bind_source(source["sha256"])
+        original = checked_source(source)
+        media = probe_source(original)
     if reuse_scene_snapshot_id and not scene:
         raise ValueError("Повтор сцены требует включённой сцены.")
     if object_sampling not in (None, "basic") and (analysis_path or reuse_scene_snapshot_id or not scene):
@@ -244,7 +248,7 @@ def _build_snapshot(store, studio_root, file_path, language, analysis_path, visu
                                     object_sampling=object_sampling, audio_classifier=audio_classifier, revolver=revolver,
                                     people_count=people_count, selected_stages=selected_stages, force_stages=force_stages,
                                     object_reconciliation=object_reconciliation,
-                                    emit=publication.activity if publication is not None else (lambda event: None),
+                                    emit=emit,
                                     publish=graph_event_publisher(event_bus, publication, store, source, media, language))
     if cached is not None:
         # Legacy exports infer speech/face/shot coverage from their measured layers. Materialise
@@ -270,7 +274,7 @@ def _build_snapshot(store, studio_root, file_path, language, analysis_path, visu
         from voice_studio.graph.media_stage_cache import incremental_stages
         from voice_studio.graph.media_object_review import review_objects
         with incremental_stages(studio_root, original, selection=selection) as cache:
-            review_objects(original, report, cache, emit=publication.activity if publication else (lambda event: None))
+            review_objects(original, report, cache, emit=emit)
             selection.attach(report)
     provenance = {"mode": "studio-json" if analysis_path else "local-analysis",
                   "recognitionModel": report.get("recognitionModel")}
@@ -280,6 +284,8 @@ def _build_snapshot(store, studio_root, file_path, language, analysis_path, visu
     # Keep replay conflicts visible to agents after the imported report becomes a graph.
     if report.get("analysisStages"):
         provenance["analysisStages"] = report["analysisStages"]
+        if publication:
+            publication.run.set_layers(report["analysisStages"])
     if report.get("objectReconciliationEvidence"):
         provenance["objectReconciliationEvidence"] = report["objectReconciliationEvidence"]
     if report.get("speakerIdentityConflicts"):
@@ -303,7 +309,7 @@ def _build_snapshot(store, studio_root, file_path, language, analysis_path, visu
         graph = build_graph(report, kind=media["kind"], duration_ms=media["durationMs"])
         provenance["eventBus"] = event_bus.metrics()
         provenance["eventBus"]["capture"] = "before-final-commit"
-        if publication is None:
+        if publication is None or not publication.progressive:
             return store.publish(source, media, graph, language, provenance)
         return publication.publish("complete", lambda progress: store.publish(
             source, media, graph, language, {**provenance, "progress": progress}))
@@ -314,9 +320,10 @@ def _build_snapshot(store, studio_root, file_path, language, analysis_path, visu
 class GraphBuildQueue:
     """Keep long media work off the MCP request thread and bound concurrent analysis."""
 
-    def __init__(self, *, result_key="snapshot", label="графов"):
+    def __init__(self, *, result_key="snapshot", label="графов", track_stages=False):
         self.result_key = result_key
         self.label = label
+        self.track_stages = track_stages
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="media-jobs")
         self.lock = Lock()
         self.jobs = {}
@@ -333,13 +340,19 @@ class GraphBuildQueue:
                 if self.jobs[key][0].done():
                     del self.jobs[key]
             job = uuid4().hex
-            publication = GraphPublication(job) if progressive else None
+            publication = GraphPublication(job, progressive=progressive) if progressive or self.track_stages else None
             if publication is None:
                 future = self.worker.submit(operation, *arguments, **options)
             else:
-                future = self.worker.submit(operation, *arguments, publication=publication, **options)
+                future = self.worker.submit(self.run_tracked, publication, operation, arguments, options)
             self.jobs[job] = future, publication
         return {"jobId": job, "status": "queued"}
+
+    @staticmethod
+    def run_tracked(publication, operation, arguments, options):
+        """Bracket only executing work; a queued job has zero measured run time."""
+        with publication.run.execution():
+            return operation(*arguments, publication=publication, **options)
 
     def status(self, job):
         """Read the build outcome without blocking a client request."""
@@ -348,15 +361,21 @@ class GraphBuildQueue:
         if item is None:
             raise ValueError("Задание не найдено в этом сеансе MCP.")
         future, publication = item
-        latest = publication.state() if publication is not None else {}
-        if publication is not None and hasattr(publication, "event_bus"):
-            latest["eventBus"] = publication.event_bus.metrics()
+        def progress():
+            """Read current stages and snapshots without waiting for an active worker."""
+            if publication is None:
+                return {}
+            latest = publication.state() if publication.progressive else {}
+            latest["pipeline"] = publication.run.snapshot()
+            if hasattr(publication, "event_bus"):
+                latest["eventBus"] = publication.event_bus.metrics()
+            return latest
+
         if not future.done():
-            active = future.running() or future.done()
-            return {"jobId": job, "status": "running" if active else "queued", **latest}
-        latest = publication.state() if publication is not None else {}
-        if publication is not None and hasattr(publication, "event_bus"):
-            latest["eventBus"] = publication.event_bus.metrics()
+            latest = progress()
+            if not future.done():
+                return {"jobId": job, "status": "running" if future.running() else "queued", **latest}
+        latest = progress()
         try:
             result = future.result()
         except ValueError as exc:
@@ -404,7 +423,7 @@ def interval_frame_samples(details, frame_count):
 def register_media_graph_tools(mcp, root, studio_root):
     """Register graph tools and return their queues/IO lanes to the owning MCP lifespan."""
     store = MediaGraphStore(root)
-    queue = GraphBuildQueue()
+    queue = GraphBuildQueue(track_stages=True)
     read_lane = AsyncWorkLane('graph-read', workers=2, capacity=4)
     render_lane = AsyncWorkLane('graph-render', capacity=2)
 
@@ -442,7 +461,7 @@ def register_media_graph_tools(mcp, root, studio_root):
 
     @mcp.tool()
     def media_graph_job(job_id: str) -> dict[str, Any]:
-        """Read graph build progress and the latest immutable snapshot when available."""
+        """Poll graph build stages, timers, errors, and the latest immutable snapshot when available."""
         return queue.status(job_id)
 
     @mcp.tool()

@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
-from voice_studio.mcp.voice_catalog import read_catalog
+from voice_studio.mcp.voice_catalog import PROFILES, read_catalog
 from voice_studio.mcp.voice_mcp import StudioClient, build_server
 
 
@@ -26,7 +26,7 @@ class MeasurementMcpTests(IsolatedAsyncioTestCase):
             server = build_server(StudioClient(1, root / "out"), studio_root=root / "studio")
             rows = await server.list_tools()
             names = [row.name for row in rows]
-            self.assertEqual(len(names), 43)
+            self.assertCountEqual(names, PROFILES)
             self.assertEqual(len(set(names)), len(names))
             self.assertFalse(any(name.startswith("voice_") for name in names))
             self.assertTrue({"ui_measure", "ui_execute", "ui_windows", "screen_analyze", "audio_denoise", "speech_generate"} <= set(names))
