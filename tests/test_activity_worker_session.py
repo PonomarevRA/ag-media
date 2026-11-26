@@ -1,8 +1,13 @@
 """Check bounded native-window transport without loading models or media."""
 
 from io import BytesIO
+from io import StringIO
+from importlib.util import find_spec
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Event, Thread, enumerate as threads
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 from unittest.mock import patch
 
 from voice_studio.vision.activity_worker_session import ActivityWorkerSession
@@ -121,6 +126,26 @@ class ActivityWorkerSessionTests(TestCase):
                 self.assertEqual(worker.request([], 1), {'window': 2})
                 self.assertEqual(spawn.call_count, 1)
         self.assertTrue(child.killed)
+
+    @skipUnless(find_spec("cv2"), "OpenCV is available in the vision runtime")
+    def test_clothing_worker_keeps_models_but_reads_each_request(self):
+        """A second source window reuses models without reusing the first window's samples."""
+        from voice_studio.workers import clothing_sample_worker as clothing
+
+        with TemporaryDirectory() as folder:
+            first, second = [Path(folder) / f"part-{index}.json" for index in range(2)]
+            for path in (first, second):
+                path.write_text(json.dumps({"models": {"body": "fixture"}, "frames": []}), encoding="utf-8")
+            requests = StringIO("".join(json.dumps([str(path)]) + "\n" for path in (first, second)))
+            replies = StringIO()
+            with (patch.object(clothing.sys, "stdin", requests), patch.object(clothing.sys, "stdout", replies),
+                  patch.object(clothing, "open_sampling_models", return_value=(object(), None, object(), None)) as open_models,
+                  patch.object(clothing, "read_samples", side_effect=[["first"], ["second"]]) as read):
+                clothing.serve_windows()
+            self.assertEqual(open_models.call_count, 1)
+            self.assertEqual([call.args[0] for call in read.call_args_list], [first, second])
+            self.assertEqual([json.loads(line)["result"]["samples"] for line in replies.getvalue().splitlines()],
+                             [["first"], ["second"]])
 
     def test_invalid_limits_are_rejected_before_spawn(self):
         """Invalid deadlines and oversized requests never allocate a native child."""

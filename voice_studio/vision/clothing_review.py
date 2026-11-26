@@ -3,6 +3,7 @@
 from voice_studio.mod_runtime import model_resource, worker_environment
 
 from collections import defaultdict
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ from time import perf_counter
 
 from voice_studio.core.optional_runtime import runtime_environment
 from voice_studio.core.worker_process import worker_command
+from voice_studio.vision.activity_worker_session import ActivityWorkerSession
 from voice_studio.vision.clothing_match import borderline_pairs, choose_sample_tracks, corroborate
 from voice_studio.vision.face_appearance import describe_appearance
 from voice_studio.vision.person_layers import mediapipe_interpreter
@@ -72,7 +74,23 @@ def save_references(source, folder, requests, visible):
     return saved
 
 
-def collect_samples(source, tracks, selected, width, height, appearance_faces=()):
+def clothing_environment(runtime):
+    """Use the same native options for a resident or one-shot sampling worker."""
+    env = {**os.environ, "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
+           "PYTHONPATH": str(APPEARANCE_RUNTIME)}
+    return runtime_environment(runtime, env) if runtime else env
+
+
+def clothing_worker_session():
+    """Keep deterministic image-mode models resident only within one video stage."""
+    interpreter, runtime = mediapipe_interpreter()
+    if not interpreter or os.environ.get("VOICE_CLOTHING_PROFILE", "1") == "0":
+        return nullcontext()
+    command = worker_command(interpreter, "voice_studio.workers.clothing_sample_worker")
+    return ActivityWorkerSession(command, (), environment=clothing_environment(runtime))
+
+
+def collect_samples(source, tracks, selected, width, height, appearance_faces=(), *, worker=None):
     """Read a bounded sidecar of descriptors from the MediaPipe interpreter."""
     requests, visible = sample_requests(tracks, selected, width, height, appearance_faces)
     with temporary_directory() as raw:
@@ -82,20 +100,21 @@ def collect_samples(source, tracks, selected, width, height, appearance_faces=()
         request.write_text(json.dumps({"frames": frames, "models": {
             "body": str(BODY_MODEL), "masks": str(MASK_MODEL), "appearance": str(APPEARANCE_MODEL),
         }}), encoding="utf-8")
+        if worker is not None:
+            rows = worker.request([request], 22).get("samples")
+            if not isinstance(rows, list):
+                raise ValueError("Clothing worker returned no sample list")
+            return rows
         interpreter, runtime = mediapipe_interpreter()
         if interpreter is None:
             raise ValueError("MediaPipe runtime is unavailable")
-        env = {**os.environ, "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
-               "PYTHONPATH": str(APPEARANCE_RUNTIME)}
-        env = worker_environment(env)
-        if runtime:
-            env = runtime_environment(runtime, env)
+        env = worker_environment(clothing_environment(runtime))
         response = subprocess.check_output(worker_command(interpreter, "voice_studio.workers.clothing_sample_worker", request),
                                            env=env, stderr=subprocess.DEVNULL, timeout=22)
         return json.loads(response)
 
 
-def review_clothing(source, tracks, signatures, aliases, width, height, active_faces=()):
+def review_clothing(source, tracks, signatures, aliases, width, height, active_faces=(), *, worker=None):
     """Keep baseline face groups when optional outfit evidence is missing or inconclusive."""
     report = {"status": "unavailable", "proposals": 0, "samples": 0, "matches": []}
     if os.environ.get("VOICE_CLOTHING_PROFILE", "1") == "0":
@@ -115,7 +134,7 @@ def review_clothing(source, tracks, signatures, aliases, width, height, active_f
     try:
         # Bound the additional work to the first four activity candidates with selected tracks.
         first_speakers = [face for face in dict.fromkeys(active_faces) if face in selected][:4]
-        samples = collect_samples(source, tracks, selected, width, height, first_speakers)
+        samples = collect_samples(source, tracks, selected, width, height, first_speakers, worker=worker)
     except (OSError, ValueError, subprocess.SubprocessError):
         return aliases, {}, {**report, "status": "failed"}
     outfit_samples = [sample for sample in samples if "hist" in sample]

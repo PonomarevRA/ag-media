@@ -1,6 +1,7 @@
 """Decode COCO NanoDet-Plus predictions using the existing OpenCV DNN runtime."""
 
 from voice_studio.mod_runtime import model_resource, is_replacement
+from voice_studio.vision.object_tracking_contract import TRACKING_PROPOSAL_SCORE
 
 from copy import deepcopy
 
@@ -43,24 +44,33 @@ class ObjectDetector:
         """Drop input pixels and proposals at a shot boundary while keeping run counters."""
         self.previous_view = None
 
-    def detect(self, image, *, sectors=None):
+    def detect(self, image, *, sectors=None, minimum_score=None):
         """Find objects in the full view and optional overlapping sector crops."""
         height, width = image.shape[:2]
-        candidates = self.detect_view(image)
+        detector_options = {} if minimum_score is None else {"minimum_score": minimum_score}
+        candidates = self.detect_view(image, **detector_options)
         if sectors is None:
             sectors = height >= width * 1.25
         if sectors:
             for bounds in object_sectors(width, height):
-                candidates.extend(self.detect_region(image, bounds))
+                candidates.extend(self.detect_region(image, bounds, **detector_options))
         return unique_proposals(candidates)
 
-    def detect_region(self, image, bounds):
+    def detect_with_tracking(self, image, *, sectors=None):
+        """Return unchanged standard proposals and separate low-score tracking candidates."""
+        proposals = self.detect(image, sectors=sectors, minimum_score=TRACKING_PROPOSAL_SCORE)
+        ordinary = [item for item in proposals if not item.get("trackingProposalOnly")]
+        weak = [item for item in proposals if item.get("trackingProposalOnly")]
+        return ordinary, weak
+
+    def detect_region(self, image, bounds, *, minimum_score=None):
         """Project detections from one crop back to source coordinates, excluding clipped edges."""
         height, width = image.shape[:2]
         left, top, right, bottom = bounds
         span_x, span_y = right - left, bottom - top
         candidates = []
-        for item in self.detect_view(image[top:bottom, left:right]):
+        options = {} if minimum_score is None else {"minimum_score": minimum_score}
+        for item in self.detect_view(image[top:bottom, left:right], **options):
             x, y, w, h = item["box"]
             if ((left and x <= .01) or (right < width and x + w >= .99)
                     or (top and y <= .01) or (bottom < height and y + h >= .99)):
@@ -70,28 +80,29 @@ class ObjectDetector:
             candidates.append({**item, "box": box})
         return candidates
 
-    def detect_view(self, image, *, people=False):
+    def detect_view(self, image, *, people=False, minimum_score=None):
         """Return person or object proposals in the view's normalized coordinates."""
         height, width = image.shape[:2]
         scale = SIDE / max(width, height)
         scaled_w, scaled_h = round(width * scale), round(height * scale)
         resized = cv2.resize(image, (scaled_w, scaled_h))
+        options = {} if minimum_score is None else {"minimum_score": minimum_score}
         if not self.reuse_views:
-            return self.detect_resized_view(resized, people)
+            return self.detect_resized_view(resized, people, **options)
         previous = self.previous_view
         if previous is not None:
-            previous_image, previous_people, previous_objects = previous
+            previous_image, previous_people, previous_options, previous_objects = previous
             # A zero maximum difference means every resized byte matches.
-            if (people == previous_people and resized.shape == previous_image.shape
+            if (people == previous_people and options == previous_options and resized.shape == previous_image.shape
                     and cv2.norm(resized, previous_image, cv2.NORM_INF) == 0):
                 self.cache_hits += 1
                 return deepcopy(previous_objects)
-        objects = self.detect_resized_view(resized, people)
+        objects = self.detect_resized_view(resized, people, **options)
         # Sector projection mutates returned boxes, so retain independent coordinates.
-        self.previous_view = resized, people, deepcopy(objects)
+        self.previous_view = resized, people, options, deepcopy(objects)
         return objects
 
-    def detect_resized_view(self, resized, people):
+    def detect_resized_view(self, resized, people, *, minimum_score=PROPOSAL_SCORE):
         """Letterbox a resized BGR image and decode one inference in its normalized coordinates."""
         scaled_h, scaled_w = resized.shape[:2]
         left, top = (SIDE - scaled_w) // 2, (SIDE - scaled_h) // 2
@@ -100,8 +111,8 @@ class ObjectDetector:
         pixels = cv2.LUT(padded, PIXEL_LUT)
         self.net.setInput(cv2.dnn.blobFromImage(pixels))
         self.model_runs += 1
-        boxes, scores, classes = decode_boxes(self.net.forward(self.outputs), people=people)
-        picked = cv2.dnn.NMSBoxesBatched(boxes, scores, classes, PROPOSAL_SCORE, 0.45)
+        boxes, scores, classes = decode_boxes(self.net.forward(self.outputs), people=people, minimum_score=minimum_score)
+        picked = cv2.dnn.NMSBoxesBatched(boxes, scores, classes, minimum_score, 0.45)
         objects = []
         for index in np.asarray(picked).reshape(-1)[:20]:
             x, y, w, h = boxes[index]
@@ -109,7 +120,10 @@ class ObjectDetector:
             y1, y2 = np.clip([(y - top) / scaled_h, (y + h - top) / scaled_h], 0, 1)
             if (x2 - x1) * (y2 - y1) >= 0.002:
                 box = [round(float(value), 4) for value in (x1, y1, x2 - x1, y2 - y1)]
-                objects.append({"label": LABELS[classes[index]], "box": box, "score": round(scores[index], 3)})
+                item = {"label": LABELS[classes[index]], "box": box, "score": round(scores[index], 3)}
+                if scores[index] < PROPOSAL_SCORE:
+                    item["trackingProposalOnly"] = True
+                objects.append(item)
         return objects
 
 
@@ -135,7 +149,7 @@ def iou(left, right):
 def unique_proposals(candidates):
     """Keep the existing score-ordered same-class deduplication for an ordinary frame."""
     kept = []
-    for item in sorted(candidates, key=lambda hit: hit["score"], reverse=True):
+    for item in sorted(candidates, key=lambda hit: (not hit.get("trackingProposalOnly"), hit["score"]), reverse=True):
         if not any(item["label"] == existing["label"] and iou(item["box"], existing["box"]) >= .4
                    for existing in kept):
             kept.append(item)
@@ -256,7 +270,7 @@ def confirm_objects(frames):
         frame["objects"] = confirmed[:12]
 
 
-def decode_boxes(outputs, *, people=False):
+def decode_boxes(outputs, *, people=False, minimum_score=PROPOSAL_SCORE):
     """Pair output heads by grid size so inference works across OpenCV output orderings."""
     heads = {(out.shape[1], out.shape[2]): out[0] for out in outputs}
     boxes, scores, classes = [], [], []
@@ -266,7 +280,7 @@ def decode_boxes(outputs, *, people=False):
         probabilities = heads[count, len(LABELS)]
         class_ids = probabilities.argmax(axis=1)
         confidence = probabilities[np.arange(count), class_ids]
-        anchors = np.flatnonzero(((class_ids == 0) if people else (class_ids != 0)) & (confidence >= PROPOSAL_SCORE))
+        anchors = np.flatnonzero(((class_ids == 0) if people else (class_ids != 0)) & (confidence >= minimum_score))
         logits = heads[count, 32][anchors].reshape(-1, 4, 8)
         exp = np.exp(logits - logits.max(axis=2, keepdims=True))
         offsets = (exp / exp.sum(axis=2, keepdims=True)) @ np.arange(8) * stride

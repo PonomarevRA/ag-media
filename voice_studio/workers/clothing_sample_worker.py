@@ -1,6 +1,6 @@
 """Extract small clothing descriptors in the existing MediaPipe CPU environment."""
 
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stdout
 import json
 from pathlib import Path
 import sys
@@ -80,37 +80,73 @@ def measure_hair(image, hit, neighbors, segmenter, mp):
     return np.median(rgb[interior], axis=0).astype(int).tolist()
 
 
-def read_samples(request_path):
-    """Reuse model instances and process only selected frames with an unambiguous torso."""
-    request = json.loads(request_path.read_text(encoding="utf-8"))
+def open_sampling_models(stack, paths):
+    """Prepare the independent image-mode models for one fixed configuration."""
     plan = {"body": True, "masks": True, "gaze": False}
-    model_path = request["models"].get("appearance")
+    model_path = paths.get("appearance")
     appearance = appearance_model(Path(model_path) if model_path else None)
+    try:
+        detector, mp, _, segmenter = open_models(stack, plan, paths)
+    except (ImportError, OSError, RuntimeError, ValueError):
+        detector = mp = segmenter = None
+    return detector, mp, segmenter, appearance
+
+
+def read_samples(request_path, request, models):
+    """Process a request without reusing its samples, paths or face identities."""
+    detector, mp, segmenter, appearance = models
     samples = []
-    with ExitStack() as stack:
-        try:
-            detector, mp, _, segmenter = open_models(stack, plan, request["models"])
-        except (ImportError, OSError, RuntimeError, ValueError):
-            detector = mp = segmenter = None
-        for row in request["frames"]:
-            image = cv2.imread(str(request_path.parent / row["file"]))
-            if image is None:
-                continue
-            outfit_targets = any(len(target) == 2 for target in row["targets"])
-            boxes = boxes_for_faces(detector.detect_view(image, people=True), row["faces"]) if detector and outfit_targets else {}
-            for face, track, *kind in row["targets"]:
-                hit = next(item for item in row["faces"] if item[0] == track)
-                crop, _ = pixel_crop(image, hit[1:5])
-                result = apparent_age_and_sex(appearance, crop)
-                hair = measure_hair(image, hit, row["faces"], segmenter, mp) if segmenter else None
-                if hair is not None:
-                    result["hairRgb"] = hair
-                if not kind and track in boxes:
-                    result.update(descriptor(image, boxes[track], hit, segmenter, mp) or {})
-                if result:
-                    samples.append({**result, "face": face, "timeMs": row["timeMs"], "appearanceOnly": bool(kind)})
+    for row in request["frames"]:
+        image = cv2.imread(str(request_path.parent / row["file"]))
+        if image is None:
+            continue
+        outfit_targets = any(len(target) == 2 for target in row["targets"])
+        boxes = boxes_for_faces(detector.detect_view(image, people=True), row["faces"]) if detector and outfit_targets else {}
+        for face, track, *kind in row["targets"]:
+            hit = next(item for item in row["faces"] if item[0] == track)
+            crop, _ = pixel_crop(image, hit[1:5])
+            result = apparent_age_and_sex(appearance, crop)
+            hair = measure_hair(image, hit, row["faces"], segmenter, mp) if segmenter else None
+            if hair is not None:
+                result["hairRgb"] = hair
+            if not kind and track in boxes:
+                result.update(descriptor(image, boxes[track], hit, segmenter, mp) or {})
+            if result:
+                samples.append({**result, "face": face, "timeMs": row["timeMs"], "appearanceOnly": bool(kind)})
     return samples
 
 
+def serve_windows():
+    """Load image models once per configuration and close them when the parent exits."""
+    output = sys.stdout
+    paths = models = None
+    with ExitStack() as stack:
+        for line in sys.stdin:
+            try:
+                filename, = json.loads(line)
+                path = Path(filename)
+                request = json.loads(path.read_text(encoding="utf-8"))
+                with redirect_stdout(sys.stderr):
+                    if request["models"] != paths:
+                        stack.close()
+                        paths = None
+                        models = open_sampling_models(stack, request["models"])
+                        if models[0] is not None and models[2] is not None:
+                            paths = request["models"]
+                    result = read_samples(path, request, models)
+                reply = json.dumps({"result": {"samples": result}}, allow_nan=False)
+            except Exception:
+                reply = '{"error":"window-failed"}'
+            output.write(reply + "\n")
+            output.flush()
+
+
 if __name__ == "__main__":
-    print(json.dumps(read_samples(Path(sys.argv[1])), allow_nan=False))
+    if sys.argv[1:] == ["--window-server"]:
+        serve_windows()
+    else:
+        path = Path(sys.argv[1])
+        request = json.loads(path.read_text(encoding="utf-8"))
+        with ExitStack() as stack:
+            print(json.dumps(read_samples(path, request, open_sampling_models(stack, request["models"])),
+                             allow_nan=False))

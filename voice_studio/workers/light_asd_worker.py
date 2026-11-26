@@ -23,7 +23,7 @@ import numpy as np
 from voice_studio.vision.adaptive_faces import ANCHOR_STEP, ScanFrame, detect_adaptively
 from voice_studio.vision.active_speaker_changes import MAX_RECHECKS, recheck_activity
 from voice_studio.core.analysis_stages import MAX_ACTIVITY_CUES
-from voice_studio.vision.clothing_review import review_clothing
+from voice_studio.vision.clothing_review import clothing_worker_session, review_clothing
 from voice_studio.speech.speaker_photos import collect as collect_photos, thumbnail
 from voice_studio.vision.face_reid import Signatures, distinct_faces, face_references, group_tracks
 from voice_studio.core.media_resources import stage_threads
@@ -373,7 +373,7 @@ def summarize(scores, track, span, frames):
         'representative': representative,
     }
 
-def run(args, *, include_identity=False):
+def run(args, *, include_identity=False, clothing_worker=None):
     """Score tracked faces, with private descriptors only for the window protocol."""
     start = perf_counter()
     signatures = Signatures(args.sface)
@@ -387,7 +387,8 @@ def run(args, *, include_identity=False):
     with TemporaryFile() as storage:
         expressions = ExpressionClassifier(getattr(args, "expressions_model", None))
         scan = load_frames(args.video, args.yunet, signatures, storage, args.yunet_sampling, pilot, expressions)
-        result = score_scan(args, signatures, scan, start, include_identity=include_identity)
+        result = score_scan(args, signatures, scan, start, include_identity=include_identity,
+                            clothing_worker=clothing_worker)
     if args.photo_source:
         try:
             result["phrasePhotos"] = collect_photos(str(args.photo_source), str(args.yunet),
@@ -451,7 +452,7 @@ def score_spans(args, frames, tracks, aliases, spans):
     return activity, rechecks
 
 
-def score_scan(args, signatures, scan, start, *, include_identity=False):
+def score_scan(args, signatures, scan, start, *, include_identity=False, clothing_worker=None):
     """Package a scan, optionally adding descriptors for private window transport."""
     frames, tracks = scan.frames, scan.tracks
     qualities = {track: preview[0] for track, preview in scan.previews.items()}
@@ -462,7 +463,8 @@ def score_scan(args, signatures, scan, start, *, include_identity=False):
     scored = perf_counter()
     active_faces = appearance_priorities(spans)
     aliases, outfits, clothing = review_clothing(args.video, tracks, signatures.samples, aliases,
-                                                scan.width, scan.height, active_faces)
+                                                scan.width, scan.height, active_faces, worker=clothing_worker)
+    dressed = perf_counter()
     for span in spans:
         for candidate in span["candidates"]:
             candidate["face"] = aliases[candidate["track"]]
@@ -477,6 +479,7 @@ def score_scan(args, signatures, scan, start, *, include_identity=False):
         'seconds': {
             'detect_and_track': tracked - start,
             'crop_and_score': scored - tracked,
+            'clothing_review': dressed - scored,
         },
         'positive_logit_threshold': 0,
         'faceTracking': {"status": signatures.status, "tracks": len(tracks),
@@ -583,15 +586,16 @@ def serve_windows():
     from contextlib import redirect_stdout
 
     output = sys.stdout
-    for line in sys.stdin:
-        try:
-            with redirect_stdout(sys.stderr):
-                result = run(parse_arguments(json.loads(line)), include_identity=True)
-            reply = json.dumps({"result": result}, separators=(",", ":"), allow_nan=False)
-        except (Exception, SystemExit):
-            reply = '{"error":"window-failed"}'
-        output.write(reply + "\n")
-        output.flush()
+    with clothing_worker_session() as clothing:
+        for line in sys.stdin:
+            try:
+                with redirect_stdout(sys.stderr):
+                    result = run(parse_arguments(json.loads(line)), include_identity=True, clothing_worker=clothing)
+                reply = json.dumps({"result": result}, separators=(",", ":"), allow_nan=False)
+            except (Exception, SystemExit):
+                reply = '{"error":"window-failed"}'
+            output.write(reply + "\n")
+            output.flush()
 
 
 if __name__ == '__main__':

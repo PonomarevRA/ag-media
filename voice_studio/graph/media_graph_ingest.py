@@ -33,6 +33,7 @@ from voice_studio.speech.media_transcript import (
 from voice_studio.speech.speaker_diarization import detect_turns
 from voice_studio.speech.transcription_languages import CLIP_LANGUAGES
 from voice_studio.speech.speaker_profiles import collect_profiles, cue_number
+from voice_studio.vision.object_tracking_contract import WEAK_CONTINUATION
 from voice_studio.vision.scene_sampling import DEFAULT_OBJECT_SAMPLING
 from voice_studio.vision.video_scene import review_scene
 from voice_studio.vision.shot_moodbook import build_moodbook
@@ -239,6 +240,13 @@ def apply_visual_evidence(result, visual, start, end, id_base, speech_start):
                 first + index for index in timeline["estimatedFrames"] if 0 <= index < stop - first)
     result["coverage"]["face"].extend(face_coverage(visual, start, end, windowStartMs=speech_start))
 
+    for row in visual.get("visibleSpeechIntervals", ()):
+        left, right = row["startMs"] + start, min(end, row["endMs"] + start)
+        if left < right:
+            combined.setdefault("visibleSpeechIntervals", []).append({
+                **row, "startMs": left, "endMs": right, "cueStartMs": row["cueStartMs"] + start,
+                "track": row["track"] + id_base, "faceId": row["faceId"] + id_base,
+            })
     for face, binding in visual.get("faceSpeakers", {}).items():
         combined["faceSpeakers"][int(face) + id_base] = {
             **binding, "speaker": binding["speaker"] + id_base, "windowStartMs": speech_start,
@@ -268,17 +276,38 @@ def apply_visual_evidence(result, visual, start, end, id_base, speech_start):
 
 
 def offset_screen_panel(panel, offset):
-    """Preserve document boxes and shift only their references to the window clock."""
+    """Shift timed screen evidence to the source clock, keeping exact crop geometry."""
+    from voice_studio.graph.media_graph_interfaces import STATE_EVIDENCE_TIMES
+
     shifted = dict(panel)
     for field in ("readingTimeMs", "lastObservedMs", "previousStateMs", "screenStateEndMs"):
         if type(panel.get(field)) is int:
             shifted[field] += offset
-    if "elements" in panel:
-        shifted["elements"] = [
-            {**item, "mosaic": {**address, "pageStartMs": address["pageStartMs"] + offset}}
-            if isinstance((address := item.get("mosaic")), dict) and type(address.get("pageStartMs")) is int else item
-            for item in panel["elements"]
-        ]
+    for field in ("elements", "screenStateElements"):
+        if not isinstance(panel.get(field), (list, tuple)):
+            continue
+        elements = []
+        for item in panel[field]:
+            if not isinstance(item, dict):
+                elements.append(item)
+                continue
+            element = dict(item)
+            address = item.get("mosaic")
+            if isinstance(address, dict) and type(address.get("pageStartMs")) is int:
+                element["mosaic"] = {**address, "pageStartMs": address["pageStartMs"] + offset}
+            if isinstance(evidence := item.get("stateEvidence"), dict):
+                # The decoder ordinal is local to this window; milliseconds identify the source frame.
+                updated = dict(evidence)
+                for key in STATE_EVIDENCE_TIMES:
+                    if type(updated.get(key)) is int and updated[key] >= 0:
+                        updated[key] += offset
+                reference = evidence.get("sameContentAs")
+                prior = reference.get("recognizedAtMs") if isinstance(reference, dict) else None
+                if type(prior) is int and prior >= 0:
+                    updated["sameContentAs"] = {**reference, "recognizedAtMs": prior + offset}
+                element["stateEvidence"] = updated
+            elements.append(element)
+        shifted[field] = elements
     return shifted
 
 
@@ -346,6 +375,10 @@ def offset_object_matches(item, start):
             shifted = dict(item)
         shifted[field] = [{**match, "timeMs": match["timeMs"] + start} for match in matches
                           if isinstance(match, dict) and type(match.get("timeMs")) is int and match["timeMs"] >= 0]
+    witness = item.get("trackingWitness")
+    if (item.get("detailBasis") == WEAK_CONTINUATION and isinstance(witness, dict)
+            and type(witness.get("timeMs")) is int):
+        shifted = {**shifted, "trackingWitness": {**witness, "timeMs": witness["timeMs"] + start}}
     return shifted
 
 

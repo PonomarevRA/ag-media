@@ -65,6 +65,21 @@ test("a sustained face highlights inside a longer unconfirmed cue while a one-fr
   assert.equal(frameAnnotation(evidence, [{...phrase, speakerNumber: 4}], 200).speakerFace, undefined);
 });
 
+test("a local audiovisual interval highlights an unbound face without assigning a speaker", () => {
+  const face = [41, .3, .2, .25, .45, 1, 34];
+  const phrase = {startMs: 3960, endMs: 6640, speaker: 1};
+  const evidence = {
+    timeline: {stepMs: 40, frames: Array.from({length: 166}, (_, index) =>
+      index >= 142 && index < 165 ? [face] : [])},
+    visibleSpeechIntervals: [{startMs: 5680, endMs: 6600, cueStartMs: 3960,
+      track: 41, faceId: 34, basis: "light-asd-local"}],
+  };
+  assert.deepEqual(frameAnnotation(evidence, [phrase], 5680).speakingFaces, [41]);
+  assert.equal(frameAnnotation(evidence, [phrase], 6000).phrase, phrase);
+  assert.deepEqual(frameAnnotation(evidence, [phrase], 6600).speakingFaces, []);
+  assert.deepEqual(frameAnnotation({...evidence, faceSpeakers: {34: {speaker: 2}}}, [phrase], 6000).speakingFaces, []);
+});
+
 const measure = {measureText: text => ({width: text.length * 6})};
 
 test("technical labels follow the exact depth interval and track identity", () => {

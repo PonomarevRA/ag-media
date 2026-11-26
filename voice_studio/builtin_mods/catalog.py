@@ -105,16 +105,23 @@ def manifests():
             item['description'] = 'Local pixel changes. Assist mode adds split-screen OCR and targeted object checks.'
             item['settings'] = {'mode': 'measure', 'pixelThreshold': 24,
                                 'adaptiveThreshold': False, 'compensateCamera': False,
-                                'sampling': 'baseline', 'ocrBudget': 0}
+                                'sampling': 'baseline', 'ocrBudget': 0, 'interfaceStateOcr': False,
+                                'smallUiControls': False, 'objectTrackContinuation': False, 'parallelPrimaryOcr': True}
             item['settingsSchema']['properties'].update({
                 'mode': {'type': 'string', 'enum': ['measure', 'objects', 'assist'], 'title': 'Mode'},
                 'pixelThreshold': {'type': 'integer', 'minimum': 8, 'maximum': 96,
                                    'title': 'Pixel threshold (8-bit channel)'},
                 'adaptiveThreshold': {'type': 'boolean', 'title': 'Адаптивный порог изменений'},
                 'compensateCamera': {'type': 'boolean', 'title': 'Компенсация движения камеры'},
-                'sampling': {'type': 'string', 'enum': ['baseline', 'event', 'event-ocr-reuse'],
+                'sampling': {'type': 'string', 'enum': ['baseline', 'event', 'event-ocr-reuse', 'stable-events'],
                              'title': 'Отбор кадров и OCR',
-                             'enumLabels': ['Базовый', 'Появление и пик', 'Появление, пик и повторное использование OCR']},
+                             'enumLabels': ['Базовый', 'Появление и пик', 'Появление, пик и повторное использование OCR',
+                                            'События относительно устойчивой области']},
+                'interfaceStateOcr': {'type': 'boolean', 'title': 'OCR по состояниям интерфейса'},
+                'smallUiControls': {'type': 'boolean', 'title': 'Мелкие элементы интерфейса'},
+                'objectTrackContinuation': {'type': 'boolean', 'title': 'Продолжение трека по слабой детекции'},
+                'parallelPrimaryOcr': {'type': 'boolean', 'title': 'Параллельный OCR и поиск предметов',
+                                       'description': 'Параметр действует и при выключенном поиске зон изменений.'},
                 'ocrBudget': {'type': 'integer', 'minimum': 0, 'maximum': 1024,
                               'title': 'Лимит кропов OCR для сцены',
                               'description': '0 сохраняет штатный лимит, а для экспериментальных режимов включает бюджет 256.'},

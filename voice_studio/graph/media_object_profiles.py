@@ -6,6 +6,7 @@ from itertools import combinations, product
 from voice_studio.graph.media_graph_objects import box_coverage, center, overlap, representative_sample
 from voice_studio.graph.object_reappearance import reappearance_chains
 from voice_studio.graph.object_reconciliation import color_conflict, reconcile_object_groups, source_gallery
+from voice_studio.vision.object_tracking_contract import WEAK_CONTINUATION
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 
 MAX_LABEL_GAP_MS = 600
@@ -169,7 +170,7 @@ def identity_tracks(nodes, tracks):
     """Use only baseline geometry, labels and times when associating existing object identities."""
     identity_nodes, identity_rows = {}, []
     for key, shot, samples in tracks:
-        baseline = [sample for sample in samples if sample["data"].get("detailBasis") != SMALL_OBJECT_DETAIL]
+        baseline = [sample for sample in samples if sample["data"].get("detailBasis") not in (SMALL_OBJECT_DETAIL, WEAK_CONTINUATION)]
         source = nodes[key]
         if baseline and len(baseline) < len(samples):
             source = {**source, "startMs": baseline[0]["startMs"], "endMs": baseline[-1]["endMs"]}
@@ -222,7 +223,9 @@ def add_object_profiles(graph, tracks, *, object_reconciliation=False):
             baseline = identity_samples[node["id"]]
             sample = (representative_sample(baseline) if baseline and len(baseline) < facts["sampleCount"]
                       else facts["representative"])
-            labels.append({"label": node["label"], "trackId": node["id"], "sampleCount": facts["sampleCount"],
+            weak_count = sum(sample["data"].get("detailBasis") == WEAK_CONTINUATION
+                             for sample in samples_by_track[node["id"]])
+            labels.append({"label": node["label"], "trackId": node["id"], "sampleCount": facts["sampleCount"] - weak_count,
                            "observationId": sample["observationId"], "timeMs": sample["timeMs"],
                            "score": sample["score"]})
         labels.sort(key=label_order)

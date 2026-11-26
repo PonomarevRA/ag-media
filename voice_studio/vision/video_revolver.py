@@ -16,6 +16,7 @@ from voice_studio.core.worker_process import worker_command
 from voice_studio.core.optional_runtime import runtime_environment, runtime_ready
 from voice_studio.vision.activity_worker_session import ActivityWorkerSession
 from voice_studio.vision.facial_expressions import finalize_expressions
+from voice_studio.vision.local_visible_speech import local_visible_speech
 from voice_studio.vision.video_activity_chunks import STEP, ActivityTimeline, activity_windows
 
 from voice_studio.core.analysis_stages import MAX_ACTIVITY_CUES, ignore_progress, queued_stage_slot, stage
@@ -346,4 +347,6 @@ def score_visible_faces(source, wav, audio_start_ms, phrases, formats, *, photo_
     for span in accumulated.spans.values():
         span["candidates"] = list(span["candidates"].values())
         observations[str(span["start_ms"])] = classify_span(span, identity_cuts)
+    if intervals := local_visible_speech(phrases, visual, observations):
+        visual["visibleSpeechIntervals"] = intervals
     return observations, visual

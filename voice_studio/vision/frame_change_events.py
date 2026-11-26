@@ -7,7 +7,9 @@ from heapq import heappush, heapreplace
 from itertools import count
 
 
-EVENT_SAMPLING = ("event", "event-ocr-reuse")
+REFERENCE_SAMPLING = "stable-events"
+REFERENCE_BASIS = "stable-region-reference"
+EVENT_SAMPLING = ("event", "event-ocr-reuse", REFERENCE_SAMPLING)
 MAX_TRANSIENT_MS = 500
 MAX_LINK_GAP_MS = 160
 MAX_EVENT_MS = 1600
@@ -73,6 +75,10 @@ class Witness:
     def signature(self):
         return self.row["_pixelSignatures"][self.index]
 
+    @property
+    def focus(self):
+        return self.region.get("sharpness")
+
 
 @dataclass(slots=True)
 class Event:
@@ -89,7 +95,11 @@ class Event:
         """Update the spatial link and keep the strongest frame before disappearance."""
         self.last = witness
         self.samples += 1
-        if witness.pixels > self.peak.pixels:
+        if (witness.focus is not None and self.peak.focus is not None
+                and witness.pixels >= .65 * self.peak.pixels):
+            if witness.focus > self.peak.focus or witness.pixels >= 1.55 * self.peak.pixels:
+                self.peak = witness
+        elif witness.pixels > self.peak.pixels:
             self.peak = witness
 
     def returned(self, witness, shared):
@@ -199,10 +209,11 @@ def group_events(rows, cut_stamps):
         returned = event.returned_at is not None
         onset, peak = event.onset, event.peak
         use_end = event.returned_at if returned else event.last.row["endMs"]
+        reference = any(witness.region.get("detectionBasis") == REFERENCE_BASIS for witness in (onset, peak))
+        basis = "roi-pixel-return" if returned else REFERENCE_BASIS if reference else "adjacent-region-overlap"
         facts = {"eventId": f"{onset.row['sourceFrame']}:{onset.index}",
                  "eventStartMs": onset.time, "eventEndMs": use_end, "eventSamples": event.samples,
-                 "eventBasis": "roi-pixel-return" if returned else "adjacent-region-overlap",
-                 "transient": returned}
+                 "eventBasis": basis, "transient": returned}
         onset.row.setdefault("eventWitnesses", []).append({**facts, "index": onset.index, "role": "onset"})
         if peak is not onset:
             peak.row.setdefault("eventWitnesses", []).append({**facts, "index": peak.index, "role": "peak"})
@@ -223,7 +234,8 @@ def prefer_witness_rows(bucket, limit):
 
     def priority(row):
         """Favor brief appearances, then a stronger change within the same budget."""
-        return max((item["transient"], item["eventSamples"] > 1, row["regions"][item["index"]]["changedPixels"])
+        return max((item["transient"], item["eventBasis"] == REFERENCE_BASIS,
+                    item["eventSamples"] > 1, row["regions"][item["index"]]["changedPixels"])
                    for item in row["eventWitnesses"])
 
     preferred.sort(key=priority, reverse=True)

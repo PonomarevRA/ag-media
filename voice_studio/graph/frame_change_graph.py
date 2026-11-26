@@ -1,5 +1,8 @@
 """Expose geometric change witnesses as first-class source-clock graph nodes."""
 
+from math import isfinite
+
+from voice_studio.vision.frame_change_events import REFERENCE_BASIS
 from voice_studio.vision.frame_changes import BASIS, GRAPHIC_BASIS
 
 
@@ -60,6 +63,15 @@ def change_coverage(scene):
     if isinstance(pilot := scene.get("ocrPilot", report.get("ocrPilot")), dict):
         keys = ("limit", "targetedReserve", "requested", "dispatched", "reused", "dropped", "batches", "engineCalls", "ocrMs")
         fields["ocrPilot"] = {key: pilot[key] for key in keys if type(pilot.get(key)) is int}
+    measurements = {
+        "stableReference": ("strongTiles", "confirmedWeakTiles"),
+        "interfaceStateOcr": ("status", "ocrCrops", "stableCrops", "changedCrops", "recognized", "elapsedMs"),
+        "smallUiControls": ("status", "frames", "added", "elapsedMs"),
+        "objectTracking": ("status", "continued", "cameraContinued", "cameraPairs", "densePairs", "elapsedMs"),
+    }
+    for name, keys in measurements.items():
+        if isinstance(stats := scene.get(name, report.get(name)), dict):
+            fields[name] = {key: stats[key] for key in keys if type(stats.get(key)) in (int, str)}
     if "graphicRows" in report:
         fields["graphicCandidates"] = len(change_rows(scene, "graphicRows"))
     if isinstance(objects := scene.get("frameChangeObjects", report.get("objectChecks")), dict):
@@ -132,6 +144,11 @@ def valid_region(region, box_coordinates, basis):
     if type(count) is not int or not 0 < count <= 320 * 320:
         return None
     result = {"box": box, "changedPixels": count, "basis": basis}
+    if region.get("detectionBasis") == REFERENCE_BASIS:
+        result["detectionBasis"] = REFERENCE_BASIS
+        focus = region.get("sharpness")
+        if type(focus) in (int, float) and isfinite(focus) and focus >= 0:
+            result["sharpness"] = focus
     if isinstance(reading := region.get("recognition"), dict):
         objects = recognition_rows(reading.get("objects"), "label", box_coordinates)
         text = recognition_rows(reading.get("text"), "text", box_coordinates)

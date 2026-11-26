@@ -92,6 +92,23 @@ class VideoRevolverTests(TestCase):
                          "partial-or-ambiguous")
         self.assertEqual(classify_span({**span, "end_ms": 2700})["state"], "partial-or-ambiguous")
 
+    def test_local_visible_speech_keeps_only_the_confirmed_part_of_a_cue(self):
+        """A short active close-up keeps its evidence without assigning the audio cue."""
+        from voice_studio.vision.local_visible_speech import local_visible_speech
+
+        face = [41, .3, .2, .25, .45, 1, 34]
+        frames = [[] for _ in range(166)]
+        frames[142:165] = [[face]] * 23
+        visual = {"timeline": {"stepMs": 40, "frames": frames}, "editorTimeline": {"shots": []},
+                  "faceTracking": {"identityCutTimesMs": []}}
+        spans = [(3960, 6640)]
+        observations = {"3960": {"state": "partial-or-ambiguous"}}
+        interval, = local_visible_speech(spans, visual, observations)
+        self.assertEqual(interval, {"startMs": 5680, "endMs": 6600, "track": 41, "faceId": 34,
+                                    "cueStartMs": 3960, "basis": "light-asd-local", "activeFrames": 23})
+        frames[145:161] = [[face, [1, .1, .1, .2, .3, 1, 1]]] * 16
+        self.assertEqual(local_visible_speech(spans, visual, observations), [])
+
     def test_verified_cut_keeps_dominant_phrase_but_abstains_on_concurrent_faces(self):
         first = {"track": 1, "face": 3, "frames": 31, "positive_frames": 29,
                  "track_start_ms": 34920, "track_end_ms": 36200, "representative": {"time_ms": 35000}}

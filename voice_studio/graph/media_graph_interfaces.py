@@ -10,6 +10,13 @@ PANEL_TYPES = ("mobile-ui", "ui")
 MAX_REGIONS = 2
 MAX_ELEMENTS = 48
 MAX_CONNECTIONS = 24
+NATIVE_SMALL_CONTROLS = {
+    "native-small-control-outline": "button_candidate",
+    "native-small-control-glyph": "icon_candidate",
+}
+MAX_NATIVE_DIMENSION = 16_384
+MAX_STATE_SUPPORT_MS = 12_001
+STATE_EVIDENCE_TIMES = ("recognizedAtMs", "verifiedFromMs", "verifiedUntilMs")
 
 
 def sequence(value, limit):
@@ -57,7 +64,67 @@ def segment_box(points):
     return [round(value, 4) for value in (left, top, right - left, bottom - top)]
 
 
-def clean_region(row, box_coordinates):
+def clean_native_control(row, role, basis):
+    """Preserve exact pixel geometry only for the native small-control detector."""
+    if NATIVE_SMALL_CONTROLS.get(basis) != role:
+        return {}
+    pixel, confidence = row.get("pixelBox"), row.get("confidence")
+    if (not isinstance(pixel, (list, tuple)) or len(pixel) != 4
+            or any(type(value) is not int or value < 0 for value in pixel)
+            or type(confidence) not in (int, float) or not isfinite(confidence) or not 0 <= confidence <= 1):
+        return {}
+    x, y, width, height = pixel
+    if min(width, height) <= 0 or max(x + width, y + height) > MAX_NATIVE_DIMENSION:
+        return {}
+    return {"pixelBox": list(pixel), "confidence": confidence}
+
+
+def clean_state_evidence(value, box_coordinates, screen, element, stamp, interval):
+    """Retain bounded support metadata only on the exact frame that supplied the OCR."""
+    if not isinstance(value, dict) or interval is None:
+        return None
+    recognized, start, end = (value.get(key) for key in STATE_EVIDENCE_TIMES)
+    source, count, kind = (value.get(key) for key in ("sourceFrame", "supportCount", "kind"))
+    if any(type(item) is not int for item in (recognized, start, end, source, count)):
+        return None
+    lower, upper = interval
+    if (recognized != stamp or not lower <= start <= recognized < end <= upper
+            or end - start > MAX_STATE_SUPPORT_MS or not 0 <= source < 2 ** 31
+            or not 1 <= count <= end - start):
+        return None
+    if kind == "changed":
+        if count != 1 or start != recognized or end != recognized + 1:
+            return None
+    elif kind != "stable" or count < 2:
+        return None
+    crop = box_coordinates(value.get("cropBox"))
+    if not crop or min(crop[2:]) <= 0 or not within(crop, screen):
+        return None
+    x, y, w, h = element
+    if not within((x + w / 2, y + h / 2, 0, 0), crop):
+        return None
+    evidence = {"recognizedAtMs": recognized, "verifiedFromMs": start, "verifiedUntilMs": end,
+                "sourceFrame": source, "supportCount": count, "kind": kind, "cropBox": crop}
+    if previous := clean_same_content(value.get("sameContentAs"), box_coordinates, screen, lower, recognized):
+        evidence["sameContentAs"] = previous
+    return evidence
+
+
+def clean_same_content(value, box_coordinates, screen, shot_start, stamp):
+    """Reference only an earlier observed crop in the same shot and viewport."""
+    if not isinstance(value, dict):
+        return None
+    recognized, source = value.get("recognizedAtMs"), value.get("sourceFrame")
+    if (type(recognized) is not int or not shot_start <= recognized < stamp
+            or type(source) is not int or not 0 <= source < 2 ** 31):
+        return None
+    crop = box_coordinates(value.get("box"))
+    if not crop or min(crop[2:]) <= 0 or not within(crop, screen):
+        return None
+    return {"recognizedAtMs": recognized, "sourceFrame": source, "box": crop}
+
+
+def clean_region(row, box_coordinates, *, stamp=None, interval=None):
     """Normalize one screen and remap connector indices after discarding malformed elements."""
     if not isinstance(row, dict):
         return None
@@ -66,6 +133,7 @@ def clean_region(row, box_coordinates):
     if not isinstance(basis, str) or basis not in REGION_BASES or not box or min(box[2:]) <= 0:
         return None
 
+    verified = basis == "frame-layout" and row.get("panelType") in PANEL_TYPES
     elements, index_map = [], {}
     for original, element in enumerate(sequence(row.get("elements"), MAX_ELEMENTS)):
         if not isinstance(element, dict):
@@ -79,13 +147,17 @@ def clean_region(row, box_coordinates):
         data = {"role": role, "box": bounds, "basis": element_basis}
         if label := text_field(element.get("text"), 180):
             data["text"] = label
+            if verified and (evidence := clean_state_evidence(
+                    element.get("stateEvidence"), box_coordinates, box, bounds, stamp, interval)):
+                data["stateEvidence"] = evidence
+        if verified:
+            data.update(clean_native_control(element, role, element_basis))
         for field in ("column", "row"):
             if type(element.get(field)) is int and 1 <= element[field] <= 4096:
                 data[field] = element[field]
         if mosaic := clean_mosaic(element.get("mosaic"), box_coordinates):
             data["mosaic"] = mosaic
         elements.append(data)
-    verified = basis == "frame-layout" and row.get("panelType") in PANEL_TYPES
     if not elements and not verified:
         return None
 
@@ -142,8 +214,16 @@ def clean_mosaic(value, box_coordinates):
 
 def add_interface_observations(graph, stamp, rows, box_coordinates):
     """Attach visible screen regions, their elements and their connectors to a sampled frame."""
-    for region_index, candidate in enumerate(sequence(rows, MAX_REGIONS)):
-        normalized = clean_region(candidate, box_coordinates)
+    candidates = sequence(rows, MAX_REGIONS)
+    if not candidates:
+        return
+    sampled_shot = next(graph.intersecting_shots(stamp, stamp + 1), None)
+    interval = (0, graph.duration)
+    if sampled_shot is not None:
+        shot = graph.nodes[sampled_shot]
+        interval = (shot["startMs"], shot["endMs"])
+    for region_index, candidate in enumerate(candidates):
+        normalized = clean_region(candidate, box_coordinates, stamp=stamp, interval=interval)
         if normalized is None:
             continue
         region, elements, connections = normalized
@@ -151,7 +231,8 @@ def add_interface_observations(graph, stamp, rows, box_coordinates):
         if region.get("panelType") and type(end) is int and stamp < end <= graph.duration:
             region["screenStateEndMs"] = end
             state_region = clean_region({**candidate, "connections": (),
-                                         "elements": candidate.get("screenStateElements")}, box_coordinates)
+                                         "elements": candidate.get("screenStateElements")}, box_coordinates,
+                                        stamp=stamp, interval=interval)
             region["screenStateElements"] = state_region[1] if state_region else []
         reading = region.get("readingTimeMs")
         if reading is not None and not 0 <= reading < stamp:
@@ -208,7 +289,8 @@ def restore_interface_observation(frame, regions, node_id, kind, data):
         regions[node_id] = region
     elif region := regions.get(data.get("screenId")):
         if kind == "ui_element":
-            fields = ("role", "box", "basis", "text", "mosaic", "row", "column")
+            fields = ("role", "box", "basis", "text", "mosaic", "row", "column",
+                      "pixelBox", "confidence", "stateEvidence")
             region["elements"].append({field: data[field] for field in fields if field in data})
         else:
             region["connections"].append({field: data[field] for field in ("from", "to", "segment")})

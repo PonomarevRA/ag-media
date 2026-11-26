@@ -6,10 +6,13 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
+from voice_studio.builtin_mods.catalog import manifests
+from voice_studio.mods import ModRegistry
 from voice_studio.synthesis.engines import ffmpeg
 from voice_studio.speech.media_transcript import FORMATS
+from voice_studio.vision.frame_changes import MOD_ID
 from voice_studio.vision.scene_sampling import evenly_spaced, label_visible_faces, sample_plan
-from voice_studio.vision.video_scene import review_scene
+from voice_studio.vision.video_scene import review_scene, scene_pilot_features
 
 
 def frames_at(fps, count):
@@ -18,6 +21,17 @@ def frames_at(fps, count):
 
 
 class SceneSamplingTests(TestCase):
+    def test_parallel_ocr_default_and_override_with_frame_changes_disabled(self):
+        """Use the standard scene schedule independently of frame-change detection."""
+        manifest = next(item for item in manifests() if item["id"] == MOD_ID)
+        with TemporaryDirectory() as directory:
+            registry = ModRegistry(data_dir=directory, builtin_manifests=[manifest])
+            registry.configure(MOD_ID, {"smallUiControls": True})
+            with patch("voice_studio.vision.video_scene.current_snapshot", side_effect=registry.snapshot):
+                self.assertEqual(scene_pilot_features(), {"parallelPrimaryOcr": True})
+                registry.configure(MOD_ID, {"parallelPrimaryOcr": False, "smallUiControls": True})
+                self.assertEqual(scene_pilot_features(), {})
+
     def test_basic_checks_ten_frames_per_shot_or_every_available_frame(self):
         rows = sample_plan(frames_at(25, 46), [40])
         self.assertEqual([sum(row["shot"] == shot and row["objects"] for row in rows)

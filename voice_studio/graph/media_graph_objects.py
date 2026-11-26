@@ -6,6 +6,7 @@ from math import hypot, isfinite
 
 from voice_studio.graph.object_reconciliation import color_conflict
 from voice_studio.vision.frame_changes import BASIS as FRAME_CHANGE_DETAIL
+from voice_studio.vision.object_tracking_contract import WEAK_CONTINUATION
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 from voice_studio.vision.vehicle_evidence import VEHICLE_LABELS
 
@@ -276,10 +277,40 @@ def confirmed_tracks(frames, fragments, *, displays=False, panel_checks=(), vehi
                         vehicle_review=vehicle_review)
 
 
+def attach_weak_samples(groups, candidates):
+    """Extend only a unique existing track with its exact preceding detector anchor."""
+    if not candidates:
+        return
+    anchors = defaultdict(list)
+    gaps = {}
+    for index, (_, track) in enumerate(groups):
+        gaps[index] = {node["startMs"] for node in track}
+        for node in track:
+            if not node["data"].get("detailBasis"):
+                anchors[node["startMs"], tuple(node["data"]["box"])].append(index)
+    pending = defaultdict(list)
+    for candidate in candidates:
+        witness = candidate["data"].get("trackingWitness")
+        if not witness:
+            continue
+        track_ids = anchors[witness["timeMs"], tuple(witness["box"])]
+        stamp = candidate["startMs"]
+        if len(track_ids) == 1 and stamp not in gaps[track_ids[0]]:
+            pending[track_ids[0], stamp].append(candidate)
+    modified = set()
+    for (index, _), observations in pending.items():
+        if len(observations) == 1:
+            groups[index][1].extend(observations)
+            modified.add(index)
+    for index in modified:
+        groups[index][1].sort(key=lambda node: node["startMs"])
+
+
 def add_object_tracks(graph, *, object_reconciliation=False):
     """Link object samples to a concrete track, preserving separations at cuts."""
     grouped = defaultdict(lambda: (defaultdict(list), defaultdict(list)))
     panels = defaultdict(list)
+    weak = defaultdict(list)
     for node in graph.nodes.values():
         if node["kind"] != "object_observation":
             continue
@@ -288,7 +319,11 @@ def add_object_tracks(graph, *, object_reconciliation=False):
         if shot:
             if node["data"].get("source") == "interface-layout" and node["label"] in ("mobile-ui", "ui"):
                 panels[shot].append((stamp, node["data"]["box"]))
-            baseline, detail = grouped[shot, node["label"].casefold()]
+            group = shot, node["label"].casefold()
+            if node["data"].get("detailBasis") == WEAK_CONTINUATION:
+                weak[group].append(node)
+                continue
+            baseline, detail = grouped[group]
             frames = detail if node["data"].get("detailBasis") in (SMALL_OBJECT_DETAIL, FRAME_CHANGE_DETAIL) else baseline
             frames[stamp].append(node)
     for checks in panels.values():
@@ -301,15 +336,18 @@ def add_object_tracks(graph, *, object_reconciliation=False):
         baseline = confirmed_tracks(base_frames, fragments, displays=displays, panel_checks=checks,
                                     vehicle_review=object_reconciliation and label in VEHICLE_LABELS)
         detail = confirmed_tracks(detail_frames, fragments, displays=displays, panel_checks=checks)
-        for anchor, observations in append_detail_tracks(baseline, detail, panel_checks=checks):
+        groups = append_detail_tracks(baseline, detail, panel_checks=checks)
+        attach_weak_samples(groups, weak.get((shot, label), ()))
+        for anchor, observations in groups:
             first, last = observations[0], observations[-1]
+            stable = [node for node in observations if node["data"].get("detailBasis") != WEAK_CONTINUATION]
             # Earlier detail extends coverage without changing the baseline track ID.
             key = "object_track:" + anchor["id"].split(":", 1)[1]
             label = anchor["label"]
             graph.node(key, "object_track", label, (first["startMs"], last["endMs"]),
                        {"sampleCount": len(observations), "basis": "box-iou-within-shot",
                         "coordinateSpace": "normalized-oriented-source", "sampledGeometry": True,
-                        "representative": representative_sample(observations)})
+                        "representative": representative_sample(stable)})
             graph.connect(key, "in_shot", shot)
             for node in observations:
                 graph.connect(node["id"], "sample_of", key)

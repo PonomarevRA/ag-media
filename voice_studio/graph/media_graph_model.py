@@ -22,6 +22,7 @@ from voice_studio.graph.speech_screen_evidence import add_speech_screen_evidence
 from voice_studio.speech.person_mentions import clean_mentions
 from voice_studio.speech.speaker_profiles import APPEARANCE_FIELDS, cue_number
 from voice_studio.vision.frame_changes import BASIS as FRAME_CHANGE_DETAIL
+from voice_studio.vision.object_tracking_contract import WEAK_CONTINUATION, tracking_witness
 from voice_studio.vision.scene_sampling import SMALL_OBJECT_DETAIL
 from voice_studio.vision.video_colors import hex_rgb
 from voice_studio.vision.vehicle_evidence import validated_body_color
@@ -395,6 +396,12 @@ def add_utterances(graph, report, track):
     """Add each transcript cue and preserve overlap participants as timed edges."""
     cues = sorted((row for row in report.get("segments") or [] if source_interval(row, graph.duration)),
                   key=lambda row: (row["startMs"], row["endMs"]))
+    local_activity = defaultdict(list)
+    intervals = (report.get("videoEvidence") or {}).get("visibleSpeechIntervals")
+    for row in intervals if isinstance(intervals, list) else ():
+        if (isinstance(row, dict) and row.get("basis") == "light-asd-local"
+                and type(row.get("cueStartMs")) is int and source_interval(row, graph.duration)):
+            local_activity[row["cueStartMs"]].append(row)
     at_time = Counter()
     previous = None
     for cue in cues:
@@ -415,6 +422,11 @@ def add_utterances(graph, report, track):
                     if left < right:
                         overlaps.append((left, right, span))
         data = compact_source_data(cue, ("speakerName", "asrModel", "visualSpeakerBasis", "speakerBasis"))
+        visible = [compact_source_data(row, ("startMs", "endMs", "track", "faceId", "basis", "activeFrames"))
+                   for row in local_activity.get(start, ())[:8] if start <= row["startMs"] < row["endMs"] <= end
+                   and positive_id(row.get("track")) and positive_id(row.get("faceId"))]
+        if visible:
+            data["visibleSpeech"] = visible
         window = cue.get("speakerAudioWindow")
         if isinstance(window, dict) and (bounds := source_interval(window, graph.duration)):
             if start <= bounds[0] < bounds[1] <= end:
@@ -516,6 +528,8 @@ def scene_observations(graph, report, *, keep_display_aliases=False):
                 label = str(item.get(field) or "").strip()[:512]
                 box = box_coordinates(item.get("box"))
                 if label and box:
+                    if kind == "object" and item.get("detailBasis") == WEAK_CONTINUATION and not tracking_witness(item, stamp):
+                        continue
                     if kind == "object" and label.casefold() in DISPLAY_LABELS:
                         if panel_sample is None:
                             panel_sample = panels.measurement_at(stamp)
@@ -529,7 +543,8 @@ def scene_observations(graph, report, *, keep_display_aliases=False):
                     add_scene_observation(graph, stamp, kind, source, index, label, box, item, screen=screen)
         interfaces = row.get("interfaces") or []
         # Appended crop detections keep the baseline indexes, including the synthetic panel.
-        panel_offset = sum(item.get("detailBasis") not in (SMALL_OBJECT_DETAIL, FRAME_CHANGE_DETAIL) for item in row.get("objects") or ())
+        panel_offset = sum(item.get("detailBasis") not in (SMALL_OBJECT_DETAIL, FRAME_CHANGE_DETAIL, WEAK_CONTINUATION)
+                           for item in row.get("objects") or ())
         for index, panel in enumerate(interfaces, start=panel_offset):
             if not isinstance(panel, dict) or panel.get("panelType") not in PANEL_TYPES:
                 continue
@@ -615,6 +630,8 @@ def add_scene_observation(graph, stamp, kind, source, index, label, box, item, *
     if kind == "object":
         if source == "nanodet":
             data["rawLabel"] = label
+        if witness := tracking_witness(item, stamp):
+            data["trackingWitness"] = witness
         if screen:
             data["interfaceEvidence"] = screen
         if palette := item.get("objectPalette"):
@@ -888,7 +905,10 @@ def object_layers(report):
     clips = []
     for key, shot, samples in tracks:
         node = graph.nodes[key]
+        continued = [{"timeMs": sample["startMs"], "basis": witness["basis"], "anchorMs": witness["timeMs"]}
+                     for sample in samples if (witness := sample["data"].get("trackingWitness"))]
         clips.append({field: node[field] for field in ("id", "label", "startMs", "endMs")}
+                     | ({"trackingContinuation": continued} if continued else {})
                      | {"shotId": shot, "sampleCount": len(samples),
                         "representative": node["data"]["representative"], "profileId": node["data"]["profileId"],
                         "boxSamples": [[sample["startMs"], sample["data"]["box"], sample["data"].get("score")]

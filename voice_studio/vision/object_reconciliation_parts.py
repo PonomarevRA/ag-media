@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from voice_studio.vision.object_foreground import compare_foregrounds, describe_foreground
+from voice_studio.vision.object_tracking_contract import WEAK_CONTINUATION
 from voice_studio.vision.vehicle_body_color import measure_vehicle_bodies
 from voice_studio.vision.vehicle_evidence import VEHICLE_LABELS
 
@@ -181,8 +182,10 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
             item.pop('objectPartMatches', None)
             item.pop('objectForegroundMatches', None)
             item.pop('vehicleBodyColor', None)
-    selected = spread([row for row in frames if row.get('objects')], MAX_FRAMES)
-    rows = [(frame, item) for frame in selected for item in frame.get('objects', [])[:12]]
+    detected_frames = [(frame, [item for item in frame.get('objects', [])
+                                if item.get("detailBasis") != WEAK_CONTINUATION][:12]) for frame in frames]
+    selected = spread([(frame, objects) for frame, objects in detected_frames if objects], MAX_FRAMES)
+    rows = [(frame, item) for frame, objects in selected for item in objects]
     selected_rows = spread(rows, MAX_CROPS)
     foreground_objects = {id(item) for _, item in spread(
         [(frame, item) for frame, item in selected_rows if item.get('label') not in {'ui', 'mobile-ui', 'person'}],
@@ -190,13 +193,13 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     by_stamp = {}
     for frame, item in selected_rows:
         by_stamp.setdefault(frame['timeMs'], []).append(item)
-    vehicle_frames = [(frame, [item for item in frame.get('objects', ())[:12]
-                              if item.get('label') in VEHICLE_LABELS]) for frame in frames]
-    vehicle_rows = [(frame, item) for frame, items in spread(
-        [(frame, items) for frame, items in vehicle_frames if items], MAX_VEHICLE_FRAMES) for item in items]
+    vehicle_frames = [(frame, objects, [item for item in objects if item.get('label') in VEHICLE_LABELS])
+                      for frame, objects in detected_frames]
+    vehicle_rows = [(frame, objects, item) for frame, objects, items in spread(
+        [row for row in vehicle_frames if row[2]], MAX_VEHICLE_FRAMES) for item in items]
     vehicle_by_stamp = {}
-    for frame, item in spread(vehicle_rows, MAX_VEHICLE_CROPS):
-        _, items = vehicle_by_stamp.setdefault(frame["timeMs"], (frame["objects"][:12], []))
+    for frame, objects, item in spread(vehicle_rows, MAX_VEHICLE_CROPS):
+        _, items = vehicle_by_stamp.setdefault(frame["timeMs"], (objects, []))
         items.append(item)
     stats = {'basis': 'bounded-source-crop-orb-pilot', 'decodedFrames': 0, 'describedCrops': 0,
              'comparisons': 0, 'measuredPairs': 0, 'maxFrames': MAX_FRAMES,

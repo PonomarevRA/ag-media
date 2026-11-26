@@ -1,4 +1,4 @@
-"""Reuse the local Light-ASD model across bounded, synchronous requests."""
+"""Reuse local video workers across bounded, synchronous requests."""
 
 from voice_studio.core.optional_runtime import runtime_environment
 from voice_studio.mod_runtime import worker_environment
@@ -17,11 +17,13 @@ MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 class ActivityWorkerSession:
     """Restart the child after a protocol error or timeout without losing completed windows."""
 
-    def __init__(self, command, imports):
+    def __init__(self, command, imports, *, environment=None):
         """Own one lazy child and one IO thread for sequential window requests."""
         self.command = [*command, "--window-server"]
-        environment = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, imports))}
-        self.env = runtime_environment("vision", environment, extra_groups=("light-asd",))
+        if environment is None:
+            base = {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, imports))}
+            environment = runtime_environment("vision", base, extra_groups=("light-asd",))
+        self.env = environment
         self.process = None
         self.reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="light-asd-window")
 

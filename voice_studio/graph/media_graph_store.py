@@ -395,7 +395,7 @@ class MediaGraphStore:
                         continue
                     evidence = {name: data[name] for name in ("box", "score", "basis", "detailBasis", "objectPalette",
                                                              "objectMatches", "objectPartMatches", "objectForegroundMatches",
-                                                             "vehicleBodyColor") if name in data}
+                                                             "vehicleBodyColor", "trackingWitness") if name in data}
                     item = {"label": row["label"], **evidence}
                     if row["kind"] == "object_alias":
                         aliases.append((frame, data["sourceIndex"], item))

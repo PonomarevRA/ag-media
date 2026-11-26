@@ -10,7 +10,7 @@ import sys
 from threading import Timer
 from time import perf_counter
 
-from voice_studio.vision.frame_change_events import EVENT_SAMPLING
+from voice_studio.vision.frame_change_events import EVENT_SAMPLING, REFERENCE_SAMPLING
 
 
 MOD_ID = "builtin.frame-changes"
@@ -27,6 +27,7 @@ MAX_SUPPLEMENTAL_FRAMES = 4096
 MAX_OBJECT_FRAMES_PER_SECOND = 4
 MAX_OBJECT_REGIONS = 2
 MAX_RECOGNITION_REGIONS = 64
+REFERENCE_WARMUP_FRAMES = 3
 GLOBAL_FRACTION = .32
 TIMEOUT = 480
 
@@ -117,7 +118,8 @@ def regions_from_mask(quiet):
     return regions[:MAX_REGIONS]
 
 
-def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None, event_sampling=False):
+def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None, event_sampling=False,
+                reference=None, adjacent_samples=None):
     """Compare consecutive frames and retain a small, time-distributed set per source second.
 
     Read FFmpeg's clock in a separate pass after decoding; the worker retains no
@@ -126,6 +128,8 @@ def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None, ev
     """
     import numpy as np
     from voice_studio.vision.frame_change_events import pixel_signatures
+    if reference is not None:
+        from voice_studio.vision.frame_change_reference import mark_reference_regions, merge_reference_regions
 
     samples = []
     supplemental = []
@@ -142,6 +146,17 @@ def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None, ev
             regions, is_supplemental = compare_frames(
                 previous, current, threshold, adaptive=adaptive, camera=camera,
             )
+            if adjacent_samples is not None and regions and not is_supplemental:
+                adjacent_samples.append((frame_count, regions))
+                if len(adjacent_samples) >= MAX_PENDING_FRAMES:
+                    del adjacent_samples[1::2]
+            if reference is not None:
+                mask = reference.observe(previous, current, broad=regions is None)
+                stable = regions_from_mask(mask) if mask is not None else None
+                if stable:
+                    mark_reference_regions(current, stable)
+                    regions = merge_reference_regions(regions, stable, MAX_REGIONS)
+                    is_supplemental = False
             if regions is None:
                 wide += 1
             elif regions:
@@ -186,7 +201,42 @@ def bound_samples(samples, frames, cuts, *, for_objects=False):
     return bound_rows(clock_rows(samples, frames, cuts), for_objects=for_objects)
 
 
-def bound_rows(dense_rows, *, for_objects=False, event_sampling=False):
+def reference_cut_guard(rows, frames, cuts):
+    """Keep adjacent observations but discard reference-only witnesses near a cut."""
+    blocked = {frames[index][0] for cut in cuts
+               for index in range(cut, min(len(frames), cut + REFERENCE_WARMUP_FRAMES + 1))}
+    invalid = set()
+    kept = []
+    for row in rows:
+        if row["sourceFrame"] not in blocked:
+            kept.append(row)
+            continue
+        indices = [index for index, region in enumerate(row["regions"]) if not region.get("referenceOnly")]
+        positions = {before: after for after, before in enumerate(indices)}
+        witnesses = []
+        for item in row.get("eventWitnesses", ()):
+            if item["index"] in positions:
+                witnesses.append({**item, "index": positions[item["index"]]})
+            else:
+                invalid.add(item["eventId"])
+        if not indices:
+            continue
+        regions = [{key: value for key, value in row["regions"][index].items()
+                    if key not in ("detectionBasis", "sharpness")} for index in indices]
+        revised = {**row, "regions": regions}
+        if "_pixelSignatures" in row:
+            revised["_pixelSignatures"] = [row["_pixelSignatures"][index] for index in indices]
+        if "eventWitnesses" in row:
+            revised["eventWitnesses"] = witnesses
+        kept.append(revised)
+    if invalid:
+        for row in kept:
+            if "eventWitnesses" in row:
+                row["eventWitnesses"] = [item for item in row["eventWitnesses"] if item["eventId"] not in invalid]
+    return kept, invalid
+
+
+def bound_rows(dense_rows, *, for_objects=False, event_sampling=False, stable_reference=False):
     """Thin one dense source-clock stream without increasing the existing per-second cap."""
     from voice_studio.vision.frame_change_events import prefer_witness_rows
     from voice_studio.vision.scene_sampling import evenly_spaced
@@ -199,7 +249,14 @@ def bound_rows(dense_rows, *, for_objects=False, event_sampling=False):
     for bucket in buckets.values():
         if event_sampling:
             limit = MAX_OBJECT_FRAMES_PER_SECOND if for_objects else MAX_FRAMES_PER_SECOND
-            kept = prefer_witness_rows(bucket, limit)
+            if stable_reference:
+                anchors = evenly_spaced(bucket, limit // 2)
+                anchored = {row["sourceFrame"] for row in anchors}
+                free = [row for row in bucket if row["sourceFrame"] not in anchored]
+                witnesses = prefer_witness_rows(free, limit - len(anchors))
+                kept = sorted([*anchors, *witnesses], key=lambda row: row["startMs"])
+            else:
+                kept = prefer_witness_rows(bucket, limit)
         elif for_objects:
             # Select adjacent candidate pairs from the original clock, before thinning.
             starts = range(0, max(1, len(bucket) - 1), 2)
@@ -262,13 +319,20 @@ def measure(request):
     camera = CameraCompensator() if options.get("compensateCamera") else None
     sampling = options.get("sampling", "baseline")
     event_sampling = sampling in EVENT_SAMPLING
+    reference = None
+    adjacent_samples = None
+    if sampling == REFERENCE_SAMPLING:
+        from voice_studio.vision.frame_change_reference import StableRegionChanges
+        reference = StableRegionChanges(SIDE, TILE, options["threshold"])
+        adjacent_samples = []
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=folder) as process:
         timer = Timer(TIMEOUT, process.kill)
         timer.daemon = True
         timer.start()
         try:
             samples, supplemental, wide, count, dropped = scan_pixels(
-                process, options["threshold"], graphics, adaptive=adaptive, camera=camera, event_sampling=event_sampling,
+                process, options["threshold"], graphics, adaptive=adaptive, camera=camera,
+                event_sampling=event_sampling, reference=reference, adjacent_samples=adjacent_samples,
             )
             if process.wait() != 0:
                 raise ValueError("FFmpeg frame change decode failed")
@@ -283,14 +347,19 @@ def measure(request):
     event_fields = {}
     if event_sampling:
         dense_rows = list(clock_rows(samples, frames, cuts))
+        if reference is not None:
+            dense_rows, _ = reference_cut_guard(dense_rows, frames, cuts)
         events, omitted_events = group_events(dense_rows, sorted(frames[index][1] for index in cuts))
         for row in dense_rows:
             row.pop("_pixelSignatures", None)
-        rows, omitted = bound_rows(dense_rows, event_sampling=True)
-        object_rows, _ = bound_rows(dense_rows, for_objects=True) if wants_objects else ([], 0)
+        rows, omitted = bound_rows(dense_rows, event_sampling=True, stable_reference=reference is not None)
+        baseline_rows = dense_rows if adjacent_samples is None else list(clock_rows(adjacent_samples, frames, cuts))
+        object_rows, _ = bound_rows(baseline_rows, for_objects=True) if wants_objects else ([], 0)
         event_fields = {"events": events, "omittedEvents": omitted_events}
+        if reference is not None:
+            event_fields["stableReference"] = reference.summary()
         if options["mode"] == "assist":
-            fixed_rows, _ = bound_rows(dense_rows)
+            fixed_rows, _ = bound_rows(baseline_rows)
             event_fields["motionRows"] = [
                 {key: row[key] for key in ("sourceFrame", "startMs", "regions")} for row in fixed_rows
             ]
@@ -363,13 +432,14 @@ def augment_plan(plan, frames, cuts, report):
     for row, index, witness in crop_witnesses(report.get("rows", ()), event_sampling=event_sampling):
         existing = row["sourceFrame"] in by_frame
         if sample := sample_for(row):
-            region = {"index": index, "box": row["regions"][index]["box"]}
+            measured = row["regions"][index]
+            region = {"index": index, "box": measured["box"]}
             if witness:
                 region.update(witness)
                 region.update({"eventRole": region.pop("role"), "sampleEndMs": row["endMs"]})
-            if row.get("supplemental"):
+            if row.get("supplemental") or measured.get("referenceOnly"):
                 region["supplemental"] = True
-            if not existing and (witness or row.get("supplemental")):
+            if not existing and (witness or region.get("supplemental")):
                 sample["supplementalOnly"] = True
             sample.setdefault("changeRecognitionRegions", []).append(region)
     plan.sort(key=lambda row: row["sourceFrame"])

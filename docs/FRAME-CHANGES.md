@@ -77,9 +77,65 @@ onto each crop's own coordinates. This is independent of existing panel and
 scroll reuse.
 
 For comparable runs, set **Scene OCR crop budget** to the same positive number
-in all three modes. For example, 256 allows up to 256 dispatched crops per scene
+in all compared modes. For example, 256 allows up to 256 dispatched crops per scene
 pass with 64 slots available only to frame-change recognition. Backend
 fallbacks may attempt a crop again. `ocrPilot.engineCalls` counts those launches
 and `ocrPilot.dispatched` counts the admitted crops. `requested`, `reused`,
 `dropped`, and `ocrMs` describe the same pass. The baseline setting of 0 keeps
-normal recognition limits. Both event modes use 256 when the setting is 0.
+normal recognition limits. The event modes use 256 when the setting is 0.
+
+## Stable regions, UI states and track continuation
+
+**Events against a stable region** compares fixed tiles against the previous
+frame and against their last settled appearance. Strong local changes emit
+immediately. A decaying sum requires consecutive support before emitting weak
+changes. Events retain their onset and favor a sharper follow-up at similar
+extent. The preview uses the existing per-second cap and reserves half the
+slots for time-distributed frames. The object and panel-motion passes read
+their own adjacent-frame measurements.
+[NoScope](https://people.eecs.berkeley.edu/~matei/papers/2017/vldb_noscope.pdf)
+and [CUSUM](https://doi.org/10.1093/biomet/41.1-2.100) informed this approach.
+
+**Interface state OCR** selects the sharpest observed crop for each stable
+panel band or changed band state. It uses at most 48 crops per scene pass and
+shares the existing crop ceiling. Short visual gaps between verified panel
+views can add up to 96 sampled frames. The graph stores the exact recognition
+frame, crop coordinates and the extent of measured support. Equal text with
+unique registered geometry can link to an earlier observation. Rapid scroll
+can still lead to multiple readings and incomplete intervals.
+[You Only Recognize Once](https://arxiv.org/abs/1903.03299)
+informed the frame choice.
+
+**Small interface controls** adds visually supported button and icon
+candidates from at most 16 verified source frames at original resolution.
+It retains normalized coordinates, original pixel coordinates and a geometry
+score. A shape alone has no semantic label. [UIED](https://arxiv.org/abs/2008.05132)
+informed the two-pass structure.
+
+**Continue tracks using weak detections** supplements confirmed tracks with
+nearby detections of the same class. Ambiguity, an occupied box or a cut can
+prevent a continuation. A weak sample cannot establish an identity. Disputed
+matches can use sparse background alignment and, within a separate cap,
+reciprocal DIS flow outside known object boxes.
+[ByteTrack](https://arxiv.org/abs/2110.06864),
+[BoT-SORT](https://arxiv.org/abs/2206.14651) and
+[DIS](https://arxiv.org/abs/1603.03590) informed this pilot.
+
+## Local speech evidence and scene scheduling
+
+The active-speaker stage preserves a confirmed on-screen interval inside a longer
+unresolved cue when one track has at least eight consecutive positive Light-ASD
+frames. A cut or competing active face ends the interval. The technical overlay
+can highlight the face during that interval while the transcript keeps its
+audio speaker. The graph records the measured bounds and face with the cue.
+
+The active-speaker worker can reuse the appearance and clothing image models
+across windows of the same source. Each window still supplies its own frames
+and runs the same models on them.
+
+**Run OCR and object detection in parallel** overlaps the initial OCR batch
+with object processing. The scene uses the same frame selection, crop order
+and OCR budget in both modes. Later interface crops, mosaics and object
+refinements keep their existing schedule. Parallel OCR is enabled by default
+and works with frame-change detection disabled. Set `parallelPrimaryOcr` to
+`false` in the **Frame Changes** mod settings to use sequential processing.

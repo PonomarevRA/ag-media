@@ -6,7 +6,9 @@ from voice_studio.mod_runtime import current_snapshot, model_provider, is_replac
 from voice_studio.mods.errors import ModError
 
 from bisect import bisect_left
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from contextvars import copy_context
 import json
 import logging
 from pathlib import Path
@@ -57,11 +59,15 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             shot_starts = [frames[index][1] for index in sorted(cuts) if 0 < index < len(frames)]
             plan = sample_plan(frames, cuts, object_sampling)
             if changes and changes["status"] == "ok":
-                from voice_studio.vision.frame_changes import augment_plan, constrain_graphics
+                from voice_studio.vision.frame_changes import REFERENCE_SAMPLING, augment_plan, constrain_graphics, reference_cut_guard
                 cuts_by_ordinal = {frames[index][0] for index in cuts if 0 <= index < len(frames)}
                 kept = [row for row in changes["rows"] if row["sourceFrame"] not in cuts_by_ordinal]
                 changes["cutCandidatesRemoved"] = len(changes["rows"]) - len(kept)
                 changes["rows"] = kept
+                extra_cuts = cuts.difference(native_cuts)
+                if changes.get("sampling") == REFERENCE_SAMPLING and extra_cuts:
+                    changes["rows"], invalid = reference_cut_guard(kept, frames, extra_cuts)
+                    changes["events"] = [event for event in changes["events"] if event["eventId"] not in invalid]
                 changes["graphicRows"] = list(constrain_graphics(changes.get("graphicRows", ()), sorted(shot_starts)))
                 if changes.get("events"):
                     from voice_studio.vision.frame_change_events import constrain_events
@@ -87,7 +93,10 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 request["includeMosaicFiles"] = publish_mosaic is not None
                 request["scrollInputs"] = inputs
                 request["scrollClock"] = scroll_clock(frames, cuts)
-                if pilot := scene_ocr_pilot():
+                features = scene_pilot_features()
+                if features:
+                    request["pilotFeatures"] = features
+                if pilot := scene_ocr_pilot(features):
                     request["ocrPilot"] = pilot
             (root / "samples.json").write_text(json.dumps(request), encoding="utf-8")
             result = run_worker("voice_studio.vision.video_scene", [root], [VISION], timeout=max(420, len(plan)))
@@ -128,7 +137,19 @@ def mosaic_markdown(page):
     return scroll_markdown([page]) if "mosaicText" in page else None
 
 
-def scene_ocr_pilot():
+def scene_pilot_features():
+    """Read scene scheduling and optional pilots from the frozen mod configuration."""
+    from voice_studio.vision.frame_changes import MOD_ID
+
+    mod = current_snapshot().to_wire()["mods"].get(MOD_ID, {})
+    settings = mod.get("settings") or {}
+    keys = ("parallelPrimaryOcr",)
+    if mod.get("enabled"):
+        keys += ("interfaceStateOcr", "smallUiControls", "objectTrackContinuation")
+    return {key: True for key in keys if settings.get(key) is True}
+
+
+def scene_ocr_pilot(features=None):
     """Read a frozen optional OCR policy from the active scene mod."""
     from voice_studio.vision.frame_changes import MOD_ID
 
@@ -138,7 +159,7 @@ def scene_ocr_pilot():
     settings = mod["settings"]
     sampling = settings.get("sampling", "baseline")
     budget = settings.get("ocrBudget", 0)
-    if sampling == "baseline" and budget == 0:
+    if sampling == "baseline" and budget == 0 and not (features or {}).get("interfaceStateOcr"):
         return None
     return {"sampling": sampling, "limit": budget or PILOT_OCR_BUDGET}
 
@@ -476,13 +497,47 @@ def analyze_frames(folder):
     from voice_studio.vision.scene_ocr import scene_ocr_scope
 
     reserve = min(MAX_RECOGNITION_REGIONS, pilot["limit"] // 4)
-    with scene_ocr_scope(pilot["limit"], reuse=pilot["sampling"] == "event-ocr-reuse", reserve=reserve) as ocr:
+    reuse = pilot["sampling"] in ("event-ocr-reuse", "stable-events")
+    with scene_ocr_scope(pilot["limit"], reuse=reuse, reserve=reserve) as ocr:
         result = analyze_scene_frames(folder, request, cv2, ocr=ocr)
     result["ocrPilot"] = {**pilot, "targetedReserve": reserve, **ocr.summary()}
     return result
 
 
+def recognize_primary_ocr(jobs):
+    """Apply the same crop order, cap and OCR options in either execution mode."""
+    from voice_studio.vision.scene_ocr import recognize
+
+    selected = evenly_spaced(jobs, MAX_OCR_REGIONS)
+    started = perf_counter()
+    readings, statuses = recognize(selected)
+    return readings, statuses, len(selected), round((perf_counter() - started) * 1000)
+
+
+def prepare_primary_ocr(folder, samples, cv2):
+    """Prepare only the independent transcript-free full-frame OCR work."""
+    jobs, history = [], {}
+    for index, sample in enumerate(samples):
+        if not sample["ocr"] or sample.get("supplementalOnly"):
+            continue
+        path = folder / f"{index:04}.jpg"
+        image = cv2.imread(str(path)) if path.is_file() else None
+        if image is not None:
+            jobs.extend(ocr_jobs(image, path, sample, history))
+    return recognize_primary_ocr(jobs)
+
+
 def analyze_scene_frames(folder, request, cv2, *, ocr=None):
+    """Optionally overlap independent OCR and object work in a single scene worker."""
+    if not (request.get("pilotFeatures") or {}).get("parallelPrimaryOcr"):
+        return measure_scene_frames(folder, request, cv2, ocr=ocr)
+    context = copy_context()
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="scene-primary-ocr") as pool:
+        primary = pool.submit(context.run, prepare_primary_ocr, folder, request["samples"], cv2)
+        return measure_scene_frames(folder, request, cv2, ocr=ocr, primary=primary)
+
+
+def measure_scene_frames(folder, request, cv2, *, ocr=None, primary=None):
     """Run whole-frame, panel, and targeted recognition under one optional OCR policy."""
     from voice_studio.vision.camera_motion import CameraMotion
     from voice_studio.vision.frame_change_objects import review_change_objects
@@ -501,6 +556,9 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
     except cv2.error:
         detector = None
     stages = {"nanodet": "ok" if detector else "unavailable"}
+    features = request.get("pilotFeatures") or {}
+    track_objects = bool(features.get("objectTrackContinuation"))
+    tracking_raw = {}
     frames, jobs, history = [], [], {}
     checks_by_shot = {}
     colors = {}
@@ -548,12 +606,19 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
                 active_shot = shot
             object_started = perf_counter()
             try:
+                extra = []
                 if small_objects is not None and sample["sectors"]:
                     frame["objects"] = small_objects.observe_anchor(detector, image, shot)
                 else:
-                    frame["objects"] = detector.detect(image, sectors=sample["sectors"] or shot in tiled_shots)
+                    sectors = sample["sectors"] or shot in tiled_shots
+                    if track_objects:
+                        frame["objects"], extra = detector.detect_with_tracking(image, sectors=sectors)
+                    else:
+                        frame["objects"] = detector.detect(image, sectors=sectors)
                 refined, correction = refine_drinkware(detector, image, frame["objects"])
                 frame["objects"] = refined
+                if track_objects:
+                    tracking_raw[frame["timeMs"]] = (path, [*refined, *extra])
                 if correction:
                     frame["objectReview"] = correction
                 frame["objectChecked"] = True
@@ -569,7 +634,8 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
             appearance_seconds += perf_counter() - appearance_started
         if sample["ocr"]:
             frame["panelChecked"] = True
-            jobs.extend(ocr_jobs(image, path, sample, history))
+            if primary is None:
+                jobs.extend(ocr_jobs(image, path, sample, history))
             frame_paths[frame["timeMs"]] = path
             screens.sample(image, path, sample, frame["objects"])
         frames.append(frame)
@@ -582,10 +648,8 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
         object_seconds += small_report["elapsedMs"] / 1000
         if small_report["status"] == "partial":
             stages["nanodet"] = "partial"
-    jobs = evenly_spaced(jobs, MAX_OCR_REGIONS)
-    ocr_started = perf_counter()
-    readings, ocr_stages = recognize(jobs)
-    ocr_ms = round((perf_counter() - ocr_started) * 1000)
+    readings, ocr_stages, primary_crops, ocr_ms = (recognize_primary_ocr(jobs) if primary is None
+                                                  else primary.result())
     started_interface = perf_counter()
     scroll_started = perf_counter()
     screens.retain_recognized_screens(readings)
@@ -614,12 +678,30 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
     if any(sample.get("changeRecognitionRegions") for sample in request["samples"]):
         with ocr.targeted() if ocr is not None else nullcontext():
             change_recognition = recognize_change_regions(detector, request["samples"], folder, recognize=recognize)
+    pilot_results = {}
+    state_samples_extra = []
+    if features.get("interfaceStateOcr") or features.get("smallUiControls"):
+        from voice_studio.vision.scene_screen_pilots import analyze_screen_pilots
+        pilot_results, state_samples_extra = analyze_screen_pilots(
+            folder, request, interfaces, supplemental, screens.scroll_candidates, decode_samples, ocr=ocr,
+        )
     present = {frame["timeMs"] for frame in frames}
-    for shot, stamp, _, _, source_frame in supplemental:
+    for shot, stamp, _, _, source_frame in (*supplemental, *state_samples_extra):
         if stamp not in present and stamp in interfaces:
             frames.append({"timeMs": stamp, "sourceFrame": source_frame, "shot": shot,
                            "text": [], "objects": [], "objectChecked": False})
+            present.add(stamp)
     frames.sort(key=lambda row: row["timeMs"])
+    if track_objects:
+        from voice_studio.vision.object_track_continuation import continue_object_tracks
+        try:
+            pilot_results["objectTracking"] = continue_object_tracks(frames, tracking_raw)
+        except (OSError, ValueError, cv2.error):
+            logging.getLogger(__name__).exception("Object track continuation failed")
+            pilot_results["objectTracking"] = {"status": "failed"}
+    for feature, result in pilot_results.items():
+        if result.get("status") in ("failed", "partial"):
+            stages[feature] = result["status"]
     screen_statuses.update({f"scroll-{key}": value for key, value in scroll_statuses.items()})
     for frame in frames:
         stamp = frame["timeMs"]
@@ -635,8 +717,11 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
         screen_statuses.get(f"{prefix}tesseract", screen_statuses.get(f"{prefix}apple-vision", "ok")) == "ok"
         for prefix in ("", "controls-", "scroll-", "states-")
     )
+    screen_complete = screen_complete and not any(
+        stages.get(feature) in ("failed", "partial") for feature in ("interfaceStateOcr", "smallUiControls")
+    )
     cpu_ms, peak_mib = process_usage()
-    return {"status": "ok", "stages": {**stages, **ocr_stages}, "sampling": request["sampling"],
+    return {"status": "ok", "stages": {**stages, **ocr_stages}, "sampling": request["sampling"], **pilot_results,
             **({"objectTiledShots": sorted(tiled_shots)} if request["objectSampling"] == "shot-tiles" else {}),
             **({"smallObjectPass": small_report} if small_report is not None else {}),
             "objectSampling": request["objectSampling"], "objectChecksByShot": list(checks_by_shot.values()),
@@ -645,7 +730,7 @@ def analyze_scene_frames(folder, request, cv2, *, ocr=None):
             "interfaceStateOcrCrops": screen_state_count,
             "interfaceScrolls": scrolls, "interfaceScrollMs": scroll_ms, "interfaceScrollFrames": len(supplemental),
             "interfaceStatus": "ok" if screen_complete else "partial", "interfaceOcrStatuses": screen_statuses, "interfaceMs": round(1000 * (perf_counter() - started_interface)),
-            "ocrPasses": len(jobs), "ocrMs": ocr_ms, "objectMs": round(object_seconds * 1000),
+            "ocrPasses": primary_crops, "ocrMs": ocr_ms, "objectMs": round(object_seconds * 1000),
             "objectAppearanceMs": round(appearance_seconds * 1000),
             "objectFrames": sum(row["checked"] for row in checks_by_shot.values()),
             **({"frameChangeObjects": change_objects} if change_objects is not None else {}),

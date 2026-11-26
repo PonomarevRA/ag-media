@@ -64,6 +64,7 @@ function frameLookups(evidence, phrases) {
   return {
     phraseAt: intervalLookup(phrases),
     simultaneousAt: intervalLookup(evidence?.simultaneousFaces ?? []),
+    localSpeechAt: intervalLookup(evidence?.visibleSpeechIntervals ?? []),
     depthAt: (track, face, stamp) => tracks.get(`${track}:${face}`)?.(stamp),
     personCuts: (evidence?.editorTimeline?.shots ?? []).map(shot => shot.startMs).sort((a, b) => a - b),
   };
@@ -115,9 +116,19 @@ export function frameAnnotation(evidence, phrases, timeMs, lookups) {
     const track = activeFaces[0][0];
     if (sustainedFace(timeline, index, track)) speakerFace = track;
   }
+  const local = lookups?.localSpeechAt
+    ? lookups.localSpeechAt(timeMs)
+    : evidence?.visibleSpeechIntervals?.find(row => row.startMs <= timeMs && timeMs < row.endMs);
+  const single = activeFaces.length === 1 ? activeFaces[0] : null;
+  const bound = single ? faceSpeaker(evidence, single) : null;
+  const localActive = !speakerFace && phrase && !mixedSpeakerLabel(phrase, timeMs) && single
+    && local?.basis === "light-asd-local" && local.cueStartMs === phrase.startMs
+    && local.track === single[0] && local.faceId === (single[6] ?? single[0])
+    && (bound === null || allowed.includes(bound));
+  if (localActive) speakerFace = local.track;
   const simultaneous = lookups ? lookups.simultaneousAt(timeMs)
     : evidence?.simultaneousFaces?.find(span => span.startMs <= timeMs && timeMs < span.endMs);
-  const speakingFaces = simultaneous
+  const speakingFaces = simultaneous && !localActive
     ? confirmed.filter(hit => simultaneous.tracks.includes(hit[0])).map(hit => hit[0])
     : (speakerFace ? [speakerFace] : []);
   return {faces, phrase, speakerFace, speakingFaces};
@@ -199,6 +210,9 @@ function drawFaces(ctx, faces, bounds, speakingFaces, faceSpeakers, marks) {
     const binding = faceSpeakers?.[face];
     let caption = binding?.speaker && binding.basis !== "visible-only"
       ? uiText`Спикер ${binding.speaker}` : uiText`Лицо ${face}`;
+    if (active && (!binding?.speaker || binding.basis === "visible-only")) {
+      caption += " · " + uiText("Говорит в кадре");
+    }
     const mark = marks.get(track);
     if (mark?.depth) caption += " · " + uiText(DEPTH_LABELS[mark.depth])
       + (mark.depthBasis === "relative-face-scale" ? " ≈" : "");
