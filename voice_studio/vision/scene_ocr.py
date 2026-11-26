@@ -1,9 +1,10 @@
 """Run local bilingual OCR and project sector coordinates back onto the video."""
 
-from voice_studio.mod_runtime import model_provider
+from voice_studio.mod_runtime import execution_scope, is_replacement, model_provider
 
 from concurrent.futures import ThreadPoolExecutor
 import csv
+from functools import wraps
 from hashlib import sha256
 from io import StringIO
 import json
@@ -19,6 +20,7 @@ from time import monotonic
 from voice_studio.core.media_resources import stage_threads
 from voice_studio.vision.scene_objects import iou
 from voice_studio.core.storage_cache import use_cache
+from voice_studio.vision.scene_ocr_reuse import ACTIVE_SCENE_OCR, scene_ocr_scope
 
 from voice_paths import RUNTIME_DIR, ensure_temporary_root, model_path
 
@@ -121,10 +123,13 @@ def merge_lines(lines, *, line_limit=24, keep_numbers=False):
 def vision_batches(binary, jobs, workers):
     """Run one native batch, or two independent batches when explicitly enabled."""
     paths = [str(job[1]) for job in jobs]
+    scope = ACTIVE_SCENE_OCR.get()
 
     def read(items):
         """Preserve alignment and allow a failed batch to fall back independently."""
         try:
+            if scope is not None:
+                scope.engine_started()
             raw = subprocess.check_output([str(binary)], input=json.dumps(items), text=True,
                                           stderr=subprocess.DEVNULL, timeout=40)
             result = json.loads(raw)
@@ -142,12 +147,9 @@ def vision_batches(binary, jobs, workers):
     return first + second
 
 
-@model_provider('vision.ocr', 'builtin.apple-ocr')
-def recognize(jobs, *, line_limit=24, keep_numbers=False, page_mode=11, compile_vision=True, backend=None):
-    """Prefer native OCR and retry failed crops with a bounded Tesseract pool."""
-    if not jobs:
-        return {}, {}
-    options = {"line_limit": line_limit, "keep_numbers": keep_numbers}
+def read_batches(jobs, *, page_mode, compile_vision, backend):
+    """Read crop-relative geometry with native OCR and bounded Tesseract repair."""
+    scope = ACTIVE_SCENE_OCR.get()
     cores = stage_threads(os.cpu_count() or 1)
     setting = os.getenv("VOICE_SCENE_OCR_WORKERS")
     workers = 2 if (setting == "2" and cores >= 4) or (setting is None and cores >= 8) else 1
@@ -167,9 +169,9 @@ def recognize(jobs, *, line_limit=24, keep_numbers=False, page_mode=11, compile_
     if backend == 'apple-ocr' and missing:
         raise RuntimeError('Explicit Apple OCR provider could not recognize all crops.')
     if not missing:
-        return collect_lines(jobs, batches, **options), stages
+        return batches, stages
     if not fallback_ready:
-        return collect_lines(jobs, batches, **options), {**stages, "tesseract": "unavailable"}
+        return batches, {**stages, "tesseract": "unavailable"}
 
     deadline = monotonic() + 36
 
@@ -180,6 +182,8 @@ def recognize(jobs, *, line_limit=24, keep_numbers=False, page_mode=11, compile_
         if remaining <= 0:
             return None
         try:
+            if scope is not None:
+                scope.engine_started()
             return read_tesseract(command, path, width, height, min(4, remaining), page_mode=page_mode)
         except (OSError, ValueError, subprocess.SubprocessError):
             return None
@@ -188,7 +192,42 @@ def recognize(jobs, *, line_limit=24, keep_numbers=False, page_mode=11, compile_
         repairs = pool.map(read, (jobs[index] for index in missing))
         for index, result in zip(missing, repairs):
             batches[index] = result
-    return collect_lines(jobs, batches, **options), {**stages, "tesseract": "partial" if None in batches else "ok"}
+    return batches, {**stages, "tesseract": "partial" if None in batches else "ok"}
+
+
+def measure_scene_ocr(operation):
+    """Account for the shared scene budget without changing the provider API."""
+    @wraps(operation)
+    def measured(jobs, **options):
+        """Preserve the unspecialized OCR path outside a scene scope."""
+        scope = ACTIVE_SCENE_OCR.get()
+        if scope is None or not jobs:
+            return operation(jobs, **options)
+        with scope.request(len(jobs)), execution_scope():
+            if is_replacement("vision.ocr", "builtin.apple-ocr"):
+                return scope.read_replacement(jobs, lambda selected: operation(selected, **options))
+            return operation(jobs, **options)
+
+    return measured
+
+
+@measure_scene_ocr
+@model_provider('vision.ocr', 'builtin.apple-ocr')
+def recognize(jobs, *, line_limit=24, keep_numbers=False, page_mode=11, compile_vision=True, backend=None):
+    """Project raw crop-relative OCR onto the current source, then merge its lines."""
+    if not jobs:
+        return {}, {}
+    scope = ACTIVE_SCENE_OCR.get()
+    if scope is None:
+        batches, statuses = read_batches(jobs, page_mode=page_mode, compile_vision=compile_vision, backend=backend)
+    else:
+        def read(selected):
+            """Dispatch only the crops that need an actual recognition attempt."""
+            return read_batches(selected, page_mode=page_mode, compile_vision=compile_vision, backend=backend)
+
+        options = (page_mode, compile_vision, backend, os.getenv("VOICE_SCENE_OCR"))
+        batches, statuses = scope.read_native(jobs, read, options)
+    return collect_lines(jobs, batches, line_limit=line_limit, keep_numbers=keep_numbers), statuses
 
 
 def collect_lines(jobs, batches, **options):

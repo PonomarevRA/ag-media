@@ -59,3 +59,27 @@ The pilot uses [absolute difference](https://docs.opencv.org/4.x/d2/de8/group__c
 and [connected components](https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html).
 Pixel differences can see an appearance change without displacement. Use this
 layer as a bounded source of candidates for later OCR or tracking.
+
+## Event sampling and OCR reuse pilot
+
+Use **Frame selection and OCR** in the same mod. **Baseline** keeps the
+current frame schedule. **Onset and peak** groups nearby pixel changes within
+each shot before thinning. It retains the onset and strongest measured change
+when they fit the existing frame budget. A short region that returns to its
+previous appearance can submit one direct crop from a visible source frame.
+The result carries `evidenceBasis: transient-frame` and an interval ending at
+that frame. The normal evidence check still applies to other crops.
+
+**Onset, peak and OCR reuse** selects the same frames. The local OCR worker can
+reuse a complete crop-relative result during the same scene pass if the encoded
+image, dimensions and OCR options match exactly. The caller projects the boxes
+onto each crop's own coordinates. This is independent of existing panel and
+scroll reuse.
+
+For comparable runs, set **Scene OCR crop budget** to the same positive number
+in all three modes. For example, 256 allows up to 256 dispatched crops per scene
+pass with 64 slots available only to frame-change recognition. Backend
+fallbacks may attempt a crop again. `ocrPilot.engineCalls` counts those launches
+and `ocrPilot.dispatched` counts the admitted crops. `requested`, `reused`,
+`dropped`, and `ocrMs` describe the same pass. The baseline setting of 0 keeps
+normal recognition limits. Both event modes use 256 when the setting is 0.

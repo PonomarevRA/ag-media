@@ -25,7 +25,23 @@ def shift_change_rows(scene, start, end, key="rows"):
                                "verifiedUntilMs": min(end, start + reading["verifiedUntilMs"])}
                     region = {**region, "recognition": reading}
                 regions.append(region)
-            yield {**row, "startMs": left, "endMs": right, "regions": regions}
+            aligned = {**row, "startMs": left, "endMs": right, "regions": regions}
+            if isinstance(row.get("eventWitnesses"), list):
+                aligned["eventWitnesses"] = align_event_witnesses(row["eventWitnesses"], start, end)
+            yield aligned
+
+
+def align_event_witnesses(witnesses, start, end):
+    """Namespace event IDs by partition and keep their bounds on the source clock."""
+    aligned = []
+    for item in witnesses:
+        if not isinstance(item, dict) or not isinstance(item.get("eventId"), str):
+            continue
+        left, right = item.get("eventStartMs"), item.get("eventEndMs")
+        if type(left) is int and type(right) is int and 0 <= left < min(right, end - start):
+            aligned.append({**item, "eventId": f"{start}:{item['eventId']}",
+                            "eventStartMs": start + left, "eventEndMs": min(end, start + right)})
+    return aligned
 
 
 def change_coverage(scene):
@@ -34,8 +50,16 @@ def change_coverage(scene):
     if not isinstance(report, dict):
         return {}
     allowed = ("status", "mode", "basis", "framesCompared", "globalFrames", "omittedFrames",
-               "cutCandidatesRemoved", "elapsedMs", "adaptiveThreshold", "compensateCamera", "compensatedFrames")
+               "cutCandidatesRemoved", "elapsedMs", "adaptiveThreshold", "compensateCamera", "compensatedFrames", "sampling")
     fields = {key: report[key] for key in allowed if type(report.get(key)) in (str, int, bool)}
+    events = report.get("events")
+    if isinstance(events, list):
+        fields["events"] = len(events)
+    elif type(events) is int:
+        fields["events"] = events
+    if isinstance(pilot := scene.get("ocrPilot", report.get("ocrPilot")), dict):
+        keys = ("limit", "targetedReserve", "requested", "dispatched", "reused", "dropped", "batches", "engineCalls", "ocrMs")
+        fields["ocrPilot"] = {key: pilot[key] for key in keys if type(pilot.get(key)) is int}
     if "graphicRows" in report:
         fields["graphicCandidates"] = len(change_rows(scene, "graphicRows"))
     if isinstance(objects := scene.get("frameChangeObjects", report.get("objectChecks")), dict):
@@ -44,7 +68,39 @@ def change_coverage(scene):
     if isinstance(recognition := report.get("recognition"), dict):
         fields["recognition"] = {key: recognition[key] for key in ("candidatesChecked", "reviewedRegions", "ocrCrops", "detectorRuns", "elapsedMs")
                                  if type(recognition.get(key)) is int}
+        if isinstance(statuses := recognition.get("ocr"), dict):
+            ocr = {key: statuses[key] for key in ("apple-vision", "tesseract", "status")
+                   if isinstance(statuses.get(key), str)}
+            if not complete_crop_ocr(statuses) and complete_crop_ocr(ocr):
+                ocr["status"] = "partial"
+            fields["recognition"]["ocr"] = ocr
     return fields
+
+
+def complete_crop_ocr(statuses):
+    """Treat complete Tesseract repair as a valid result after partial native OCR."""
+    repaired = statuses.get("apple-vision") == "partial" and statuses.get("tesseract") == "ok"
+    return all(status == "ok" or (name == "apple-vision" and repaired) for name, status in statuses.items())
+
+
+def pilot_ocr_incomplete(scene):
+    """Keep actual targeted OCR failures distinct from a configured crop budget."""
+    if not scene.get("ocrPilot"):
+        return False
+    changes = scene.get("frameChanges") or {}
+    recognition = changes.get("recognition") or {}
+    statuses = recognition.get("ocr") or {}
+    return not complete_crop_ocr(statuses)
+
+
+def scene_ocr_coverage_reason(scene):
+    """Name why a pilot scene did not complete all requested recognition."""
+    pilot = scene.get("ocrPilot") or {}
+    if isinstance(pilot, dict) and type(dropped := pilot.get("dropped")) is int and dropped > 0:
+        return "ocr-budget"
+    if pilot_ocr_incomplete(scene):
+        return "targeted-ocr"
+    return None
 
 
 def recognition_rows(value, label_key, box_coordinates):
@@ -119,6 +175,9 @@ def add_change_rows(graph, rows, track, box_coordinates, basis):
                 sample, verified = raw.get("sampleTimeMs"), raw.get("verifiedUntilMs")
                 if type(sample) is int and type(verified) is int and start <= sample < verified <= graph.duration:
                     recognition.update(sampleTimeMs=sample, verifiedUntilMs=verified)
+                    if (raw.get("evidenceBasis") == "transient-frame"
+                            and raw.get("eventRole") in ("onset", "peak") and sample == start and verified <= end):
+                        recognition.update(evidenceBasis="transient-frame", eventRole=raw["eventRole"])
                     sample_frame = graph.frame(sample, "frame-change-crop")
             graph.node(node, "frame_change", label, (start, end), evidence)
             if sample_frame:

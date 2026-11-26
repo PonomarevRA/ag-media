@@ -18,6 +18,7 @@ from voice_paths import ensure_temporary_root, workspace_temp
 from voice_studio.core.optional_runtime import runtime_path
 from voice_studio.core.storage_cache import use_cache
 from voice_studio.graph.media_analysis_revolver import AnalysisRevolver, analysis_fingerprint, file_identity, result_fingerprint
+from voice_studio.graph.frame_change_graph import pilot_ocr_incomplete
 from voice_studio.graph.media_stage_selection import StageSelection
 
 LAYER_ENV = {
@@ -217,9 +218,10 @@ def usable_scene(result):
     ocr_recovered = stages.get("apple-vision") == "partial" and stages.get("tesseract") == "ok"
     workers_complete = all(status == "ok" or (name == "apple-vision" and ocr_recovered)
                            for name, status in stages.items())
+    changes = result.get("frameChanges") or {}
     return (result.get("status") == "ok" and result.get("interfaceStatus", "ok") == "ok"
-            and workers_complete
-            and (result.get("frameChanges") or {}).get("status", "ok") == "ok"
+            and workers_complete and not pilot_ocr_incomplete(result)
+            and changes.get("status", "ok") == "ok"
             and (result.get("frameChangeObjects") or {}).get("status", "ok") == "ok")
 
 

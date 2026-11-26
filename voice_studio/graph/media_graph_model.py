@@ -10,7 +10,7 @@ from voice_studio.audio.audio_scene import LABELS as AUDIO_LABELS, clean_audio_l
 from voice_studio.audio.dialogue_pauses import clean_dialogue_pauses
 from voice_studio.graph.object_screens import VerifiedPanels, panel_screen_states, panel_scroll_previews, screen_evidence
 from voice_studio.graph.media_graph_interfaces import PANEL_TYPES, add_interface_observations
-from voice_studio.graph.frame_change_graph import add_frame_changes, change_coverage
+from voice_studio.graph.frame_change_graph import add_frame_changes, change_coverage, scene_ocr_coverage_reason
 from voice_studio.graph.media_graph_expressions import add_facial_expressions
 from voice_studio.graph.scene_hierarchy import add_scene_hierarchy
 from voice_studio.graph.ui_activity_graph import add_ui_activity
@@ -134,11 +134,14 @@ def source_coverage(report, duration):
     if scene.get("status") == "ok" and scene.get("frames"):
         stages = scene.get("stages") or {}
         complete = all(value == "ok" for value in stages.values()) and scene.get("interfaceStatus", "ok") == "ok"
-        status = "sampled" if complete else "partial"
+        ocr_reason = scene_ocr_coverage_reason(scene)
+        status = "sampled" if complete and not ocr_reason else "partial"
         mark("scene", max(row["timeMs"] for row in scene["frames"]) + 1, status)
         coverage["scene"][0].update(compact_source_data(
             scene, ("objectSampling", "objectFrames", "interfaceFrames", "interfaceOcrCrops", "interfaceStatus")),
             statuses=compact_source_data(stages, tuple(stages)))
+        if ocr_reason:
+            coverage["scene"][0]["reason"] = ocr_reason
         if detail := change_coverage(scene):
             coverage["scene"][0]["frameChanges"] = detail
         if isinstance(screen_ocr := scene.get("interfaceOcrStatuses"), dict):

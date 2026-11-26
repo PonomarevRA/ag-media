@@ -52,6 +52,57 @@ class ProgressiveGraphTests(TestCase):
             self.assertEqual(store.search(later["snapshotId"], "Menu")["nodes"][0]["label"], "Menu")
             self.assertEqual(store.search(early_id, "Menu")["nodes"], [])
 
+    def test_final_scene_reports_ocr_budget_and_retains_event_counts(self):
+        """A readable snapshot preserves the measured crop budget and marks skipped work."""
+        publication = GraphPublication("job")
+        media = {"kind": "video", "durationMs": 83000,
+                 "streams": [{"kind": "audio", "index": 1, "startMs": 0}]}
+        changes = {"status": "ok", "sampling": "event", "events": [{"eventId": "1:0"}],
+                   "recognition": {"ocr": {"apple-vision": "ok"}, "ocrCrops": 1}, "rows": []}
+        stats = {"limit": 4, "requested": 6, "dispatched": 4, "reused": 0, "dropped": 2, "batches": 1}
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = root / "source.mp4"
+            original.write_bytes(b"source fixture")
+            store = MediaGraphStore(root / "graphs")
+            persist = intermediate_publisher(publication, store, identify(original), media, "en")
+            publish = compact_graph_publisher(media, False, True, persist)
+            publish("base", {"language": "en", "durationMs": 83000, "segments": []})
+            publish("scene", {"sceneEvidence": {"status": "ok", "frameChanges": changes,
+                     "ocrPilot": stats, "frames": [{"timeMs": 400, "objects": [],
+                         "text": [{"text": "Menu", "box": [.1, .2, .15, .1]}]}]}})
+            report = publication.state()["snapshot"]["coverage"]["scene"][0]
+            self.assertEqual(report["status"], "partial")
+            self.assertEqual(report["reason"], "ocr-budget")
+            self.assertEqual(report["frameChanges"]["ocrPilot"], stats)
+            self.assertEqual(report["frameChanges"]["events"], 1)
+            self.assertEqual(report["frameChanges"]["recognition"]["ocr"], {"apple-vision": "ok"})
+
+    def test_targeted_ocr_failure_keeps_graph_text_readable_but_blocks_scene_reuse(self):
+        """Keep partial evidence searchable without reusing it as a complete scene."""
+        publication = GraphPublication("job")
+        media = {"kind": "video", "durationMs": 83000,
+                 "streams": [{"kind": "audio", "index": 1, "startMs": 0}]}
+        changes = {"status": "ok", "recognition": {"ocr": {"apple-vision": "partial"}}, "rows": []}
+        scene = {"status": "ok", "frameChanges": changes, "ocrPilot": {"limit": 4, "dropped": 0},
+                 "frames": [{"timeMs": 400, "objects": [],
+                             "text": [{"text": "Menu", "box": [.1, .2, .15, .1]}]}]}
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = root / "source.mp4"
+            original.write_bytes(b"source fixture")
+            source = identify(original)
+            store = MediaGraphStore(root / "graphs")
+            persist = intermediate_publisher(publication, store, source, media, "en")
+            publish = compact_graph_publisher(media, False, True, persist)
+            publish("base", {"language": "en", "durationMs": 83000, "segments": []})
+            publish("scene", {"sceneEvidence": scene})
+            snapshot = publication.state()["snapshot"]
+            self.assertEqual(snapshot["coverage"]["scene"][0]["reason"], "targeted-ocr")
+            self.assertEqual(store.search(snapshot["snapshotId"], "Menu")["nodes"][0]["label"], "Menu")
+            with self.assertRaisesRegex(ValueError, "нет измеренного покрытия"):
+                store.scene_evidence(snapshot["snapshotId"], source["sha256"], "en")
+
     def test_worker_phase_differs_from_last_readable_snapshot(self):
         publication = GraphPublication('job')
         publication.activity({'stage': 'whisper', 'state': 'running'})

@@ -53,3 +53,28 @@ class FrameChangeRecognitionTests(TestCase):
                 image = np.full((192, 192, 3), shade, dtype=np.uint8)
                 self.assertTrue(cv2.imwrite(str(folder / f"{index:04}.jpg"), image))
             return recognize_change_regions(None, plan, folder, recognize=read_crops)["regions"]
+
+    def test_short_event_reads_its_frame_without_extending_its_evidence(self):
+        """A verified short insertion stays readable when it lacks later settled samples."""
+        box = [.1, .1, .3, .3]
+        sample = {"sourceFrame": 17, "timeMs": 680, "shot": 0, "changeRecognitionRegions": [{
+            "index": 0, "box": box, "transient": True, "eventRole": "peak", "sampleEndMs": 720,
+        }]}
+
+        def read_crops(jobs, *, line_limit):
+            """Return a reading only for submitted crops."""
+            return {index: [{"text": "Map", "box": box}] for index, *_ in jobs}, {"status": "ok"}
+
+        with TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            self.assertTrue(cv2.imwrite(str(folder / "0000.jpg"), np.full((240, 320, 3), 220, dtype=np.uint8)))
+            result = recognize_change_regions(None, [sample], folder, recognize=read_crops)
+            reading, = result["regions"]
+            self.assertEqual((reading["sampleTimeMs"], reading["verifiedUntilMs"]), (680, 720))
+            self.assertEqual(reading["evidenceBasis"], "transient-frame")
+            self.assertEqual(reading["eventRole"], "peak")
+            self.assertEqual(result["ocrCrops"], 1)
+
+            region, = sample["changeRecognitionRegions"]
+            region["sampleEndMs"] = 1250
+            self.assertEqual(recognize_change_regions(None, [sample], folder, recognize=read_crops)["ocrCrops"], 0)

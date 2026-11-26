@@ -56,6 +56,19 @@ def persistent_crop(samples, stamp, box, rasters):
     return (settled, location, checked) if checked > settled else None
 
 
+def crop_witness(sample, region, location, per_shot, fixed_clock, raster):
+    """Use a proven short event's own frame or the normal persistence check."""
+    stamp = sample["timeMs"]
+    if region.get("transient") is True:
+        end = region.get("sampleEndMs")
+        if (type(end) is int and 0 < end - stamp <= 500
+                and region.get("eventRole") in ("onset", "peak")):
+            return stamp, location, end
+        return None
+    clock = per_shot if region.get("supplemental") else fixed_clock
+    return persistent_crop(clock[sample["shot"]], stamp, region["box"], raster)
+
+
 def recognize_change_regions(detector, samples, folder, *, recognize):
     """Run object detection and a single bounded OCR batch on selected source crops."""
     import cv2
@@ -79,19 +92,17 @@ def recognize_change_regions(detector, samples, folder, *, recognize):
         return cv2.resize(image, (192, 192)) if image is not None else None
 
     checked = 0
-    for sample in samples:
+    for ordinal_in_plan, sample in enumerate(samples):
         regions = sample.get("changeRecognitionRegions")
         if not regions:
             continue
         for region in regions:
             box = region["box"]
             checked += 1
-            # Preserve the original settled-frame checks for existing OCR candidates.
-            clock = per_shot if region.get("supplemental") else fixed_clock
-            persisted = persistent_crop(clock[sample["shot"]], sample["timeMs"], box, raster)
-            if not persisted:
+            evidence = crop_witness(sample, region, ordinal_in_plan, per_shot, fixed_clock, raster)
+            if evidence is None:
                 continue
-            stamp, location, until = persisted
+            stamp, location, until = evidence
             image = cv2.imread(str(folder / f"{location:04}.jpg"))
             if image is None:
                 continue
@@ -101,6 +112,9 @@ def recognize_change_regions(detector, samples, folder, *, recognize):
             row = {"sourceFrame": sample["sourceFrame"], "index": region["index"],
                    "objects": [], "text": [], "status": "unclassified",
                    "sampleTimeMs": stamp, "verifiedUntilMs": until}
+            if region.get("transient") is True:
+                row["evidenceBasis"] = "transient-frame"
+                row["eventRole"] = region["eventRole"]
             if detector:
                 try:
                     objects = [item for item in detector.detect_region(image, bounds)
@@ -135,7 +149,7 @@ def attach_change_recognition(report, measured):
     for row in report.get("rows", ()):
         for index, region in enumerate(row["regions"]):
             if facts := lookup.get((row["sourceFrame"], index)):
-                keys = ("status", "text", "objects", "sampleTimeMs", "verifiedUntilMs")
+                keys = ("status", "text", "objects", "sampleTimeMs", "verifiedUntilMs", "evidenceBasis", "eventRole")
                 region["recognition"] = {key: facts[key] for key in keys if key in facts}
     report["recognition"] = {key: value for key, value in measured.items() if key != "regions"}
     report["recognition"]["reviewedRegions"] = len(lookup)

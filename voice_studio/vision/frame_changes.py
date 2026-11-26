@@ -10,6 +10,8 @@ import sys
 from threading import Timer
 from time import perf_counter
 
+from voice_studio.vision.frame_change_events import EVENT_SAMPLING
+
 
 MOD_ID = "builtin.frame-changes"
 CAPABILITY = "vision.frame-changes"
@@ -46,7 +48,8 @@ def run_scan(inputs, folder, clock_filter, settings):
     options = {"inputs": inputs, "clockFilter": clock_filter,
                "threshold": settings["pixelThreshold"], "mode": settings["mode"],
                "adaptiveThreshold": settings.get("adaptiveThreshold", False),
-               "compensateCamera": settings.get("compensateCamera", False)}
+               "compensateCamera": settings.get("compensateCamera", False),
+               "sampling": settings.get("sampling", "baseline")}
     request.write_text(json.dumps(options), encoding="utf-8")
     result = run_worker("voice_studio.vision.frame_changes", [request], [VISION], timeout=TIMEOUT + 15)
     if not isinstance(result, dict) or result.get("status") != "ok":
@@ -114,7 +117,7 @@ def regions_from_mask(quiet):
     return regions[:MAX_REGIONS]
 
 
-def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None):
+def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None, event_sampling=False):
     """Compare consecutive frames and retain a small, time-distributed set per source second.
 
     Read FFmpeg's clock in a separate pass after decoding; the worker retains no
@@ -122,6 +125,7 @@ def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None):
     a long or high-rate input reaches the fixed pending metadata budget.
     """
     import numpy as np
+    from voice_studio.vision.frame_change_events import pixel_signatures
 
     samples = []
     supplemental = []
@@ -143,7 +147,10 @@ def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None):
             elif regions:
                 target = supplemental if is_supplemental else samples
                 limit = MAX_SUPPLEMENTAL_FRAMES if is_supplemental else MAX_PENDING_FRAMES
-                target.append((frame_count, regions))
+                if event_sampling and not is_supplemental:
+                    target.append((frame_count, regions, pixel_signatures(previous, current, regions)))
+                else:
+                    target.append((frame_count, regions))
                 if len(target) >= limit:
                     dropped += len(target) // 2
                     del target[1::2]
@@ -152,14 +159,12 @@ def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None):
     return samples, supplemental, wide, frame_count, dropped
 
 
-def bound_samples(samples, frames, cuts, *, for_objects=False):
-    """Keep first, last and evenly spaced witnesses in each second without crossing a cut."""
-    from voice_studio.vision.scene_sampling import evenly_spaced
-
+def clock_rows(samples, frames, cuts):
+    """Attach source frame intervals without admitting cut pairs or duplicate timestamps."""
     cut_frames = set(cuts)
-    buckets = defaultdict(list)
     last_stamp = None
-    for index, regions in samples:
+    for sample in samples:
+        index, regions = sample[:2]
         if index in cut_frames or not 0 < index < len(frames):
             continue
         source_frame, stamp = frames[index]
@@ -170,12 +175,32 @@ def bound_samples(samples, frames, cuts, *, for_objects=False):
         if stamp < 0 or end <= stamp or stamp == last_stamp:
             continue
         last_stamp = stamp
-        buckets[stamp // 1000].append({"sourceFrame": source_frame, "startMs": stamp,
-                                       "endMs": end, "regions": regions})
+        row = {"sourceFrame": source_frame, "startMs": stamp, "endMs": end, "regions": regions}
+        if len(sample) > 2:
+            row["_pixelSignatures"] = sample[2]
+        yield row
+
+
+def bound_samples(samples, frames, cuts, *, for_objects=False):
+    """Keep first, last and evenly spaced witnesses in each second without crossing a cut."""
+    return bound_rows(clock_rows(samples, frames, cuts), for_objects=for_objects)
+
+
+def bound_rows(dense_rows, *, for_objects=False, event_sampling=False):
+    """Thin one dense source-clock stream without increasing the existing per-second cap."""
+    from voice_studio.vision.frame_change_events import prefer_witness_rows
+    from voice_studio.vision.scene_sampling import evenly_spaced
+
+    buckets = defaultdict(list)
+    for row in dense_rows:
+        buckets[row["startMs"] // 1000].append(row)
     rows = []
     omitted = 0
     for bucket in buckets.values():
-        if for_objects:
+        if event_sampling:
+            limit = MAX_OBJECT_FRAMES_PER_SECOND if for_objects else MAX_FRAMES_PER_SECOND
+            kept = prefer_witness_rows(bucket, limit)
+        elif for_objects:
             # Select adjacent candidate pairs from the original clock, before thinning.
             starts = range(0, max(1, len(bucket) - 1), 2)
             pairs = [bucket[index:index + 2] for index in starts]
@@ -216,6 +241,7 @@ def fill_supplemental_rows(rows, supplemental):
 def measure(request):
     """Decode one shared clock and RGB stream, timing out the owned FFmpeg subprocess."""
     import cv2
+    from voice_studio.vision.frame_change_events import group_events
     from voice_studio.vision.frame_change_motion import CameraCompensator
     from voice_studio.vision.frame_graphics import GraphicTracker
     from voice_studio.vision.video_scene import read_frame_clock
@@ -234,13 +260,15 @@ def measure(request):
     graphics = GraphicTracker()
     adaptive = options.get("adaptiveThreshold", False)
     camera = CameraCompensator() if options.get("compensateCamera") else None
+    sampling = options.get("sampling", "baseline")
+    event_sampling = sampling in EVENT_SAMPLING
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=folder) as process:
         timer = Timer(TIMEOUT, process.kill)
         timer.daemon = True
         timer.start()
         try:
             samples, supplemental, wide, count, dropped = scan_pixels(
-                process, options["threshold"], graphics, adaptive=adaptive, camera=camera,
+                process, options["threshold"], graphics, adaptive=adaptive, camera=camera, event_sampling=event_sampling,
             )
             if process.wait() != 0:
                 raise ValueError("FFmpeg frame change decode failed")
@@ -251,13 +279,30 @@ def measure(request):
     frames, cuts = read_frame_clock(folder)
     if len(frames) != count:
         raise ValueError("Frame change pixels and timestamps do not match")
-    rows, omitted = bound_samples(samples, frames, cuts)
+    wants_objects = options["mode"] in ("objects", "assist")
+    event_fields = {}
+    if event_sampling:
+        dense_rows = list(clock_rows(samples, frames, cuts))
+        events, omitted_events = group_events(dense_rows, sorted(frames[index][1] for index in cuts))
+        for row in dense_rows:
+            row.pop("_pixelSignatures", None)
+        rows, omitted = bound_rows(dense_rows, event_sampling=True)
+        object_rows, _ = bound_rows(dense_rows, for_objects=True) if wants_objects else ([], 0)
+        event_fields = {"events": events, "omittedEvents": omitted_events}
+        if options["mode"] == "assist":
+            fixed_rows, _ = bound_rows(dense_rows)
+            event_fields["motionRows"] = [
+                {key: row[key] for key in ("sourceFrame", "startMs", "regions")} for row in fixed_rows
+            ]
+    else:
+        rows, omitted = bound_samples(samples, frames, cuts)
+        object_rows, _ = bound_samples(samples, frames, cuts, for_objects=True) if wants_objects else ([], 0)
     if supplemental:
         extra, extra_omitted = bound_samples(supplemental, frames, cuts)
         rows, full_slots = fill_supplemental_rows(rows, extra)
         omitted += extra_omitted + full_slots
-    object_rows, _ = bound_samples(samples, frames, cuts, for_objects=True) if options["mode"] in ("objects", "assist") else ([], 0)
-    return {"status": "ok", "basis": BASIS, "objectRows": object_rows, "framesCompared": max(0, count - 1),
+    return {"status": "ok", "basis": BASIS, "sampling": sampling, **event_fields,
+            "objectRows": object_rows, "framesCompared": max(0, count - 1),
             "globalFrames": wide, "omittedFrames": omitted + dropped, "rows": rows,
             "adaptiveThreshold": adaptive, "compensateCamera": camera is not None,
             "compensatedFrames": camera.compensated_frames if camera is not None else 0,
@@ -284,6 +329,8 @@ def augment_plan(plan, frames, cuts, report):
     by_frame = {sample["sourceFrame"]: sample for sample in plan}
     boundaries = sorted({index for index in cuts if 0 < index < len(frames)})
     frame_indices = {ordinal: index for index, (ordinal, _) in enumerate(frames)}
+    event_sampling = report.get("sampling") in EVENT_SAMPLING
+    cut_stamps = sorted(frames[index][1] for index in boundaries)
     rows = report.pop("objectRows", [])
     if mode == "assist":
         from voice_studio.vision.frame_change_panels import assign_motion
@@ -292,8 +339,10 @@ def augment_plan(plan, frames, cuts, report):
         for row in rows:
             buckets[row["startMs"] // 1000].append(row)
         rows = [row for bucket in buckets.values() for row in local_pair(bucket)]
-        baseline = [row for row in report.get("rows", ()) if not row.get("supplemental")]
-        assign_motion(plan, baseline, [0, *(frames[index][1] for index in boundaries)])
+        motion_rows = report.pop("motionRows", report.get("rows", ()))
+        baseline = [row for row in motion_rows if not row.get("supplemental") and frame_indices[row["sourceFrame"]] not in cuts]
+        assign_motion(plan, baseline, [0, *cut_stamps])
+
     def sample_for(row):
         """Reuse a planned frame or schedule this exact source frame once."""
         ordinal = row["sourceFrame"]
@@ -311,16 +360,36 @@ def augment_plan(plan, frames, cuts, report):
     for row in rows:
         if sample := sample_for(row):
             sample["changeRegions"] = row["regions"][:MAX_OBJECT_REGIONS]
-    for row, index in recognition_witnesses(report.get("rows", ())):
+    for row, index, witness in crop_witnesses(report.get("rows", ()), event_sampling=event_sampling):
         existing = row["sourceFrame"] in by_frame
         if sample := sample_for(row):
             region = {"index": index, "box": row["regions"][index]["box"]}
+            if witness:
+                region.update(witness)
+                region.update({"eventRole": region.pop("role"), "sampleEndMs": row["endMs"]})
             if row.get("supplemental"):
                 region["supplemental"] = True
-                if not existing:
-                    sample["supplementalOnly"] = True
+            if not existing and (witness or row.get("supplemental")):
+                sample["supplementalOnly"] = True
             sample.setdefault("changeRecognitionRegions", []).append(region)
     plan.sort(key=lambda row: row["sourceFrame"])
+
+
+def crop_witnesses(rows, *, event_sampling):
+    """Give verified transient crops first use of the unchanged OCR crop budget."""
+    from voice_studio.vision.frame_change_events import direct_crop_witnesses
+    from voice_studio.vision.scene_sampling import evenly_spaced
+
+    direct = direct_crop_witnesses(rows, SIDE) if event_sampling else []
+    direct = evenly_spaced(direct, MAX_RECOGNITION_REGIONS)
+    if not direct:
+        return [(row, index, None) for row, index in recognition_witnesses(rows)]
+    used_seconds = {row["startMs"] // 1000 for row, _, _ in direct}
+    remaining = [row for row in rows if row["startMs"] // 1000 not in used_seconds]
+    regular = recognition_witnesses(remaining)
+    selected = evenly_spaced(regular, MAX_RECOGNITION_REGIONS - len(direct))
+    return sorted(direct + [(row, index, None) for row, index in selected],
+                  key=lambda item: item[0]["startMs"])
 
 
 def local_pair(rows):

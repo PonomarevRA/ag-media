@@ -104,13 +104,20 @@ def manifests():
             item['defaultEnabled'] = False
             item['description'] = 'Local pixel changes. Assist mode adds split-screen OCR and targeted object checks.'
             item['settings'] = {'mode': 'measure', 'pixelThreshold': 24,
-                                'adaptiveThreshold': False, 'compensateCamera': False}
+                                'adaptiveThreshold': False, 'compensateCamera': False,
+                                'sampling': 'baseline', 'ocrBudget': 0}
             item['settingsSchema']['properties'].update({
                 'mode': {'type': 'string', 'enum': ['measure', 'objects', 'assist'], 'title': 'Mode'},
                 'pixelThreshold': {'type': 'integer', 'minimum': 8, 'maximum': 96,
                                    'title': 'Pixel threshold (8-bit channel)'},
                 'adaptiveThreshold': {'type': 'boolean', 'title': 'Адаптивный порог изменений'},
                 'compensateCamera': {'type': 'boolean', 'title': 'Компенсация движения камеры'},
+                'sampling': {'type': 'string', 'enum': ['baseline', 'event', 'event-ocr-reuse'],
+                             'title': 'Отбор кадров и OCR',
+                             'enumLabels': ['Базовый', 'Появление и пик', 'Появление, пик и повторное использование OCR']},
+                'ocrBudget': {'type': 'integer', 'minimum': 0, 'maximum': 1024,
+                              'title': 'Лимит кропов OCR для сцены',
+                              'description': '0 сохраняет штатный лимит, а для экспериментальных режимов включает бюджет 256.'},
             })
         if key.startswith('builtin.whisper-'):
             maximum = min(32, max(1, os.cpu_count() or 1))

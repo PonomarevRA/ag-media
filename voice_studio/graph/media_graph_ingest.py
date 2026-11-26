@@ -19,7 +19,7 @@ from voice_studio.audio.dialogue_pauses import measure_dialogue_pauses, shift_di
 from voice_studio.synthesis.engines import ffmpeg
 from voice_studio.vision.facial_expressions import finalize_expressions
 from voice_studio.vision.face_speakers import bind_faces
-from voice_studio.graph.frame_change_graph import change_coverage, shift_change_rows
+from voice_studio.graph.frame_change_graph import change_coverage, scene_ocr_coverage_reason, shift_change_rows
 from voice_studio.vision.person_motion import measure_people_motion
 from voice_studio.graph.media_analysis_revolver import AnalysisRevolver, result_fingerprint
 from voice_studio.graph.media_stage_selection import StageSelection
@@ -365,10 +365,11 @@ def scene_coverage(scene, start, end, samples):
     """Expose completed and degraded scene evidence with its sampling policy."""
     status = scene.get("status", "unavailable")
     stages = scene.get("stages", {})
+    ocr_reason = scene_ocr_coverage_reason(scene)
     if status == "ok":
         complete = all(part == "ok" for part in stages.values()) and scene.get("interfaceStatus", "ok") == "ok"
-        status = "sampled" if complete else "partial"
-    return interval(start, end, status, samples=samples, statuses=stages,
+        status = "sampled" if complete and not ocr_reason else "partial"
+    return interval(start, end, status, reason=ocr_reason, samples=samples, statuses=stages,
                     objectSampling=scene.get("objectSampling"), objectFrames=scene.get("objectFrames"),
                     interfaceFrames=scene.get("interfaceFrames"), interfaceOcrCrops=scene.get("interfaceOcrCrops"),
                     interfaceStatus=scene.get("interfaceStatus"), interfaceOcrStatuses=scene.get("interfaceOcrStatuses"),

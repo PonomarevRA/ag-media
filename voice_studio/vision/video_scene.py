@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from contextlib import nullcontext
 from time import perf_counter
 
 from voice_studio.synthesis.engines import ROOT, ffmpeg
@@ -25,6 +26,7 @@ MAX_OCR_REGIONS = 128
 MAX_SCROLL_FRAMES = 320
 SCROLL_SAMPLE_MS = 65
 PANEL_SAMPLE_MS = 400
+PILOT_OCR_BUDGET = 256
 SCENE_CUT_THRESHOLD = 0.30
 LOW_CONTRAST_CUT = 0.16
 CLOCK_FILTER = ("scale=112:112:force_original_aspect_ratio=decrease,"
@@ -61,6 +63,9 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 changes["cutCandidatesRemoved"] = len(changes["rows"]) - len(kept)
                 changes["rows"] = kept
                 changes["graphicRows"] = list(constrain_graphics(changes.get("graphicRows", ()), sorted(shot_starts)))
+                if changes.get("events"):
+                    from voice_studio.vision.frame_change_events import constrain_events
+                    constrain_events(changes, sorted(shot_starts))
                 augment_plan(plan, frames, cuts, changes)
                 changes.pop("objectRows", None)
             if not plan:
@@ -82,6 +87,8 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 request["includeMosaicFiles"] = publish_mosaic is not None
                 request["scrollInputs"] = inputs
                 request["scrollClock"] = scroll_clock(frames, cuts)
+                if pilot := scene_ocr_pilot():
+                    request["ocrPilot"] = pilot
             (root / "samples.json").write_text(json.dumps(request), encoding="utf-8")
             result = run_worker("voice_studio.vision.video_scene", [root], [VISION], timeout=max(420, len(plan)))
             for index, page in enumerate(result.get("interfaceScrolls", [])):
@@ -119,6 +126,21 @@ def mosaic_markdown(page):
     from voice_studio.vision.screen_markdown import scroll_markdown
 
     return scroll_markdown([page]) if "mosaicText" in page else None
+
+
+def scene_ocr_pilot():
+    """Read a frozen optional OCR policy from the active scene mod."""
+    from voice_studio.vision.frame_changes import MOD_ID
+
+    mod = current_snapshot().to_wire()["mods"].get(MOD_ID, {})
+    if not mod.get("enabled"):
+        return None
+    settings = mod["settings"]
+    sampling = settings.get("sampling", "baseline")
+    budget = settings.get("ocrBudget", 0)
+    if sampling == "baseline" and budget == 0:
+        return None
+    return {"sampling": sampling, "limit": budget or PILOT_OCR_BUDGET}
 
 
 def scan_scene(inputs, folder, *, colors_only):
@@ -447,6 +469,21 @@ def analyze_frames(folder):
     request = json.loads((folder / "samples.json").read_bytes())
     if request.get("colorsOnly"):
         return read_shot_colors(folder, request["samples"], cv2)
+    pilot = request.get("ocrPilot")
+    if not pilot:
+        return analyze_scene_frames(folder, request, cv2)
+    from voice_studio.vision.frame_changes import MAX_RECOGNITION_REGIONS
+    from voice_studio.vision.scene_ocr import scene_ocr_scope
+
+    reserve = min(MAX_RECOGNITION_REGIONS, pilot["limit"] // 4)
+    with scene_ocr_scope(pilot["limit"], reuse=pilot["sampling"] == "event-ocr-reuse", reserve=reserve) as ocr:
+        result = analyze_scene_frames(folder, request, cv2, ocr=ocr)
+    result["ocrPilot"] = {**pilot, "targetedReserve": reserve, **ocr.summary()}
+    return result
+
+
+def analyze_scene_frames(folder, request, cv2, *, ocr=None):
+    """Run whole-frame, panel, and targeted recognition under one optional OCR policy."""
     from voice_studio.vision.camera_motion import CameraMotion
     from voice_studio.vision.frame_change_objects import review_change_objects
     from voice_studio.vision.frame_change_recognition import recognize_change_regions
@@ -575,7 +612,8 @@ def analyze_frames(folder):
                                            interfaces=interfaces if assisted else None)
     change_recognition = None
     if any(sample.get("changeRecognitionRegions") for sample in request["samples"]):
-        change_recognition = recognize_change_regions(detector, request["samples"], folder, recognize=recognize)
+        with ocr.targeted() if ocr is not None else nullcontext():
+            change_recognition = recognize_change_regions(detector, request["samples"], folder, recognize=recognize)
     present = {frame["timeMs"] for frame in frames}
     for shot, stamp, _, _, source_frame in supplemental:
         if stamp not in present and stamp in interfaces:
