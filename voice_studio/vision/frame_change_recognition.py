@@ -65,8 +65,12 @@ def recognize_change_regions(detector, samples, folder, *, recognize):
     jobs, rows = [], []
     runs = detector.model_runs if detector else 0
     per_shot = defaultdict(list)
+    fixed_clock = defaultdict(list)
     for index, sample in enumerate(samples):
-        per_shot[sample["shot"]].append((sample["timeMs"], index))
+        shot, stamp = sample["shot"], sample["timeMs"]
+        per_shot[shot].append((stamp, index))
+        if not sample.get("supplementalOnly"):
+            fixed_clock[shot].append((stamp, index))
 
     @lru_cache(maxsize=24)
     def raster(index):
@@ -82,7 +86,9 @@ def recognize_change_regions(detector, samples, folder, *, recognize):
         for region in regions:
             box = region["box"]
             checked += 1
-            persisted = persistent_crop(per_shot[sample["shot"]], sample["timeMs"], box, raster)
+            # Preserve the original settled-frame checks for existing OCR candidates.
+            clock = per_shot if region.get("supplemental") else fixed_clock
+            persisted = persistent_crop(clock[sample["shot"]], sample["timeMs"], box, raster)
             if not persisted:
                 continue
             stamp, location, until = persisted

@@ -96,6 +96,9 @@ export function mountVideoScene(find, video, overlay) {
       const unavailable = Object.values(evidence?.stages ?? {}).some(stage => stage !== "ok");
       if (evidence?.status === "busy") status.textContent = uiText("Анализ кадров занят другим видео.");
       else if (evidence?.status === "failed") status.textContent = uiText("Анализ кадров недоступен.");
+      else if (evidence?.status === "partial" && evidence.frameChanges) {
+        status.textContent = uiText("Зоны изменений готовы. Распознавание текста и предметов продолжается.");
+      }
       else {
         const count = evidence?.frames?.length ?? 0;
         const step = (evidence?.sampleMs ?? 3000) / 1000;

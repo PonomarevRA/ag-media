@@ -6,6 +6,7 @@ from voice_studio.mod_runtime import current_snapshot, model_provider, is_replac
 from voice_studio.mods.errors import ModError
 
 from bisect import bisect_left
+from copy import deepcopy
 import json
 import logging
 from pathlib import Path
@@ -33,8 +34,8 @@ SCENE_FRAME = re.compile(r"^frame:(\d+)\s+pts:\S+\s+pts_time:(\S+)")
 
 @model_provider('vision.scene-batch', 'builtin.scene-batch')
 def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAULT_OBJECT_SAMPLING, window=None, colors_only=False,
-                 publish_mosaic=None, emit=ignore_progress):
-    """Analyze the source or a graph partition, with a thumbnail-only path for shot colors."""
+                 publish_mosaic=None, emit=ignore_progress, publish_preview=ignore_progress):
+    """Analyze the scene and optionally publish measured change geometry before recognition."""
     source = Path(source).resolve()
     if probe_video(source, formats) is False:
         return {"status": "no-video"}
@@ -51,6 +52,7 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
             frames, native_cuts, changes = scan_scene(inputs, root, colors_only=colors_only)
             supplied_cuts = evidence.get("editorTimeline", {}).get("shots", [])
             cuts = merge_shot_cuts(frames, native_cuts, supplied_cuts)
+            shot_starts = [frames[index][1] for index in sorted(cuts) if 0 < index < len(frames)]
             plan = sample_plan(frames, cuts, object_sampling)
             if changes and changes["status"] == "ok":
                 from voice_studio.vision.frame_changes import augment_plan, constrain_graphics
@@ -58,12 +60,19 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 kept = [row for row in changes["rows"] if row["sourceFrame"] not in cuts_by_ordinal]
                 changes["cutCandidatesRemoved"] = len(changes["rows"]) - len(kept)
                 changes["rows"] = kept
-                boundaries_ms = sorted(frames[index][1] for index in cuts if 0 < index < len(frames))
-                changes["graphicRows"] = list(constrain_graphics(changes.get("graphicRows", ()), boundaries_ms))
+                changes["graphicRows"] = list(constrain_graphics(changes.get("graphicRows", ()), sorted(shot_starts)))
                 augment_plan(plan, frames, cuts, changes)
                 changes.pop("objectRows", None)
             if not plan:
                 return {"status": "no-video"}
+            preview_seconds = 0.0
+            if (publish_preview is not ignore_progress and changes and changes["status"] == "ok"
+                    and (changes["rows"] or changes["graphicRows"])):
+                publishing = perf_counter()
+                # Recognition adds readings to the scan later. Give observers an independent view.
+                preview = {"status": "partial", "shotStartsMs": shot_starts, "frameChanges": changes}
+                publish_preview(deepcopy(preview))
+                preview_seconds = perf_counter() - publishing
             label_visible_faces(plan, evidence.get("timeline") or {})
             decode_samples(inputs, root, plan, thumbnails=colors_only)
             decoded = perf_counter()
@@ -91,11 +100,11 @@ def review_scene(source, work, formats, evidence=None, *, object_sampling=DEFAUL
                 objects_status = (result.get("frameChangeObjects") or {}).get("status", "ok")
                 if objects_status != "ok":
                     result.setdefault("stages", {})["frame-change-objects"] = objects_status
-            result["shotStartsMs"] = [frames[index][1] for index in sorted(cuts) if 0 < index < len(frames)]
+            result["shotStartsMs"] = shot_starts
             starts = [0, *result["shotStartsMs"]]
             for shot in result.get("shotColors", []):
                 shot["startMs"] = starts[shot.pop("shot")]
-            result["decodeMs"] = round((decoded - started) * 1000)
+            result["decodeMs"] = round((decoded - started - preview_seconds) * 1000)
             result["elapsedMs"] = round((perf_counter() - started) * 1000)
             return result
     except (BrokenPipeError, ConnectionResetError):
@@ -476,6 +485,8 @@ def analyze_frames(folder):
     frame_paths = {}
     motion_seconds = 0
     for index, sample in enumerate(request["samples"]):
+        if sample.get("supplementalOnly"):
+            continue
         shot = sample["shot"]
         checks = checks_by_shot.setdefault(shot, {"shot": shot, "planned": 0, "checked": 0})
         if sample["objects"]:

@@ -12,11 +12,13 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 import wave
 
-from voice_studio.graph.media_graph_ingest import SPEECH_WINDOW_MS, analyze_windows
+from voice_studio.graph.media_analysis_revolver import AnalysisRevolver
+from voice_studio.graph.media_graph_ingest import SPEECH_WINDOW_MS, analyze_windows, compact_graph_publisher
 from voice_studio.speech.media_transcript import transcribe_media
 from voice_studio.app.server import Handler
 from voice_studio.mods import ModExecutionError
 from voice_studio.speech import media_transcript
+from voice_studio.vision import video_scene
 
 
 def pcm_fixture(path):
@@ -81,6 +83,7 @@ class ProgressiveAnalysisTests(TestCase):
         published = {}
         audio_detail = {"audioLayers": [{"kind": "music", "startMs": 0, "endMs": 1000}]}
         cup = {"label": "cup", "box": [.1, .2, .1, .15], "score": .91}
+        scene_preview = {"status": "partial", "frameChanges": {"rows": [{"startMs": 200}]}}
         scene_detail = {"status": "ok", "frames": [{"timeMs": 0, "objects": [cup], "text": []}]}
 
         def publish(phase, report):
@@ -98,6 +101,7 @@ class ProgressiveAnalysisTests(TestCase):
 
         def scene(*args, **kwargs):
             self.assertEqual(order, ["base", "audio"])
+            kwargs["publish_preview"](scene_preview)
             return {**scene_detail, "shotColors": [{"startMs": 0, "average": "#123456", "sampleCount": 1}]}
 
         with TemporaryDirectory() as folder:
@@ -111,8 +115,9 @@ class ProgressiveAnalysisTests(TestCase):
                     patch('voice_studio.speech.media_transcript.analyze_audio_scene', side_effect=classify) as audio, \
                     patch('voice_studio.speech.media_transcript.review_scene', side_effect=scene) as video:
                 final = transcribe_media(root, "ru", root / "media", scene=True, publish=publish)
-        self.assertEqual(order, ["base", "audio", "scene"])
+        self.assertEqual(order, ["base", "audio", "scene-preview", "scene"])
         self.assertEqual(published["audio"], audio_detail)
+        self.assertEqual(published["scene-preview"], {"sceneEvidence": scene_preview})
         self.assertEqual(published["scene"]["sceneEvidence"], scene_detail)
         self.assertNotIn("objectTimeline", published["base"])
         self.assertEqual([clip["label"] for clip in published["scene"]["objectTimeline"]], ["cup"])
@@ -121,6 +126,83 @@ class ProgressiveAnalysisTests(TestCase):
         self.assertEqual(final["audioLayers"], audio_detail["audioLayers"])
         for worker in (ffmpeg, recognize, audio, video):
             worker.assert_called_once()
+
+    def test_scene_geometry_precedes_recognition_and_keeps_native_sampling(self):
+        """Expose an independent raw scene early and enrich only the final result."""
+        clock = [(index, 40 * index) for index in range(40)]
+        box = [.46, .25, .07, .06]
+        regions = [{"box": box, "changedPixels": 200}]
+        candidates = [{"sourceFrame": index, "startMs": 40 * index, "endMs": 40 * (index + 1),
+                       "regions": deepcopy(regions)} for index in (16, 20)]
+        changes = {"status": "ok", "mode": "measure", "rows": candidates}
+        reading = {"regions": [{"sourceFrame": 16, "index": 0, "status": "recognized",
+                                "text": [{"text": "Menu", "box": box}]}]}
+        received = []
+
+        def decode(_inputs, _folder, plan, **_kwargs):
+            self.assertEqual(len(received), 1)
+            self.assertEqual(received[0]["shotStartsMs"], [800])
+            self.assertEqual([row["sourceFrame"] for row in received[0]["frameChanges"]["rows"]], [16])
+            baseline = video_scene.sample_plan(clock, {20}, "basic")
+            self.assertEqual([(row["sourceFrame"], row["ocr"], row["objects"]) for row in baseline],
+                             [(row["sourceFrame"], row["ocr"], row["objects"]) for row in plan])
+
+        with patch.object(video_scene, "probe_video", return_value=True), \
+                patch.object(video_scene, "scan_scene", return_value=(clock, {20}, changes)), \
+                patch.object(video_scene, "decode_samples", side_effect=decode) as decode_frames, \
+                patch.object(video_scene, "run_worker", return_value={"status": "ok", "frameChangeRecognition": reading}):
+            result = video_scene.review_scene.__wrapped__("media.mp4", None, "mov", object_sampling="basic",
+                                                         publish_preview=received.append)
+
+        decode_frames.assert_called_once()
+        self.assertEqual(result["status"], "ok")
+        preview = received[0]
+        self.assertEqual(preview["status"], "partial")
+        self.assertNotIn("frames", preview)
+        self.assertNotIn("recognition", preview["frameChanges"]["rows"][0]["regions"][0])
+        self.assertEqual(result["frameChanges"]["rows"][0]["regions"][0]["recognition"]["text"][0]["text"], "Menu")
+
+    def test_fresh_scene_only_has_source_clock_and_warm_scene_skips_preview(self):
+        """Publish readable previews even when speech is excluded, and reuse the full scene."""
+        media = {"kind": "video", "durationMs": 1000, "streams": [
+            {"kind": "audio", "index": 1, "startMs": 0}, {"kind": "video", "index": 0, "startMs": 0},
+        ]}
+        changes = {"status": "ok", "rows": [{"startMs": 400, "endMs": 440, "regions": []}]}
+
+        def scene(*args, **kwargs):
+            kwargs["publish_preview"]({"status": "partial", "frameChanges": changes})
+            return {"status": "ok", "frames": [], "frameChanges": changes}
+
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "media.mp4"
+            source.write_bytes(b"scene-only fixture")
+            checkpoint = AnalysisRevolver(root / "cache")
+
+            def run():
+                reports = {}
+                publish = compact_graph_publisher(media, False, True,
+                    lambda phase, report: reports.update({phase: deepcopy(report)}))
+                final = transcribe_media(root, "en", source, selected_stages=["scene"],
+                                         revolver=checkpoint, publish=publish)
+                return reports, final
+
+            with patch('voice_studio.graph.media_graph_ingest.probe_source', return_value=media), \
+                    patch.object(media_transcript, "audio_offset", return_value=0), \
+                    patch.object(media_transcript, "transcribe_wav") as speech, \
+                    patch.object(media_transcript, "review_scene", side_effect=scene) as review:
+                fresh, measured = run()
+                warm, restored = run()
+
+        speech.assert_not_called()
+        review.assert_called_once()
+        self.assertEqual(list(fresh), ["base", "audio", "scene-preview", "scene"])
+        self.assertEqual(list(warm), ["base", "audio", "scene"])
+        self.assertEqual(fresh["scene-preview"]["segments"], [])
+        self.assertEqual(fresh["scene-preview"]["coverage"]["speech"][0]["status"], "pending")
+        self.assertEqual(fresh["scene-preview"]["coverage"]["scene"][0]["status"], "partial")
+        self.assertEqual(measured["sceneEvidence"], restored["sceneEvidence"])
+        self.assertEqual(restored["analysisStages"]["scene"]["state"], "reused")
 
     def test_ndjson_reports_base_before_error_and_preserves_source_identity(self):
         """A late error leaves a usable early transcript on the already-flushed stream."""

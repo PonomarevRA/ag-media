@@ -33,8 +33,9 @@ def change_coverage(scene):
     report = scene.get("frameChanges")
     if not isinstance(report, dict):
         return {}
-    allowed = ("status", "mode", "basis", "framesCompared", "globalFrames", "omittedFrames", "cutCandidatesRemoved", "elapsedMs")
-    fields = {key: report[key] for key in allowed if type(report.get(key)) in (str, int)}
+    allowed = ("status", "mode", "basis", "framesCompared", "globalFrames", "omittedFrames",
+               "cutCandidatesRemoved", "elapsedMs", "adaptiveThreshold", "compensateCamera", "compensatedFrames")
+    fields = {key: report[key] for key in allowed if type(report.get(key)) in (str, int, bool)}
     if "graphicRows" in report:
         fields["graphicCandidates"] = len(change_rows(scene, "graphicRows"))
     if isinstance(objects := scene.get("frameChangeObjects", report.get("objectChecks")), dict):
@@ -107,6 +108,8 @@ def add_change_rows(graph, rows, track, box_coordinates, basis):
             evidence = valid_region(region, box_coordinates, basis)
             if evidence is None:
                 continue
+            if row.get("supplemental") is True:
+                evidence["supplemental"] = True
             node = (f"frame_change:graphic:{start}:{ordinal}:{index}" if basis == GRAPHIC_BASIS
                     else f"frame_change:{start}:{index}")
             label = graph.names["graphic_change" if basis == GRAPHIC_BASIS else "frame_change"]

@@ -21,6 +21,7 @@ TILE = 16
 MAX_REGIONS = 4
 MAX_FRAMES_PER_SECOND = 8
 MAX_PENDING_FRAMES = 16384
+MAX_SUPPLEMENTAL_FRAMES = 4096
 MAX_OBJECT_FRAMES_PER_SECOND = 4
 MAX_OBJECT_REGIONS = 2
 MAX_RECOGNITION_REGIONS = 64
@@ -42,21 +43,47 @@ def run_scan(inputs, folder, clock_filter, settings):
     from voice_studio.vision.video_revolver import VISION, run_worker
 
     request = Path(folder) / "change-scan.json"
-    request.write_text(json.dumps({"inputs": inputs, "clockFilter": clock_filter,
-                                   "threshold": settings["pixelThreshold"], "mode": settings["mode"]}), encoding="utf-8")
+    options = {"inputs": inputs, "clockFilter": clock_filter,
+               "threshold": settings["pixelThreshold"], "mode": settings["mode"],
+               "adaptiveThreshold": settings.get("adaptiveThreshold", False),
+               "compensateCamera": settings.get("compensateCamera", False)}
+    request.write_text(json.dumps(options), encoding="utf-8")
     result = run_worker("voice_studio.vision.frame_changes", [request], [VISION], timeout=TIMEOUT + 15)
     if not isinstance(result, dict) or result.get("status") != "ok":
         raise ValueError("Frame change worker returned no completed scan")
     return {**result, "mode": settings["mode"]}
 
 
-def changed_regions(previous, current, threshold):
-    """Bound local changes in the full-frame coordinate system of a fixed analysis raster."""
+def changed_regions(previous, current, threshold, *, adaptive=False, camera=None):
+    """Return local boxes for a pair or None for a broad change."""
+    regions, _ = compare_frames(previous, current, threshold, adaptive=adaptive, camera=camera)
+    return regions
+
+
+def compare_frames(previous, current, threshold, *, adaptive=False, camera=None):
+    """Measure a frame pair and indicate whether the result came from a fallback."""
+    from voice_studio.vision.frame_change_motion import adaptive_quiet_pixels, quiet_pixels
+
+    quiet = quiet_pixels(previous, current, threshold)
+    regions = regions_from_mask(quiet)
+    if regions:
+        return regions, False
+    if camera is not None:
+        aligned = camera.quiet_mask(previous, current, threshold, quiet)
+        if aligned is not quiet:
+            return regions_from_mask(aligned), True
+    if adaptive:
+        expanded = regions_from_mask(adaptive_quiet_pixels(previous, current, threshold))
+        if expanded:
+            return expanded, True
+    return regions, False
+
+
+def regions_from_mask(quiet):
+    """Merge neighboring changed cells and return tight normalized pixel bounds."""
     import cv2
     import numpy as np
 
-    delta = cv2.absdiff(previous, current)
-    quiet = cv2.inRange(delta, (0, 0, 0), (threshold - 1,) * 3)
     changed = SIDE * SIDE - cv2.countNonZero(quiet)
     if changed >= SIDE * SIDE * GLOBAL_FRACTION:
         return None
@@ -87,7 +114,7 @@ def changed_regions(previous, current, threshold):
     return regions[:MAX_REGIONS]
 
 
-def scan_pixels(process, threshold, graphics):
+def scan_pixels(process, threshold, graphics, *, adaptive=False, camera=None):
     """Compare consecutive frames and retain a small, time-distributed set per source second.
 
     Read FFmpeg's clock in a separate pass after decoding; the worker retains no
@@ -97,6 +124,7 @@ def scan_pixels(process, threshold, graphics):
     import numpy as np
 
     samples = []
+    supplemental = []
     previous = None
     wide = 0
     frame_count = dropped = 0
@@ -107,18 +135,21 @@ def scan_pixels(process, threshold, graphics):
         current = np.frombuffer(raw, dtype="uint8").reshape(SIDE, SIDE, 3)
         graphics.observe(current, frame_count)
         if previous is not None:
-            regions = changed_regions(previous, current, threshold)
+            regions, is_supplemental = compare_frames(
+                previous, current, threshold, adaptive=adaptive, camera=camera,
+            )
             if regions is None:
                 wide += 1
             elif regions:
-                samples.append((frame_count, regions))
-                if len(samples) >= MAX_PENDING_FRAMES:
-                    reduced = samples[::2]
-                    dropped += len(samples) - len(reduced)
-                    samples = reduced
+                target = supplemental if is_supplemental else samples
+                limit = MAX_SUPPLEMENTAL_FRAMES if is_supplemental else MAX_PENDING_FRAMES
+                target.append((frame_count, regions))
+                if len(target) >= limit:
+                    dropped += len(target) // 2
+                    del target[1::2]
         previous = current
         frame_count += 1
-    return samples, wide, frame_count, dropped
+    return samples, supplemental, wide, frame_count, dropped
 
 
 def bound_samples(samples, frames, cuts, *, for_objects=False):
@@ -159,9 +190,33 @@ def bound_samples(samples, frames, cuts, *, for_objects=False):
     return rows, omitted
 
 
+def fill_supplemental_rows(rows, supplemental):
+    """Use free per-second slots for fallback results while retaining the fixed sample set."""
+    from voice_studio.vision.scene_sampling import evenly_spaced
+
+    counts = defaultdict(int)
+    baseline_stamps = set()
+    for row in rows:
+        stamp = row["startMs"]
+        baseline_stamps.add(stamp)
+        counts[stamp // 1000] += 1
+    buckets = defaultdict(list)
+    for row in supplemental:
+        stamp = row["startMs"]
+        if stamp not in baseline_stamps:
+            buckets[stamp // 1000].append(row)
+    extra = []
+    for second, bucket in buckets.items():
+        available = MAX_FRAMES_PER_SECOND - counts[second]
+        if available > 0:
+            extra.extend({**row, "supplemental": True} for row in evenly_spaced(bucket, available))
+    return sorted(rows + extra, key=lambda row: row["startMs"]), len(supplemental) - len(extra)
+
+
 def measure(request):
     """Decode one shared clock and RGB stream, timing out the owned FFmpeg subprocess."""
     import cv2
+    from voice_studio.vision.frame_change_motion import CameraCompensator
     from voice_studio.vision.frame_graphics import GraphicTracker
     from voice_studio.vision.video_scene import read_frame_clock
 
@@ -177,12 +232,16 @@ def measure(request):
                "-map", "[pixels]", "-an", "-sn", "-pix_fmt", "rgb24", "-threads:v", "1",
                "-fps_mode", "passthrough", "-f", "rawvideo", "pipe:1"]
     graphics = GraphicTracker()
+    adaptive = options.get("adaptiveThreshold", False)
+    camera = CameraCompensator() if options.get("compensateCamera") else None
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=folder) as process:
         timer = Timer(TIMEOUT, process.kill)
         timer.daemon = True
         timer.start()
         try:
-            samples, wide, count, dropped = scan_pixels(process, options["threshold"], graphics)
+            samples, supplemental, wide, count, dropped = scan_pixels(
+                process, options["threshold"], graphics, adaptive=adaptive, camera=camera,
+            )
             if process.wait() != 0:
                 raise ValueError("FFmpeg frame change decode failed")
         finally:
@@ -193,9 +252,15 @@ def measure(request):
     if len(frames) != count:
         raise ValueError("Frame change pixels and timestamps do not match")
     rows, omitted = bound_samples(samples, frames, cuts)
+    if supplemental:
+        extra, extra_omitted = bound_samples(supplemental, frames, cuts)
+        rows, full_slots = fill_supplemental_rows(rows, extra)
+        omitted += extra_omitted + full_slots
     object_rows, _ = bound_samples(samples, frames, cuts, for_objects=True) if options["mode"] in ("objects", "assist") else ([], 0)
     return {"status": "ok", "basis": BASIS, "objectRows": object_rows, "framesCompared": max(0, count - 1),
             "globalFrames": wide, "omittedFrames": omitted + dropped, "rows": rows,
+            "adaptiveThreshold": adaptive, "compensateCamera": camera is not None,
+            "compensatedFrames": camera.compensated_frames if camera is not None else 0,
             "graphicRows": graphics.report(frames, SIDE, MIN_GRAPHIC_MS, GRAPHIC_BASIS),
             "elapsedMs": round((perf_counter() - started) * 1000)}
 
@@ -227,7 +292,8 @@ def augment_plan(plan, frames, cuts, report):
         for row in rows:
             buckets[row["startMs"] // 1000].append(row)
         rows = [row for bucket in buckets.values() for row in local_pair(bucket)]
-        assign_motion(plan, report.get("rows", ()), [0, *(frames[index][1] for index in boundaries)])
+        baseline = [row for row in report.get("rows", ()) if not row.get("supplemental")]
+        assign_motion(plan, baseline, [0, *(frames[index][1] for index in boundaries)])
     def sample_for(row):
         """Reuse a planned frame or schedule this exact source frame once."""
         ordinal = row["sourceFrame"]
@@ -246,9 +312,14 @@ def augment_plan(plan, frames, cuts, report):
         if sample := sample_for(row):
             sample["changeRegions"] = row["regions"][:MAX_OBJECT_REGIONS]
     for row, index in recognition_witnesses(report.get("rows", ())):
+        existing = row["sourceFrame"] in by_frame
         if sample := sample_for(row):
-            sample.setdefault("changeRecognitionRegions", []).append(
-                {"index": index, "box": row["regions"][index]["box"]})
+            region = {"index": index, "box": row["regions"][index]["box"]}
+            if row.get("supplemental"):
+                region["supplemental"] = True
+                if not existing:
+                    sample["supplementalOnly"] = True
+            sample.setdefault("changeRecognitionRegions", []).append(region)
     plan.sort(key=lambda row: row["sourceFrame"])
 
 
@@ -261,9 +332,24 @@ def local_pair(rows):
 
 
 def recognition_witnesses(rows):
-    """Pick the strongest compact region per second without requiring a NanoDet name."""
+    """Give fixed regions first refusal on crop slots and use fallback regions in the gaps."""
     from voice_studio.vision.scene_sampling import evenly_spaced
 
+    baseline, supplemental = [], []
+    for row in rows:
+        target = supplemental if row.get("supplemental") else baseline
+        target.append(row)
+    known = evenly_spaced(best_crop_regions(baseline), MAX_RECOGNITION_REGIONS)
+    available = MAX_RECOGNITION_REGIONS - len(known)
+    if not supplemental or not available:
+        return known
+    used_seconds = {row["startMs"] // 1000 for row, _ in known}
+    candidates = [row for row in supplemental if row["startMs"] // 1000 not in used_seconds]
+    return known + evenly_spaced(best_crop_regions(candidates), available)
+
+
+def best_crop_regions(rows):
+    """Pick the strongest compact region per second from one source of measurements."""
     candidates = defaultdict(list)
     for row in rows:
         second = row["startMs"] // 1000
@@ -289,7 +375,7 @@ def recognition_witnesses(rows):
         if later:
             _, row, index = max(later, key=lambda entry: (entry[1]["startMs"], entry[0]))
         selected.append((row, index))
-    return evenly_spaced(selected, MAX_RECOGNITION_REGIONS)
+    return selected
 
 
 def comparable_region(first, second):

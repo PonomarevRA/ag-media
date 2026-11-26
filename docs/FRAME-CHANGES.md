@@ -5,7 +5,8 @@ analysis. The existing FFmpeg pass keeps its cut/timestamp branch and sends a
 320 × 320 color raster to a separate algorithm module. The worker compares
 adjacent decoded frames, thresholds the maximum channel difference, and groups
 active 16 × 16 tiles. Bounds come from the changed pixels in each group.
-Hard cuts and broad changes (at least 32% of pixels) are not local proposals.
+Hard cuts are excluded from local proposals. The fixed-threshold pass also
+skips broad changes covering at least 32% of pixels.
 This is a candidate signal; panning, lighting, compression and UI animation can
 still produce real pixel changes unrelated to an object.
 
@@ -31,6 +32,24 @@ another read or the existing scroll mosaic workflow. The scene keeps its regular
 detector schedule. Supplemental observations can extend a baseline track through
 a unique, measured foreground and edge match across up to 160 ms in one shot.
 
+Two optional settings extend the fixed-threshold pass:
+
+- **Adaptive change threshold** checks otherwise empty frame pairs at a bounded
+  lower threshold. It can correct small frame-wide exposure shifts before looking
+  for local changes.
+- **Camera motion compensation** aligns the preceding frame when widely spread
+  Lucas–Kanade tracks support the motion. It recovers residual regions from pairs
+  with no usable fixed-threshold region. Pure vertical shifts keep their
+  original interpretation because they can be UI scrolling.
+
+Fallback results use free slots in the existing measurement and crop budgets.
+Their graph nodes have `data.supplemental: true`. Baseline object checks and
+the frames used to verify baseline OCR crops retain their original schedule.
+The `compensatedFrames` counter counts accepted alignments before cut filtering.
+
+On a fresh short-source analysis, the monitor and MCP can receive the change
+map before OCR and object detection finish. MCP reports partial scene coverage
+until recognition completes. A saved complete scene is reused as one result.
 Use **Change regions** next to the monitor's Technical mode switch. Dashed
 outlines show only during measured source frames. The current state also applies
 to MP4 export with markup; choosing a graph witness can produce an annotated
@@ -38,8 +57,5 @@ still via MCP. No new weights are downloaded.
 
 The pilot uses [absolute difference](https://docs.opencv.org/4.x/d2/de8/group__core__array.html)
 and [connected components](https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html).
-Pixel differences can see an appearance change without displacement. Global
-camera compensation, [Lucas–Kanade](https://docs.opencv.org/4.x/dc/d6b/group__video__track.html)
-and [codec motion vectors](https://ffmpeg.org/doxygen/trunk/extract__mvs_8c_source.html)
-are separate candidates for displacement estimates. Use this layer as a bounded
-source of candidate regions for later OCR or tracking work.
+Pixel differences can see an appearance change without displacement. Use this
+layer as a bounded source of candidates for later OCR or tracking.

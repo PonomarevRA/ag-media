@@ -720,7 +720,9 @@ export function mountMediaTranscript(request, currentLanguage) {
           const next = mergeAnalysisPartial(partial, event.partial);
           if (next === partial) return;
           displayAnalysisReport(next, next.segments !== partial?.segments, partial !== null);
-          if (!partial) status.textContent = uiText("Основной анализ готов. Дополнительные слои загружаются…");
+          if (!partial && !["pending", "invalidated"].includes(next.analysisStages?.speech?.state)) {
+            status.textContent = uiText("Основной анализ готов. Дополнительные слои загружаются…");
+          }
           partial = next;
         };
       }

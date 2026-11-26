@@ -76,6 +76,25 @@ class RegionPlanTests(TestCase):
         self.assertEqual([row["sourceFrame"] for row in planned[:2]], [1, 2])
         self.assertEqual([row["sourceFrame"] for row in planned[-2:]], [198, 199])
 
+    def test_fallback_witnesses_use_only_free_measurement_and_recognition_slots(self):
+        """A dense onset keeps all its original zones and its original OCR crop."""
+        from voice_studio.vision.frame_changes import fill_supplemental_rows, recognition_witnesses
+
+        def row(stamp, pixels):
+            """Build one compact detection on a source-clock instant."""
+            return {"startMs": stamp, "regions": [
+                {"box": [.1, .1, .1, .1], "changedPixels": pixels},
+            ]}
+
+        baseline = [row(i * 40, 350) for i in range(8)] + [row(1040, 350)]
+        extra = [row(360, 750), row(1200, 750), row(2200, 750)]
+        rows, omitted = fill_supplemental_rows(baseline, extra)
+        self.assertEqual(omitted, 1)
+        self.assertEqual([item for item in rows if not item.get("supplemental")], baseline)
+        self.assertEqual([item["startMs"] for item in rows if item.get("supplemental")], [1200, 2200])
+        selected = [item["startMs"] for item, _ in recognition_witnesses(rows)]
+        self.assertEqual(selected, [280, 1040, 2200])
+
     def test_assist_routes_motion_to_ocr_without_crossing_cuts(self):
         """Keep the side of the motion and discard local evidence from the previous shot."""
         left = {"box": [.1, .1, .05, .04], "changedPixels": 120}

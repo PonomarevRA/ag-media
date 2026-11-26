@@ -105,6 +105,10 @@ def is_intermediate_ready(phase, report, duration_ms):
         return bool(report.get("audioLayers"))
     if phase == "visual":
         return any((report.get("videoEvidence") or {}).get("timeline", {}).get("frames") or ())
+    if phase == "scene-preview":
+        scene = report.get("sceneEvidence") or {}
+        changes = scene.get("frameChanges") or {}
+        return scene.get("status") == "partial" and bool(changes.get("rows") or changes.get("graphicRows"))
     if phase == "scene" and duration_ms > 60_000:
         frames = (report.get("sceneEvidence") or {}).get("frames", [])
         return any(frame.get("text") or frame.get("objects") for frame in frames)
@@ -420,6 +424,7 @@ def register_media_graph_tools(mcp, root, studio_root):
         Set people_count=false to skip estimated person counts in a new visual analysis.
         Pass analysis_path to import a complete Studio JSON export instead. With progressive=true,
         media_graph_job exposes the most recent readable snapshot even while analysis is running.
+        A scene-preview snapshot contains measured change geometry while scene recognition is pending.
         Pair analysis_path with reuse_scene_snapshot_id to retain measured scene/UI/object layers
         from an exact-source snapshot when the imported report has only newer speech/face layers.
         selected_stages accepts speech,audio,visual,people,scene,voice,object_review;

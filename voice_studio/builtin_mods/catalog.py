@@ -103,11 +103,14 @@ def manifests():
         if key == 'builtin.frame-changes':
             item['defaultEnabled'] = False
             item['description'] = 'Local pixel changes. Assist mode adds split-screen OCR and targeted object checks.'
-            item['settings'] = {'mode': 'measure', 'pixelThreshold': 24}
+            item['settings'] = {'mode': 'measure', 'pixelThreshold': 24,
+                                'adaptiveThreshold': False, 'compensateCamera': False}
             item['settingsSchema']['properties'].update({
                 'mode': {'type': 'string', 'enum': ['measure', 'objects', 'assist'], 'title': 'Mode'},
                 'pixelThreshold': {'type': 'integer', 'minimum': 8, 'maximum': 96,
                                    'title': 'Pixel threshold (8-bit channel)'},
+                'adaptiveThreshold': {'type': 'boolean', 'title': 'Адаптивный порог изменений'},
+                'compensateCamera': {'type': 'boolean', 'title': 'Компенсация движения камеры'},
             })
         if key.startswith('builtin.whisper-'):
             maximum = min(32, max(1, os.cpu_count() or 1))

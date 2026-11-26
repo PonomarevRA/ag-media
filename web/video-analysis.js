@@ -54,6 +54,7 @@ const REPORT_FIELDS = {
   voice: ["segments", "voiceProfiles", "speakerProfileIndex", "voiceProfileWarning", "dialogueAudit", "srt"],
   audio: ["audioLayers", "soundAnalysisStatus", "soundClassifier"],
   visual: ["videoEvidence", "segments", "speakerReview", "srt"],
+  "scene-preview": ["sceneEvidence"],
   scene: ["sceneEvidence", "shotColors", "objectTimeline", "objectProfiles", "videoEvidence",
     "segments", "language", "durationMs", "text", "srt", "corrections"],
 };

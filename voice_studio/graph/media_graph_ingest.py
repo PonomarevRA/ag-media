@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from threading import Lock
 from voice_paths import temporary_directory
 from uuid import NAMESPACE_URL, uuid5
 import wave
@@ -453,9 +454,10 @@ def scene_revolver(stages, evidence, object_sampling):
     """Bind scene reuse to the cut timestamps and occupancy, omitting face thumbnails."""
     editor = evidence.get("editorTimeline", {})
     cuts = [row["startMs"] for row in editor.get("shots", [])]
-    return stages.child_for_input("scene-full-window", {"cuts": cuts, "timeline": evidence.get("timeline"),
-                                                       "shotColorsVersion": 1, "objectAppearanceVersion": 1, "interfaceVersion": 5,
-                                                       "objectSampling": object_sampling})
+    inputs = {"cuts": cuts, "timeline": evidence.get("timeline"),
+              "shotColorsVersion": 1, "objectAppearanceVersion": 1, "interfaceVersion": 5,
+              "objectSampling": object_sampling, "providers": layer_fingerprint("scene")}
+    return stages.child_for_input("scene-full-window", inputs)
 
 
 def collect_visual(source, work, window, analysis, visual, scene, *, object_sampling=DEFAULT_OBJECT_SAMPLING,
@@ -1014,13 +1016,15 @@ def compact_graph_publisher(metadata, visual, scene, publish):
     if publish is None:
         return None
     report = {}
+    lock = Lock()
 
     def update(phase, detail):
-        """Publish only the coverage of layers received so far."""
-        report.update(detail)
-        staged = attach_coverage(dict(report), metadata, visual and "videoEvidence" in report,
-                                 scene and "sceneEvidence" in report)
-        publish(phase, staged)
+        """Serialize cumulative patches from the parallel scene and people workers."""
+        with lock:
+            report.update(detail)
+            staged = attach_coverage(dict(report), metadata, visual and "videoEvidence" in report,
+                                     scene and "sceneEvidence" in report)
+            publish(phase, staged)
 
     return update
 

@@ -9,10 +9,49 @@ from unittest.mock import Mock, patch
 
 from voice_studio.mcp.media_graph_mcp import GraphBuildQueue, build_snapshot, import_report, intermediate_publisher
 from voice_studio.graph.media_graph_progress import GraphPublication
-from voice_studio.graph.media_graph_store import MediaGraphStore
+from voice_studio.graph.media_graph_ingest import compact_graph_publisher
+from voice_studio.graph.media_graph_store import MediaGraphStore, identify
 
 
 class ProgressiveGraphTests(TestCase):
+    def test_preview_exposes_geometry_without_claiming_scene_coverage(self):
+        """Query early geometric nodes, then publish recognized evidence as a separate revision."""
+        publication = GraphPublication("job")
+        media = {"kind": "video", "durationMs": 83000, "streams": [
+            {"kind": "audio", "index": 1, "startMs": 0}, {"kind": "video", "index": 0, "startMs": 0},
+        ]}
+        changes = {"status": "ok", "framesCompared": 50, "rows": [
+            {"startMs": 400, "endMs": 440, "regions": [{"box": [.1, .2, .15, .1], "changedPixels": 250}]},
+        ]}
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = root / "preview.mp4"
+            original.write_bytes(b"source fixture")
+            source = identify(original)
+            store = MediaGraphStore(root / "graphs")
+            persist = intermediate_publisher(publication, store, source, media, "en")
+            publish = compact_graph_publisher(media, False, True, persist)
+            publish("base", {"language": "en", "durationMs": 83000, "segments": []})
+            publish("scene-preview", {"sceneEvidence": {"status": "partial", "frameChanges": {"rows": []}}})
+            self.assertEqual(publication.state()["phase"], "base")
+            publish("scene-preview", {"sceneEvidence": {"status": "partial", "frameChanges": changes}})
+            early = publication.state()["snapshot"]
+            early_id = early["snapshotId"]
+            self.assertEqual(early["provenance"]["progress"]["phase"], "scene-preview")
+            self.assertEqual(early["coverage"]["scene"][0]["status"], "partial")
+            self.assertEqual(early["coverage"]["scene"][0]["frameChanges"]["framesCompared"], 50)
+            self.assertEqual(store.timeline(early_id, 0, 83000, "frame_change")["nodes"][0]["startMs"], 400)
+            with self.assertRaisesRegex(ValueError, "нет измеренного покрытия"):
+                store.scene_evidence(early_id, source["sha256"], "en")
+            publish("scene", {"sceneEvidence": {"status": "ok", "frameChanges": changes, "frames": [
+                {"timeMs": 400, "text": [{"text": "Menu", "box": [.1, .2, .15, .1]}], "objects": []},
+            ]}})
+            later = publication.state()["snapshot"]
+            self.assertEqual(later["provenance"]["progress"]["previousSnapshotId"], early_id)
+            self.assertEqual(later["coverage"]["scene"][0]["status"], "sampled")
+            self.assertEqual(store.search(later["snapshotId"], "Menu")["nodes"][0]["label"], "Menu")
+            self.assertEqual(store.search(early_id, "Menu")["nodes"], [])
+
     def test_worker_phase_differs_from_last_readable_snapshot(self):
         publication = GraphPublication('job')
         publication.activity({'stage': 'whisper', 'state': 'running'})

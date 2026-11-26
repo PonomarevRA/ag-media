@@ -168,6 +168,11 @@ def transcribe_media(root, language, source, allow_empty=False, speakers=False, 
                                 audio_classifier=audio_classifier, clip_languages=clip_languages, publish=publish, defer_audio=True),
                            usable_speech,
                            publish=(lambda report: publish("base", report)) if publish else None, emit=emit, fallback=empty)
+        if publish is not None and scene and selection.selective:
+            speech_status = selection.states.get("speech", {})
+            if speech_status.get("state") in ("pending", "invalidated"):
+                # Scene-only analysis still needs a source clock for subsequent partial layers.
+                publish("base", {**result, "analysisStages": {"speech": speech_status}})
         speech_input = deepcopy(result)
         if not allow_empty:
             detail = cache.run("audio", {"classifier": audio_classifier}, speech_input,
@@ -311,11 +316,11 @@ def attach_person_evidence(source, work, evidence, *, body, gaze, emit=ignore_pr
                 progress.update(state="partial" if layer.get("frames") else "skipped", reason=reason)
 
 
-def collect_scene(source, work, evidence, object_sampling, emit, publish_mosaic):
-    """Measure one independent scene pass and report its real result status."""
+def collect_scene(source, work, evidence, object_sampling, emit, publish_mosaic, publish_preview=ignore_progress):
+    """Measure one scene pass and forward its optional change geometry preview."""
     with stage(emit, "scene") as progress:
         result = review_scene(source, work, FORMATS, evidence, object_sampling=object_sampling,
-                              publish_mosaic=publish_mosaic, emit=emit)
+                              publish_mosaic=publish_mosaic, emit=emit, publish_preview=publish_preview)
         if result["status"] != "ok":
             progress["state"] = "failed" if result["status"] == "failed" else "skipped"
             if reason := result.get("reason"):
@@ -325,7 +330,7 @@ def collect_scene(source, work, evidence, object_sampling, emit, publish_mosaic)
 
 def analyze_detail_layers(source, work, evidence, *, body, gaze, scene, object_sampling, emit, publish=None,
                           publish_mosaic=None, cache=None):
-    """Run figure/gaze and scene analysis from the already computed face timeline."""
+    """Run figure/gaze and progressive scene analysis from the computed face timeline."""
     people = body or gaze
     evidence = evidence or {}
     has_tracks = bool(((evidence or {}).get("timeline") or {}).get("frames"))
@@ -354,8 +359,13 @@ def analyze_detail_layers(source, work, evidence, *, body, gaze, scene, object_s
 
     def measure_scene(view, notify):
         """Cache the raw scene before moodbook/name reconciliation mutates the report."""
+        def preview(detail):
+            """Send geometry while the scene worker still has recognition ahead."""
+            publish("scene-preview", {"sceneEvidence": detail})
+
         def operation(mosaic):
-            return collect_scene(source, work, view, object_sampling, notify, mosaic)
+            callback = preview if publish is not None else ignore_progress
+            return collect_scene(source, work, view, object_sampling, notify, mosaic, callback)
 
         if cache is None:
             return operation(publish_mosaic)

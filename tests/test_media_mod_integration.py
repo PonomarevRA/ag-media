@@ -158,13 +158,19 @@ class MediaModIntegrationTests(TestCase):
         self.assertEqual(marker.read_text(), 'x')
 
     def test_scene_batch_replacement_is_consumed_without_native_scene_runtime(self):
-        self.package('test.scene', 'vision.scene-batch', "return {'status': 'ok', 'frames': [{'timeMs': 300, 'objects': [{'label': 'cup', 'score': .9, 'box': [.1,.2,.3,.4]}], 'text': []}], 'providerTag': settings['tag']}")
+        self.package('test.scene', 'vision.scene-batch',
+                     "assert 'publish_preview' not in payload\n"
+                     "return {'status': 'ok', 'frames': [{'timeMs': 300, 'objects': "
+                     "[{'label': 'cup', 'score': .9, 'box': [.1,.2,.3,.4]}], 'text': []}], "
+                     "'providerTag': settings['tag']}")
         self.registry.select('vision.scene-batch', 'test.scene')
         from voice_studio.vision.video_scene import review_scene
         from voice_studio.graph.media_graph_model import build_graph
+        previews = []
         with patch('voice_studio.vision.video_scene.probe_video') as native_probe:
-            scene = review_scene(self.root / 'missing.mp4', self.root, 'mov')
+            scene = review_scene(self.root / 'missing.mp4', self.root, 'mov', publish_preview=previews.append)
         native_probe.assert_not_called()
+        self.assertEqual(previews, [])
         graph = build_graph({'sceneEvidence': scene, 'segments': []}, kind='video', duration_ms=1000)
         self.assertTrue(any(row['kind'] == 'object_observation' for row in graph['nodes']))
 

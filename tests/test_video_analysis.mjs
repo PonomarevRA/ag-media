@@ -79,6 +79,22 @@ test("detail errors retain the prior base and malformed or duplicate patches are
   assert.equal(mergeAnalysisPartial(current, {phase: "detail", layer: "visual", report: {segments: null}}), current);
 });
 
+test("change geometry is visible before recognition and final scene replaces the preview", () => {
+  const segments = [{text: "Text"}];
+  const sceneEvidence = {status: "partial", frameChanges: {rows: [{startMs: 400}]}};
+  const base = mergeAnalysisPartial(null, {phase: "base", report: {segments}});
+  const preview = mergeAnalysisPartial(base, {phase: "detail", layer: "scene-preview",
+    report: {sceneEvidence, segments: []}});
+  assert.equal(preview.sceneEvidence, sceneEvidence);
+  assert.equal(preview.segments, segments);
+  assert.equal(preview.analysisComplete, false);
+  const recognized = {status: "ok", frames: [{timeMs: 400, text: ["Menu"]}]};
+  const finalScene = mergeAnalysisPartial(preview, {phase: "detail", layer: "scene",
+    report: {sceneEvidence: recognized}});
+  assert.equal(finalScene.sceneEvidence, recognized);
+  assert.equal(finalScene.segments, segments);
+});
+
 test("WebMCP distinguishes preliminary transcript pages without changing completed pages", async () => {
   const report = {segments: [], language: "ru", analysisComplete: false};
   const tools = studioWebTools({ui: {transcript: () => report}}, new AbortController().signal);
