@@ -1,7 +1,7 @@
 """Conservative optional object identity and bounded real-crop local-part checks."""
 from copy import deepcopy
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 try:
     import cv2
@@ -171,7 +171,8 @@ class WorkerBudgetTests(TestCase):
             def release(self):
                 pass
         frames = [{'timeMs': stamp * 100, 'objects': [
-            {'label': 'car', 'box': [0, 0, 1, 1], 'objectPartMatches': [{'stale': True}]}
+            {'label': 'car', 'box': [0, 0, 1, 1], 'objectPartMatches': [{'stale': True}],
+             'objectForegroundMatches': [{'stale': True}]}
             for _ in range(20)]} for stamp in range(100)]
         report = {'sceneEvidence': {'frames': frames}}
         with patch.object(worker.cv2, 'VideoCapture', return_value=Capture()):
@@ -180,10 +181,33 @@ class WorkerBudgetTests(TestCase):
         self.assertLessEqual(stats['decodedFrames'], 48)
         self.assertLessEqual(stats['describedCrops'], 96)
         self.assertLessEqual(stats['comparisons'], 96 * 16)
+        self.assertEqual(stats['foreground']['attemptedCrops'], 32)
+        self.assertEqual(stats['foreground']['acceptedMasks'], 0)
         self.assertEqual(stats['status'], 'no-evidence')
         self.assertFalse(any('objectPartMatches' in item for frame in result['sceneEvidence']['frames']
                              for item in frame['objects']))
         self.assertIn('objectPartMatches', report['sceneEvidence']['frames'][0]['objects'][0])
+        self.assertFalse(any('objectForegroundMatches' in item for frame in result['sceneEvidence']['frames']
+                             for item in frame['objects']))
+        self.assertIn('objectForegroundMatches', report['sceneEvidence']['frames'][0]['objects'][0])
+
+    def test_foreground_budget_and_native_error_do_not_skip_ordinary_crops(self):
+        """Continue ORB measurement when the optional native work fails or takes its allowance."""
+        from voice_studio.vision import object_reconciliation_parts as worker
+        image = np.zeros((120, 120, 3), np.uint8)
+        capture = Mock()
+        capture.read.return_value = True, image
+        frames = [{'timeMs': time, 'objects': [{'label': 'cup', 'box': [.1, .1, .5, .5]}]}
+                  for time in (100, 200)]
+        with (patch.object(worker.cv2, 'VideoCapture', return_value=capture),
+              patch.object(worker, 'describe_foreground', side_effect=worker.cv2.error),
+              patch.object(worker, 'perf_counter', side_effect=(0, worker.FOREGROUND_BUDGET_SECONDS)),
+              patch.object(worker, 'crop_features', return_value=None) as describe_parts):
+            result = worker.prepare_object_reconciliation('fixture.mp4', {'sceneEvidence': {'frames': frames}})
+        stats = result['objectReconciliationEvidence']['foreground']
+        self.assertEqual(describe_parts.call_count, 2)
+        self.assertEqual((stats['attemptedCrops'], stats['failedCrops']), (1, 1))
+        self.assertTrue(stats['timeBudgetReached'])
 
 
 class GraphProjectionTests(TestCase):

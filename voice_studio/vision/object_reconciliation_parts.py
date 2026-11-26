@@ -6,10 +6,12 @@ train a model, or change detector predictions. A failed read produces no match.
 from copy import deepcopy
 from math import ceil
 from pathlib import Path
+from time import perf_counter
 
 import cv2
 import numpy as np
 
+from voice_studio.vision.object_foreground import compare_foregrounds, describe_foreground
 from voice_studio.vision.vehicle_body_color import measure_vehicle_bodies
 from voice_studio.vision.vehicle_evidence import VEHICLE_LABELS
 
@@ -17,6 +19,8 @@ MAX_FRAMES = 48
 MAX_CROPS = 96
 MAX_VEHICLE_FRAMES = 96
 MAX_VEHICLE_CROPS = 144
+MAX_FOREGROUND_CROPS = 32
+FOREGROUND_BUDGET_SECONDS = 4
 MAX_GALLERY = 64
 MAX_CANDIDATES = 16
 MAX_FEATURES = 512
@@ -133,6 +137,31 @@ def candidate_views(previous, item, stamp):
     return spread(named, name_count) + spread(alternatives, min(len(alternatives), MAX_CANDIDATES - name_count))
 
 
+def measure_foreground_matches(image, item, stamp, previous, stats):
+    """Collect comparable masked witnesses independently of the identity inputs."""
+    stats['attemptedCrops'] += 1
+    try:
+        foreground = describe_foreground(image, item.get('box', []))
+    except cv2.error:
+        # A native diagnostic error must not prevent the existing ORB measurements.
+        stats['failedCrops'] += 1
+        return None
+    if foreground is None:
+        return None
+    stats['acceptedMasks'] += 1
+    matches = []
+    for old_stamp, old, descriptor in candidate_views(previous, item, stamp):
+        metrics = compare_foregrounds(descriptor, foreground)
+        if metrics:
+            matches.append({'timeMs': old_stamp, 'label': old['label'], 'box': list(old['box']), **metrics})
+    if matches:
+        # Prefer nearby source observations so that reporting is independent of OCR and mask scores.
+        matches.sort(key=lambda pair: (-pair['timeMs'], pair['label'], pair['box']))
+        item['objectForegroundMatches'] = matches[:3]
+        stats['storedPairs'] += len(item['objectForegroundMatches'])
+    return stamp, item, foreground
+
+
 def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     """Return a copied report with bounded measured crop witnesses for optional reconciliation.
 
@@ -141,7 +170,8 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     crops within 30 seconds, and retain at most three source witnesses per crop.
     The vehicle pass samples at most 96 timestamps and 144 vehicle crops and
     shares decoded frames with ORB when possible. Unreadable frames leave no evidence.
-    Original scene predictions, boxes, labels and scores are preserved.
+    Foreground comparison records diagnostics on at most 32 of the same crops.
+    Original scene predictions, boxes, labels and identity inputs are preserved.
     """
     result = deepcopy(report)
     frames = sorted(result.get('sceneEvidence', {}).get('frames', []), key=lambda row: row['timeMs'])
@@ -149,10 +179,14 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
     for frame in frames:
         for item in frame.get('objects', []):
             item.pop('objectPartMatches', None)
+            item.pop('objectForegroundMatches', None)
             item.pop('vehicleBodyColor', None)
     selected = spread([row for row in frames if row.get('objects')], MAX_FRAMES)
     rows = [(frame, item) for frame in selected for item in frame.get('objects', [])[:12]]
     selected_rows = spread(rows, MAX_CROPS)
+    foreground_objects = {id(item) for _, item in spread(
+        [(frame, item) for frame, item in selected_rows if item.get('label') not in {'ui', 'mobile-ui', 'person'}],
+        MAX_FOREGROUND_CROPS)}
     by_stamp = {}
     for frame, item in selected_rows:
         by_stamp.setdefault(frame['timeMs'], []).append(item)
@@ -168,11 +202,15 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
              'comparisons': 0, 'measuredPairs': 0, 'maxFrames': MAX_FRAMES,
              'maxCrops': MAX_CROPS, 'maxGallery': MAX_GALLERY,
              'maxCandidates': MAX_CANDIDATES, 'status': 'no-evidence',
-             'vehicleColorFrames': 0, 'vehicleColorCrops': 0}
+             'vehicleColorFrames': 0, 'vehicleColorCrops': 0,
+             'foreground': {'attemptedCrops': 0, 'acceptedMasks': 0, 'storedPairs': 0, 'failedCrops': 0,
+                            'maxCrops': MAX_FOREGROUND_CROPS, 'timeBudgetMs': FOREGROUND_BUDGET_SECONDS * 1000,
+                            'timeBudgetReached': False}}
     result['objectReconciliationEvidence'] = stats
     capture = cv2.VideoCapture(str(source))
     detector = cv2.ORB_create(nfeatures=MAX_FEATURES, edgeThreshold=12, fastThreshold=12)
-    previous = []
+    previous, previous_foregrounds = [], []
+    foreground_seconds = 0
     try:
         if not capture.isOpened():
             stats['status'] = 'source-unavailable'
@@ -190,8 +228,14 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
             if stamp not in by_stamp:
                 continue
             stats['decodedFrames'] += 1
-            current = []
+            current, current_foregrounds = [], []
             for item in by_stamp[stamp]:
+                if id(item) in foreground_objects and foreground_seconds < FOREGROUND_BUDGET_SECONDS:
+                    started = perf_counter()
+                    observation = measure_foreground_matches(image, item, stamp, previous_foregrounds, stats['foreground'])
+                    foreground_seconds += perf_counter() - started
+                    if observation is not None:
+                        current_foregrounds.append(observation)
                 features = crop_features(image, item.get('box', []), detector)
                 stats['describedCrops'] += 1
                 if features is None:
@@ -209,6 +253,8 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
                     stats['measuredPairs'] += len(item['objectPartMatches'])
                 current.append((stamp, item, features))
             previous = (previous + current)[-MAX_GALLERY:]
+            previous_foregrounds.extend(current_foregrounds)
+        stats['foreground']['timeBudgetReached'] = foreground_seconds >= FOREGROUND_BUDGET_SECONDS
         if stats['measuredPairs'] or stats['vehicleColorCrops']:
             stats['status'] = 'measured'
     finally:

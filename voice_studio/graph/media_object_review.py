@@ -21,6 +21,7 @@ def review_objects(source, report, cache, *, emit):
     for frame in raw.get("frames", []):
         for item in frame.get("objects", []):
             item.pop("objectPartMatches", None)
+            item.pop("objectForegroundMatches", None)
             item.pop("vehicleBodyColor", None)
 
     def compute():
@@ -33,7 +34,7 @@ def review_objects(source, report, cache, *, emit):
                 progress["state"] = "failed"
         return {key: reviewed[key] for key in ("sceneEvidence", "objectReconciliationEvidence") if key in reviewed}
 
-    result = cache.run("object_review", {"vehicleBodyColorVersion": 1}, raw, compute,
+    result = cache.run("object_review", {"vehicleBodyColorVersion": 1, "foregroundDiagnosticsVersion": 1}, raw, compute,
                        lambda value: isinstance(value.get("sceneEvidence"), dict)
                        and (value.get("objectReconciliationEvidence") or {}).get("status") in ("measured", "no-evidence"), emit=emit)
     report.update(result)

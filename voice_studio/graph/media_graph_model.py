@@ -547,6 +547,8 @@ def scene_observations(graph, report, *, keep_display_aliases=False):
             alias_id = f"object_alias:{stamp}:{index}:{source_key(label)}"
             info = {"box": box, "source": "nanodet", "sourceIndex": index,
                     **compact_source_data(item, ("score", "basis", "detailBasis"))}
+            if matches := object_foreground_matches(item, stamp):
+                info["objectForegroundMatches"] = matches
             graph.node(alias_id, "object_alias", label, (stamp, stamp + 1), info)
             graph.connect(alias_id, "alias_of", owner)
             graph.connect(alias_id, "at_frame", graph.frame(stamp, "nanodet"))
@@ -572,6 +574,37 @@ def object_matches(item, stamp):
     return matches[:3]
 
 
+def object_foreground_matches(item, stamp):
+    """Keep bounded GrabCut measurements with original source coordinates."""
+    entries = item.get("objectForegroundMatches")
+    if not isinstance(entries, list):
+        return []
+    similarities = ("baselineObjectSimilarity", "baselineEdgeSimilarity",
+                    "maskedObjectSimilarity", "maskedEdgeSimilarity")
+    mask_quality = ("sourceFraction", "targetFraction", "sourceStability", "targetStability", "maskOverlap")
+    matches = []
+    for entry in entries[:3]:
+        if not isinstance(entry, dict) or entry.get("basis") != "grabcut-foreground":
+            continue
+        time, label = entry.get("timeMs"), entry.get("label")
+        box = box_coordinates(entry.get("box"))
+        if (type(time) is not int or not 0 <= time < stamp
+                or not isinstance(label, str) or not label.strip() or not box):
+            continue
+        scores = {key: entry.get(key) for key in similarities}
+        if scores["maskedObjectSimilarity"] is None and scores["maskedEdgeSimilarity"] is None:
+            continue
+        if any(value is not None and (type(value) not in (int, float) or not -1 <= value <= 1)
+               for value in scores.values()):
+            continue
+        masks = {key: entry.get(key) for key in mask_quality}
+        if any(type(value) not in (int, float) or not 0 <= value <= 1 for value in masks.values()):
+            continue
+        matches.append({"timeMs": time, "label": label.strip()[:512], "box": box, "basis": "grabcut-foreground",
+                        **scores, **masks})
+    return matches
+
+
 def add_scene_observation(graph, stamp, kind, source, index, label, box, item, *, screen=None):
     """Keep the detector box and confidence at the measured instant."""
     entity = f"{kind}:{source_key(label)}"
@@ -588,6 +621,8 @@ def add_scene_observation(graph, stamp, kind, source, index, label, box, item, *
             data["objectPalette"] = palette
         if matches := object_matches(item, stamp):
             data["objectMatches"] = matches
+        if foreground := object_foreground_matches(item, stamp):
+            data["objectForegroundMatches"] = foreground
         # The reconciliation module validates these bounded measured-pair metrics.
         pairs = item.get("objectPartMatches")
         if isinstance(pairs, list):

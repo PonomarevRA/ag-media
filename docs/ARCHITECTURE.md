@@ -46,3 +46,16 @@ invalidate that snapshot.
 Workspace data, installed dependencies and model weights live outside the
 application bundle. [Storage and model paths](wiki/Models-and-storage.md) documents
 the paths and environment overrides.
+
+## Object comparison
+
+The optional final object review measures background-masked crop similarity
+alongside the original box-interior similarity. It runs GrabCut on up to 32
+existing crops, with a four-second budget checked between crops. It checks mask
+size and stability before comparing overlapping foreground pixels in normalized
+coordinates. A stable mask can still include a neighboring object within the
+detector box. An uncertain mask yields no foreground comparison.
+The graph keeps the raw candidate pairs in
+`objectForegroundMatches` and the pairs within a profile in
+`foregroundComparisons`. These scores are experimental diagnostics. Track
+and profile identity use the existing evidence and safeguards.

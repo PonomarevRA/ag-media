@@ -394,7 +394,7 @@ class MediaGraphStore:
                         panels.append((frame, data["box"], row["label"]))
                         continue
                     evidence = {name: data[name] for name in ("box", "score", "basis", "detailBasis", "objectPalette",
-                                                             "objectMatches", "objectPartMatches",
+                                                             "objectMatches", "objectPartMatches", "objectForegroundMatches",
                                                              "vehicleBodyColor") if name in data}
                     item = {"label": row["label"], **evidence}
                     if row["kind"] == "object_alias":

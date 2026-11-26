@@ -338,14 +338,14 @@ def apply_scene_evidence(result, scene, start, end):
 def offset_object_matches(item, start):
     """Move pair references onto the source clock without changing cached scene data."""
     shifted = item
-    for field in ("objectMatches", "objectPartMatches"):
-        if not item.get(field):
+    for field in ("objectMatches", "objectPartMatches", "objectForegroundMatches"):
+        matches = item.get(field)
+        if not isinstance(matches, (list, tuple)) or not matches:
             continue
         if shifted is item:
             shifted = dict(item)
-        shifted[field] = []
-        for match in item[field]:
-            shifted[field].append({**match, "timeMs": match["timeMs"] + start})
+        shifted[field] = [{**match, "timeMs": match["timeMs"] + start} for match in matches
+                          if isinstance(match, dict) and type(match.get("timeMs")) is int and match["timeMs"] >= 0]
     return shifted
 
 

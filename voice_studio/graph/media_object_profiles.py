@@ -189,6 +189,7 @@ def add_object_profiles(graph, tracks, *, object_reconciliation=False):
     partners, visual_partners, geometric_tracks = match_candidates(identity_rows)
     identity_samples = {key: samples for key, _, samples in identity_rows}
     samples_by_track = {key: samples for key, _, samples in tracks}
+    foreground_sources = foreground_source_index(tracks, graph.nodes.values())
     groups = list(object_groups(identity_nodes, identity_rows, partners, visual_partners, geometric_tracks))
     if object_reconciliation:
         links, reconciliation = reconcile_object_groups(
@@ -256,6 +257,8 @@ def add_object_profiles(graph, tracks, *, object_reconciliation=False):
                                          "observationId": support["id"]}
         if appearance := profile_appearance(samples):
             data["appearance"] = appearance
+        if comparisons := profile_foreground_comparisons(samples, foreground_sources):
+            data["foregroundComparisons"] = comparisons
         start = min(node["startMs"] for node in members)
         end = max(node["endMs"] for node in members)
         data["labelEvidence"] = stable_label_evidence(labels, identity_evidence or samples, data.get("interfaceEvidence"))
@@ -379,6 +382,43 @@ def observation_key(node):
 def match_key(match):
     """Resolve a scene worker reference without depending on detector order."""
     return match["timeMs"], match["label"], tuple(match["box"])
+
+
+def foreground_source_index(tracks, observations):
+    """Keep referenced positions only when exactly one raw observation matches."""
+    referenced = {match_key(match) for _, _, samples in tracks for node in samples
+                  for match in node["data"].get("objectForegroundMatches", ())}
+    sources = {}
+    if not referenced:
+        return sources
+    for node in observations:
+        if node["kind"] not in ("object_observation", "object_alias"):
+            continue
+        key = observation_key(node)
+        if key in referenced:
+            sources[key] = None if key in sources else node
+    return sources
+
+
+def profile_foreground_comparisons(samples, sources):
+    """Publish descriptive comparisons when both exact witnesses belong to this profile."""
+    if not sources:
+        return []
+    members = {node["id"] for node in samples}
+    unique = {}
+    for target in samples:
+        for evidence in target["data"].get("objectForegroundMatches", ()):
+            source = sources.get(match_key(evidence))
+            if source is None or source["id"] not in members or source["id"] == target["id"]:
+                continue
+            key = source["id"], target["id"]
+            if key not in unique:
+                metrics = {name: value for name, value in evidence.items() if name not in ("timeMs", "label", "box")}
+                unique[key] = {"fromObservationId": source["id"], "toObservationId": target["id"],
+                               "fromTimeMs": source["startMs"], "toTimeMs": target["startMs"],
+                               "fromLabel": source["label"], "toLabel": target["label"], **metrics}
+    return sorted(unique.values(), key=lambda row: (row["toTimeMs"], row["fromTimeMs"],
+                                                     row["fromObservationId"], row["toObservationId"]))[:6]
 
 
 def profile_appearance(samples):

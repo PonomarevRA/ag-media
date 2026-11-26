@@ -11,7 +11,8 @@ from voice_studio.core.optional_runtime import runtime_environment
 from voice_studio.core.worker_process import worker_command
 from voice_studio.vision.video_revolver import PYTHON, VISION
 
-TIMEOUT_SECONDS = 30
+# Keep the existing 30-second allowance plus bounded foreground diagnostics and a small margin.
+TIMEOUT_SECONDS = 36
 
 
 def prepare_object_reconciliation(source: Path, report: dict) -> dict:
@@ -19,7 +20,8 @@ def prepare_object_reconciliation(source: Path, report: dict) -> dict:
 
     Uses the installed vision runtime so the main application needs no
     OpenCV dependency. The child reads at most 48 timestamps and 96 crops; its
-    wall time is capped at 30 seconds. No model installation or download occurs.
+    wall time is capped at 36 seconds, including foreground diagnostics. No model
+    installation or download occurs.
     """
     if not PYTHON.is_file():
         return unavailable(report, 'vision-runtime-unavailable')
