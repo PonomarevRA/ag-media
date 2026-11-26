@@ -25,6 +25,24 @@ def cue(start, end, number):
 
 
 class VideoDubTests(TestCase):
+    @skipUnless(which("ffmpeg"), "FFmpeg is required")
+    def test_anime_profile_keeps_reference_conditioning_and_fits_the_slot(self):
+        mode = []
+
+        def generated(engine, job, demo):
+            """Supply deterministic PCM and record the reference conditioning mode."""
+            mode.append(job["pronunciationMode"])
+            with open_pcm(job["output"]) as audio:
+                audio.writeframes(b"\x10\x01" * (RATE // 2))
+
+        with TemporaryDirectory() as name, patch('voice_studio.synthesis.video_dub.generate', side_effect=generated):
+            row = {**cue(100, 1500, 1), "pronunciationMode": "neutral", "tempo": 1}
+            _, start, end, *_ = render_cue(row, 1, {1: {"accentStyle": "anime"}}, (100, 1500),
+                                         Path(name), monotonic() + 90)
+        self.assertEqual(mode, ["source"])
+        self.assertLessEqual(100, start)
+        self.assertLessEqual(end, 1500)
+
     def test_pronunciation_mode_is_validated_and_retained_through_retry(self):
         rows, _ = clean_cues({'sourceLanguage': 'ru', 'pronunciationMode': 'neutral',
                               'cues': [cue(100, 1000, 1)]}, 2000)

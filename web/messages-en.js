@@ -1,5 +1,18 @@
 /** English translations keyed by the original Russian interface strings. */
 export default {
+  "Акцент для дубляжа": "Dubbing accent",
+  "Подача": "Delivery",
+  "Язык образца": "Reference language",
+  "Немецкий акцент": "German accent",
+  "Японский акцент": "Japanese accent",
+  "Аниме · японская подача": "Anime · Japanese delivery",
+  "Аудиообразец": "Audio reference",
+  "Точный текст образца": "Exact reference transcript",
+  "Загрузи до 18 секунд речи. Для выраженного акцента выбери образец, где человек уже говорит с ним на языке дубляжа.": "Upload up to 18 seconds of speech. For a stronger accent, choose a reference spoken with that accent in the dub language.",
+  "Сохранить профиль акцента": "Save accent profile",
+  "Проверяем аудиообразец…": "Checking the audio reference…",
+  "Профиль сохранён. Выбери его для спикера в дубляже.": "Profile saved. Assign it to a speaker in the dubbing panel.",
+  "Экспериментальный режим уменьшает влияние исходного произношения. Выбранные профили акцента сохраняют режим произношения образца.": "Experimental mode reduces the influence of the original pronunciation. Selected accent profiles keep the reference pronunciation mode.",
   "Письмо для SRT": "SRT writing system",
   "Как в расшифровке": "As transcribed",
   "Упрощённое · 简体中文": "Simplified · 简体中文",

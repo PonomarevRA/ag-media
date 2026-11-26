@@ -24,6 +24,32 @@ def synthetic_take(path, hz=153, amplitude=4200, pause_ms=300):
 
 
 class VoiceEnrollmentTests(TestCase):
+    def test_accent_reference_keeps_its_recorded_language_across_dub_targets(self):
+        with TemporaryDirectory() as raw:
+            root = Path(raw)
+            studio = Studio(root / "workspace", demo=True)
+            source = root / "input.wav"
+            synthetic_take(source)
+            sample = {"style": "japanese", "referenceLanguage": "ja", "text": "これはテストです。", "name": "Тест"}
+            try:
+                version = studio.import_accent_profile(source, sample)["version"]
+                catalog = studio.list_voice_catalog("ru", dubbing=True)
+                self.assertEqual(len(catalog), 1)
+                self.assertEqual(catalog[0]["accentStyle"], "japanese")
+                self.assertTrue(catalog[0]["dubbingReady"])
+                self.assertEqual(studio.list_voice_catalog("ru"), [])
+                self.assertTrue(studio.accent_preview(version).is_file())
+                copied = studio.copy_dub_prompts("ru", {"1": version}, root)
+                self.assertEqual(copied[1]["text"], sample["text"])
+                self.assertEqual(reference_report(copied)[1], {
+                    "profileVersion": version, "recordedLanguage": "ja", "accentStyle": "japanese",
+                })
+                with self.assertRaisesRegex(ValueError, "фактический язык"):
+                    studio.import_accent_profile(source, {**sample, "referenceLanguage": "de"})
+                self.assertEqual(len(studio.list_voice_catalog("en", dubbing=True)), 1)
+            finally:
+                studio.worker.shutdown()
+
     def test_cleans_and_batches_before_scoring(self):
         with TemporaryDirectory() as raw:
             root = Path(raw)

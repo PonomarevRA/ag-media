@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AgMediaStudio</AssemblyName>
     <ApplicationIcon>../icons/AgMediaStudio.ico</ApplicationIcon>
-    <Version>0.1.9</Version>
+    <Version>0.1.10</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>

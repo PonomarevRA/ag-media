@@ -1,5 +1,11 @@
 import {uiText} from "./i18n.js";
 
+/** Use the same style names in the acoustic catalog and the dubbing picker. */
+export function accentStyleLabel(style) {
+  const labels = {german: "Немецкий акцент", japanese: "Японский акцент", anime: "Аниме · японская подача"};
+  return labels[style] ? uiText(labels[style]) : "";
+}
+
 /** Include a stable version so profiles with the same name remain distinguishable. */
 export function voiceProfileLabel(profile) {
   return profile.name ? `${profile.name} · v${profile.version}` : uiText`Профиль ${profile.version}`;
@@ -8,6 +14,13 @@ export function voiceProfileLabel(profile) {
 /** Show comparison evidence without interpreting cosine as a percentage. */
 export function voiceProfileSummary(profile) {
   const parts = [uiText`Записей: ${profile.recordingCount}`];
+  if (profile.accentStyle) {
+    parts.push(accentStyleLabel(profile.accentStyle));
+    if (profile.metrics?.activeSeconds != null) {
+      parts.push(uiText`Активная речь: ${profile.metrics.activeSeconds.toFixed(1)} с`);
+    }
+    return parts.join(" · ");
+  }
   if (profile.metrics?.medianCosine != null) {
     const {medianCosine, minimumCosine, pairCount, activeSeconds} = profile.metrics;
     parts.push(uiText`Косинус медиана ${medianCosine.toFixed(3)}, минимум ${minimumCosine.toFixed(3)} · пар: ${pairCount}`);

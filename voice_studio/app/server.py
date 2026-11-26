@@ -168,7 +168,16 @@ class Handler(LoopbackRequestHandler):
             elif url.path == "/api/voice-reference-profiles":
                 self.reply(200, {"profiles": self.server.studio.list_dub_profiles(self.language(parse_qs(url.query)))})
             elif url.path == "/api/voice-catalog":
-                self.reply(200, {"profiles": self.server.studio.list_voice_catalog(self.language(parse_qs(url.query)))})
+                query = parse_qs(url.query)
+                self.reply(200, {"profiles": self.server.studio.list_voice_catalog(
+                    self.language(query), dubbing=query.get("purpose") == ["dubbing"])})
+            elif url.path == "/api/voice-accent-preview":
+                version = int(parse_qs(url.query).get("version", ["0"])[0])
+                path = self.server.studio.accent_preview(version)
+                if path is None:
+                    self.reply(404, {"error": "Образец акцента не найден."})
+                else:
+                    self.file(path, "audio/wav", seekable=True)
             elif url.path in {"/api/transcript-materials", "/api/transcript-material"}:
                 query = parse_qs(url.query, keep_blank_values=True)
                 language = self.language(query, transcript=True)
@@ -533,6 +542,10 @@ class Handler(LoopbackRequestHandler):
                     report = build_video_dub(path, dub, path.parent, output, voice_prompts=prompts)
                     filename = "russian-dub.zip" if report["dubLanguage"] == "ru" else "english-dub.zip"
                     self.file(output, "application/zip", attachment=filename)
+                return
+            if url.path == "/api/voice-accent-profile":
+                with self.uploaded_media(MAX_AUDIO, overlay=True) as (path, options):
+                    self.reply(201, studio.import_accent_profile(path, options))
                 return
             if url.path == "/api/video-dub-text-translation":
                 from voice_studio.synthesis.dub_text_translation import MAX_REQUEST_BYTES, translate_text

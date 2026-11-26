@@ -135,6 +135,8 @@ def reference_report(profiles):
         if "profileVersion" in profile:
             summary[number] = {"profileVersion": profile["profileVersion"],
                                "recordedLanguage": profile["recordedLanguage"]}
+            if style := profile.get("accentStyle"):
+                summary[number]["accentStyle"] = style
             continue
         row = {key: profile[key] for key in ("startMs", "endMs", "clips", "voiceAgreement")}
         fallback = profile.get("fallback")

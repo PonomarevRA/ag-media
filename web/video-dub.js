@@ -1,7 +1,7 @@
 import {apiText, uiText} from "./i18n.js";
 import {packMedia} from "./person-layer.js";
 import {effectiveSpeaker} from "./speaker-label.js";
-import {voiceProfileLabel, voiceProfileSummary} from "./voice-catalog.js";
+import {accentStyleLabel, voiceProfileLabel, voiceProfileSummary} from "./voice-catalog.js";
 
 /** Edit dubbing text for the transcript clock and request a local dub package. */
 export function mountVideoDub(find, request) {
@@ -47,7 +47,7 @@ export function mountVideoDub(find, request) {
     for (const select of profileSelects.values()) select.disabled = active === source;
   }
 
-  /** Load only saved profiles for the delivery language, after opening the dubbing controls. */
+  /** Load verified voices for the delivery language and explicitly marked accent profiles. */
   async function loadProfiles() {
     const revision = ++profileRequest;
     profileSelects.clear();
@@ -59,7 +59,7 @@ export function mountVideoDub(find, request) {
     if (!profileLoading) return;
     let profiles;
     try {
-      ({profiles} = await request("voice-catalog", undefined, {language: target}));
+      ({profiles} = await request("voice-catalog", undefined, {language: target, purpose: "dubbing"}));
       profiles = profiles.filter(profile => profile.dubbingReady);
     } catch {
       if (revision !== profileRequest) return;
@@ -94,7 +94,9 @@ export function mountVideoDub(find, request) {
       const select = document.createElement("select");
       select.add(new Option(uiText("Голос из видео"), ""));
       for (const profile of profiles) {
-        select.add(new Option(voiceProfileLabel(profile), String(profile.version)));
+        const accent = accentStyleLabel(profile.accentStyle);
+        const label = accent ? `${voiceProfileLabel(profile)} · ${accent}` : voiceProfileLabel(profile);
+        select.add(new Option(label, String(profile.version)));
       }
       const previous = drafts.get(speaker);
       if (previous && !versions.has(previous)) {

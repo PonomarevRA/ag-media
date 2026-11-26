@@ -37,7 +37,8 @@ from voice_studio.prosody.prosody import VERSION as PROSODY_VERSION
 from voice_studio.prosody.revolver import (VERSION as REVOLVER_VERSION, fragment_radius, fragment_trials, mark_lapshi,
                       review_words, synthesis_variants)
 from voice_studio.synthesis.speech_metrics import measure, speaker_encoder
-from voice_studio.synthesis.reference_enrollment import MAX_TAKES, check_references, delivery_comparison
+from voice_studio.synthesis.accent_profiles import reference_language, saved_accent
+from voice_studio.synthesis.reference_enrollment import MAX_TAKES, check_references, delivery_comparison, inspect_take
 from voice_studio.synthesis.voice_sequence import render_voice_sequence
 from voice_studio.synthesis.voice_catalog import profile_name, voice_catalog
 from voice_studio.vision.tracking import Tracking
@@ -274,13 +275,63 @@ class Studio:
                                                          reference_report=report, name=label)
         return report
 
-    def list_voice_catalog(self, language):
+    def import_accent_profile(self, source, metadata):
+        """Validate one accent sample and publish its recording and profile together."""
+        style = metadata.get("style")
+        language = reference_language(style, metadata.get("referenceLanguage"))
+        text = require_text(metadata.get("text"), 500)
+        name = profile_name(metadata.get("name"))
+        if not name:
+            raise ValueError("Введи имя профиля.")
+        key = uuid4().hex
+        destination = self.media / f"{key}.wav"
+        with temporary_directory(prefix="accent-profile-") as folder:
+            wav = Path(folder) / "reference.wav"
+            seconds = normalize(source, wav, duration_limit=18)
+            take, _, _ = inspect_take({"id": key, "text": text}, wav)
+            if take["issues"]:
+                raise ValueError("Нужен чёткий образец речи до 18 секунд без перегруза.")
+            report = {"metric": "reference-signal-quality", "accentStyle": style, "takes": [take], "pairs": []}
+            try:
+                with closing(self.connect()) as db, db:
+                    db.execute("BEGIN IMMEDIATE")
+                    publish_file(wav, destination)
+                    db.execute("INSERT INTO recordings(id,language,text,seconds) VALUES(?,?,?,?)",
+                               (key, language, text, seconds))
+                    profile = db.execute("INSERT INTO profiles(language,refs,reference_report,name) VALUES(?,?,?,?)",
+                                         (language, json.dumps([key]), json.dumps(report, ensure_ascii=False), name))
+                    version = profile.lastrowid
+            except (OSError, sqlite3.Error):
+                destination.unlink(missing_ok=True)
+                raise
+        return {"version": version}
+
+    def list_voice_catalog(self, language, *, dubbing=False):
         """Read catalog metadata for one language without touching the model workers."""
         with closing(self.connect()) as db, db:
             db.execute("BEGIN")
-            profiles = db.execute("SELECT * FROM profiles WHERE language=? ORDER BY version DESC", (language,)).fetchall()
-            recordings = db.execute("SELECT id,evaluation_only FROM recordings WHERE language=?", (language,)).fetchall()
+            if dubbing:
+                profiles = [row for row in db.execute("SELECT * FROM profiles ORDER BY version DESC")
+                            if row["language"] == language or saved_accent(row["reference_report"])]
+                recordings = db.execute("SELECT id,evaluation_only FROM recordings").fetchall()
+            else:
+                profiles = db.execute("SELECT * FROM profiles WHERE language=? ORDER BY version DESC", (language,)).fetchall()
+                recordings = db.execute("SELECT id,evaluation_only FROM recordings WHERE language=?", (language,)).fetchall()
         return voice_catalog(profiles, recordings)
+
+    def accent_preview(self, version):
+        """Resolve an accent preview from the reviewed recording, never a caller-supplied path."""
+        if not 1 <= version < 2**63:
+            return None
+        rows = self.rows("SELECT * FROM profiles WHERE version=? AND reference_report IS NOT NULL", (version,))
+        if not rows or not saved_accent(rows[0]["reference_report"]):
+            return None
+        refs = json.loads(rows[0]["refs"])
+        if not refs:
+            return None
+        recordings = self.rows("SELECT id FROM recordings WHERE id=? AND language=?", (refs[0], rows[0]["language"]))
+        path = self.media / f"{refs[0]}.wav"
+        return path if recordings and path.is_file() else None
 
     def rename_voice_profile(self, language, version, name):
         """Update a label while keeping its stable version and exact reference audio."""
@@ -310,13 +361,15 @@ class Studio:
                         or len(speaker) > 3 or str(int(speaker)) != speaker or speaker == "0"
                         or type(version) is not int or not 1 <= version < 2**63):
                     raise ValueError("Некорректный спикер или версия голосового профиля.")
-                profile = db.execute("""SELECT refs FROM profiles WHERE language=? AND version=?
-                                        AND reference_report IS NOT NULL""", (language, version)).fetchone()
-                if not profile:
+                profile = db.execute("""SELECT refs,language,reference_report FROM profiles
+                                        WHERE version=? AND reference_report IS NOT NULL""", (version,)).fetchone()
+                accent = saved_accent(profile["reference_report"]) if profile else None
+                if not profile or (profile["language"] != language and not accent):
                     raise ValueError("Проверенный профиль нужного языка недоступен.")
+                recorded_language = profile["language"]
                 key = json.loads(profile["refs"])[0]
                 row = db.execute("""SELECT text FROM recordings WHERE language=? AND id=?
-                                    AND evaluation_only=0""", (language, key)).fetchone()
+                                    AND evaluation_only=0""", (recorded_language, key)).fetchone()
                 if row is None:
                     raise ValueError("Запись голосового профиля недоступна.")
                 path = folder / f"reference-profile-{speaker}.wav"
@@ -325,7 +378,9 @@ class Studio:
                 except OSError as error:
                     raise ValueError("Аудио голосового профиля недоступно.") from error
                 prompts[int(speaker)] = {"path": str(path), "text": row["text"],
-                                         "profileVersion": version, "recordedLanguage": language}
+                                         "profileVersion": version, "recordedLanguage": recorded_language}
+                if accent:
+                    prompts[int(speaker)]["accentStyle"] = accent
         return prompts
 
     def export(self, language, ids, destination):

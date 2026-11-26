@@ -45,6 +45,7 @@ STATIC = {
     "/auto-synthesis.js": ("auto-synthesis.js", "text/javascript; charset=utf-8"),
     "/voice-enrollment.js": ("voice-enrollment.js", "text/javascript; charset=utf-8"),
     "/voice-catalog.js": ("voice-catalog.js", "text/javascript; charset=utf-8"),
+    "/voice-accent-profiles.js": ("voice-accent-profiles.js", "text/javascript; charset=utf-8"),
     "/morpheme-graph.js": ("morpheme-graph.js", "text/javascript; charset=utf-8"),
     "/capture-audio.js": ("capture-audio.js", "text/javascript; charset=utf-8"),
     "/capture-worklet.js": ("capture-worklet.js", "text/javascript; charset=utf-8"),

@@ -17,6 +17,7 @@ import {mountStudioStorage} from "./studio-storage.js";
 import {createAutoMap} from "./auto-synthesis.js";
 import {reportMatches, showVoiceReferenceReport} from "./voice-enrollment.js";
 import {mountVoiceCatalog, voiceProfileLabel} from "./voice-catalog.js";
+import {mountAccentProfiles} from "./voice-accent-profiles.js";
 
 const byId = id => document.getElementById(id);
 const state = {data: null, language: "ru", refs: new Set(), models: new Set(),
@@ -35,6 +36,7 @@ const catalogView = mountVoiceCatalog(byId, selectVoiceProfile, profile => {
   catalogPlayer.setSource(`/media/${profile.previewId}.wav`);
   catalogAudio.play().catch(error => notice(error.message, true));
 });
+mountAccentProfiles(byId, request);
 const deck = new TrackDeck(() => processing.syncTracks());
 document.addEventListener("studio-design-change", () => deck.draw());
 const processing = new ProcessingPanel(deck, () => state.language);

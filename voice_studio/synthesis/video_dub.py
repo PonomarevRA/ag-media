@@ -11,6 +11,7 @@ from zipfile import ZIP_STORED, ZipFile
 
 from voice_studio.synthesis.commercial_voice import ready
 from voice_studio.audio.voice_quality import measure_dialogue, restore_dialogue
+from voice_studio.synthesis.accent_profiles import ANIME_PITCH_RATIO
 from voice_studio.synthesis.dub_background import BACKGROUND_WAV, MODEL_NAME, mix_english, prepare_background
 from voice_studio.synthesis.dub_timing import source_speech_window, speech_edges
 from voice_studio.synthesis.dub_voice_profiles import RATE, reference_report, render_voice_profiles
@@ -187,10 +188,15 @@ def change_tempo(pcm, speed, folder):
     """Adjust duration with FFmpeg atempo while preserving pitch."""
     if abs(speed - 1) < .002:
         return pcm
+    return filter_pcm(pcm, f"atempo={speed:.6f}", folder)
+
+
+def filter_pcm(pcm, filters, folder):
+    """Run the selected audio filter on mono cue PCM before fitting it to a slot."""
     voice, aligned = folder / "voice.wav", folder / "aligned.wav"
     with open_pcm(voice) as audio:
         audio.writeframes(pcm)
-    ffmpeg(["-i", str(voice), "-af", f"atempo={speed:.6f}", "-c:a", "pcm_s16le", str(aligned)])
+    ffmpeg(["-i", str(voice), "-af", filters, "-c:a", "pcm_s16le", str(aligned)])
     with wave.open(str(aligned), "rb") as audio:
         return audio.readframes(audio.getnframes())
 
@@ -235,9 +241,10 @@ def render_cue(cue, index, references, window, folder, deadline):
         # Reproduce the baseline seed when returning to the original prompt.
         seed = 419 + index + (0 if prompt is fallback else attempt * 1009)
         try:
+            mode = "source" if prompt.get("accentStyle") else cue.get("pronunciationMode", "source")
             generate("qwen", {"output": str(raw), "text": text, "language": language,
                               "seed": seed, "references": [prompt],
-                              "pronunciationMode": cue.get("pronunciationMode", "source"),
+                              "pronunciationMode": mode,
                               "deadline": min(deadline, monotonic() + allowed)}, False)
         except subprocess.TimeoutExpired:
             if monotonic() >= deadline:
@@ -245,6 +252,10 @@ def render_cue(cue, index, references, window, folder, deadline):
             continue
         has_take = True
         pcm = read_voice_pcm(raw, folder, index)
+        if prompt.get("accentStyle") == "anime":
+            # Compensate the pitch shift's speed change before the usual cue fit.
+            rate = round(RATE * ANIME_PITCH_RATIO)
+            pcm = filter_pcm(pcm, f"asetrate={rate},aresample={RATE},atempo={RATE / rate:.6f}", folder)
         if fit := fit_voice(pcm, cue, window, folder):
             return (*fit, round(len(pcm) * 500 / RATE), prompt is fallback)
         if "tempo" in cue and not fallback:

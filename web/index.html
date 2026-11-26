@@ -164,6 +164,40 @@
           <p id="voice-catalog-empty" class="muted" hidden>Сохрани набор записей, чтобы голос появился в каталоге.</p>
           <ul id="voice-catalog-list" class="studio-list" data-ag-width="fill"></ul>
           <audio id="voice-catalog-preview" preload="none"></audio>
+          <details id="voice-accent-profiles" class="capture-options" data-ag-width="fill">
+            <summary>Акцент для дубляжа</summary>
+            <form id="voice-accent-form" class="capture-fields" data-ag-width="fill">
+              <label class="select-field">Подача
+                <select id="voice-accent-style">
+                  <option value="german">Немецкий акцент</option>
+                  <option value="japanese">Японский акцент</option>
+                  <option value="anime">Аниме · японская подача</option>
+                </select>
+              </label>
+              <label class="select-field">Язык образца
+                <select id="voice-accent-language">
+                  <option value="de" lang="de" data-endonym>Deutsch</option>
+                  <option value="ja" lang="ja" data-endonym>日本語</option>
+                  <option value="ru" lang="ru" data-endonym>Русский</option>
+                  <option value="en" lang="en" data-endonym>English</option>
+                </select>
+              </label>
+              <label class="select-field">Имя голосового профиля
+                <input id="voice-accent-name" type="text" required maxlength="80">
+              </label>
+              <label class="select-field">Аудиообразец
+                <input id="voice-accent-file" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm" required>
+              </label>
+              <label class="select-field">Точный текст образца
+                <textarea id="voice-accent-text" rows="3" required maxlength="500"></textarea>
+              </label>
+              <p class="muted">Загрузи до 18 секунд речи. Для выраженного акцента выбери образец, где человек уже говорит с ним на языке дубляжа.</p>
+              <button id="voice-accent-save" type="submit">Сохранить профиль акцента</button>
+              <p id="voice-accent-status" role="status" class="muted"></p>
+            </form>
+            <ul id="voice-accent-list" class="studio-list" data-ag-width="fill"></ul>
+            <audio id="voice-accent-preview" controls preload="none" hidden></audio>
+          </details>
           <p class="muted" id="sample-count">Загрузка записей…</p>
           <a class="history-jump" href="/history">Управлять записями</a>
           <label class="select-field" for="voice-catalog-name" data-ag-width="fill">Имя голосового профиля
@@ -542,7 +576,7 @@
             Уменьшить акцент
           </label>
         </div>
-        <p id="media-dub-pronunciation-help" class="muted">Экспериментальный режим. Использует тембр образца и старается приблизить произношение к языку дубляжа.</p>
+        <p id="media-dub-pronunciation-help" class="muted">Экспериментальный режим уменьшает влияние исходного произношения. Выбранные профили акцента сохраняют режим произношения образца.</p>
         <p id="media-dub-translation-status" class="muted" aria-live="polite" hidden></p>
         <div id="media-dub-profiles" class="actions" aria-label="Голоса для дубляжа" data-ag-width="fill" hidden></div>
         <ol id="media-dub-cues" class="media-dub-cues"></ol>

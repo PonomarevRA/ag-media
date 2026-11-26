@@ -145,6 +145,14 @@ button.studio-icon.studio-quiet-action:hover:not(:disabled) {
 .voice-catalog-select[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 #synthesis-voice-summary:empty { display: none; }
 #voice-catalog-name { inline-size: 100%; min-inline-size: 0; margin: 0; }
+#voice-accent-form, #voice-accent-form .select-field { grid-template-columns: minmax(0, 1fr); }
+#voice-accent-form, #voice-accent-list li { overflow-wrap: anywhere; }
+#voice-accent-form :is(.select-field, input, select, textarea, button) {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+#voice-accent-file { inline-size: 100%; }
+#voice-accent-file::file-selector-button { max-inline-size: 100%; white-space: normal; }
 .media-dub-voice { flex: 1 1 14rem; min-inline-size: 0; overflow-wrap: anywhere; }
 .media-dub-voice > p { margin-block: .35em 0; }
 .record-check-actions { margin-block: 8px 12px; }

@@ -3,6 +3,8 @@
 import json
 from statistics import median
 
+from voice_studio.synthesis.accent_profiles import saved_accent
+
 
 def profile_name(value):
     """Validate an optional catalog label. An empty label uses the version number."""
@@ -25,13 +27,16 @@ def voice_catalog(profiles, recordings):
         primary = refs[0] if refs and refs[0] in available else None
         report = json.loads(profile["reference_report"]) if profile["reference_report"] else None
         metrics = summarize_review(report, refs) if report else None
-        result.append({
+        entry = {
             "version": profile["version"], "language": profile["language"], "name": profile["name"],
             "created": profile["created"], "recordingCount": len(refs), "previewId": primary,
             "synthesisReady": bool(primary and all(ref in available for ref in refs)),
             "dubbingReady": bool(primary and metrics),
             "metrics": metrics,
-        })
+        }
+        if style := saved_accent(profile["reference_report"]):
+            entry["accentStyle"] = style
+        result.append(entry)
     return result
 
 
